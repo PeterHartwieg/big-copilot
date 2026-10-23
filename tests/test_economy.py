@@ -40,8 +40,22 @@ class EconomyInputs(unittest.TestCase):
                 save = capture()
                 save._mod_economy["reports"]["rlo"]["modules"]["employment"] = {
                     "status": status, "data": None}
+                save._mod_economy["reports"]["rlo"]["modules"]["prices"] = {"status": "disabled"}
                 self.assertEqual(economy.hourly(save, "employee", 20.125),
                                  (20.125, status == "disabled"))
+
+    def test_disabled_employment_does_not_erase_another_salary_owner(self):
+        for status, level, factor, known in (("ready", 1000, 1000, True),
+                ("ready", 1000, 1001, True), ("ready", 1000, 1137, False),
+                ("ready", 1137, 1000, False), ("failed", 1000, 1000, False),
+                ("unavailable", 1000, 1000, False)):
+            with self.subTest(status=status, level=level, factor=factor):
+                save = capture({"prices": {"levelThousandths": level,
+                    "costFactorThousandths": factor, "adjustmentQuiet": 2}})
+                modules = save._mod_economy["reports"]["rlo"]["modules"]
+                modules["employment"] = {"status": "disabled"}
+                modules["prices"]["status"] = status
+                self.assertEqual(economy.hourly(save, "employee", 20), (20, known))
 
     def test_new_hire_with_company_disabled_uses_city_level_once(self):
         save = capture({"prices": {"levelThousandths": 1137, "costFactorThousandths": 4000}})

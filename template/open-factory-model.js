@@ -208,10 +208,10 @@ const OpenFactoryModel = ((storeModel, economyModel, ownerModel) => {
       const education=modded ? (!out.lines.length ? {status:"ready",startupCents:0,totalCents:0,requirements:[],reasons:[]} : economy ? economy.factoryRequirements(out.lines) : {status:"unavailable",startupCents:null,totalCents:null,requirements:[],reasons:["mod-model-unavailable"]}) : null;
       const incomplete=[...(F.compatibility?.factoryOpening || []),...(modCosts?.reasons || []),...(education?.reasons || [])];
       if(education?.totalCents === null) incomplete.push("course-future-cost-unavailable");
-      if(modded && !owned && (storeModel.leaseDeposit(b) == null || (at && storeModel.leaseDeposit(at) == null))) incomplete.push("lease-quote-unavailable");
+      if(deposit == null || (depot && depot.deposit == null)) incomplete.push("lease-quote-unavailable");
       if([...out.lines,...hqLines,...(depot?.shelves ? [[shelf.item,depot.shelves]] : [])].some(([id,n])=>n>0 && (unavailablePrices.has(id) || !items[id]))) incomplete.push("equipment-price-unavailable");
       const adjustedDeposit=rentCost(deposit,true), depotAdjustment=depot ? rentCost(depot.deposit,true) : 0;
-      if(!known([adjustedDeposit,depotAdjustment])) incomplete.push("deposit-adjustment-unavailable");
+      if((Number.isFinite(deposit) && adjustedDeposit === null) || (depot && Number.isFinite(depot.deposit) && depotAdjustment === null)) incomplete.push("deposit-adjustment-unavailable");
       const firmCost = furniture === null ? null : prices.status === "disabled" ? fee+furniture : prices.status === "ready"
         ? (prices.data.livingTransactionTypes.includes("ba:transaction_interiorinstallation") ? rentCost(fee+furniture) : fee+furniture) : null;
       if(firmCost === null) incomplete.push("installation-adjustment-unavailable");

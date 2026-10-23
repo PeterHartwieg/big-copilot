@@ -521,3 +521,16 @@ test('unknown required deposit leaves store totals null while known outfit amoun
   const held=core.investment({type:'T'},{...SHOP,status:'mine',deposit:null});
   assert.equal(held.deposit,0);assert.ok(Number.isFinite(held.firm));
 });
+
+
+test('expansion initial stock is one purchase bill when City includes wholesale purchases',()=>{
+  const f=expansionFacts(),b={...SHOP,key:'road#1'},o={sat:50,open:HOUR,promoTotal:20};
+  const prices=priceRules(1200);prices.livingExcludesWholesalePurchases=true;
+  f.modEconomy.rlo.modules.prices=ready(prices);
+  const native=model(f).expansions('T',b,o)[0];
+  prices.livingExcludesWholesalePurchases=false;
+  const included=model(f).expansions('T',b,o)[0],owner=require('../template/mod-demand-model.js');
+  assert.equal(included.stock,owner.wholesaleDayCost(native.stock,prices));
+  close(included.investment-native.investment,included.stock-native.stock,'initial stock adjustment counted once');
+  assert.ok(included.assumptions.includes('initial-stock-single-purchase'));
+});

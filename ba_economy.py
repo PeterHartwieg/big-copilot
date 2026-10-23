@@ -156,8 +156,20 @@ def tables(save, rules, prices):
 
 def hourly(save, employee_id, native_hourly):
     """An ordinary wage observation; no sick pay or overtime is fabricated."""
-    if report(save, "rlo") is None or module(save, "rlo", "employment")["status"] == "disabled":
+    if report(save, "rlo") is None:
         return native_hourly, True
+    if module(save, "rlo", "employment")["status"] == "disabled":
+        # This owner is off, but City can still affect salary. Without an
+        # employment observation do not infer a complete current wage from a
+        # base amount while another salary adjustment is active or unknown.
+        prices = module(save, "rlo", "prices")
+        if prices["status"] == "disabled":
+            return native_hourly, True
+        values = prices.get("data") if prices["status"] == "ready" else None
+        no_adjustment = values is not None and values["levelThousandths"] == 1000 and (
+            values["costFactorThousandths"] == 1000
+            or abs(values["costFactorThousandths"] - 1000) < values["adjustmentQuiet"])
+        return native_hourly, no_adjustment
     observed = index(save, "rlo", "employment", identity="employeeId").get(employee_id)
     if observed is not None:
         return observed["ordinaryHourlyCents"] / 100, True

@@ -12379,6 +12379,7 @@ function mcReason(reason){
     "company-carried-debt-unavailable": () => tt("gr.mod.carriedDebt", "This forecast cannot allocate the company's carried debt to the site."),
     "additional-credit-eligibility": () => tt("gr.mod.additionalCredit", "Loan eligibility depends on additional credit that this estimate cannot verify."),
     "principal-expense-basis": () => tt("gr.mod.principalExpense", "Loan estimates are unavailable because the captured rules treat principal as an expense."),
+    "secured-bank-eligibility": () => tt("gr.mod.securedBank", "This bank’s secured-account borrowing eligibility could not be verified."),
     "native-bank-terms": () => tt("gr.mod.bankTerms", "Current bank terms could not be verified."),
     "future-cashflow-unavailable": () => osFutureUnknown(),
     "forecast-horizon-exceeded": () => osFutureUnknown({reason:"forecast-horizon-exceeded"}),
@@ -12545,6 +12546,9 @@ function planFinanceHtml(prefix, plan, total, offText, facts){
   const bank = planBank(plan);
   const lenders = banks.map(b => `<button type="button" class="${b.id === bank.id ? "on" : ""}" data-${prefix}-bank="${attr(b.id)}" aria-pressed="${b.id === bank.id}">${spEsc(b.name)} <b>${
     tt("gr.os.fin.rate", "{r}% a year · {d} days", {r: num(Math.round(b.rate * (b.interestMultiplier ?? f.multiplier ?? 0) * 10) / 10), d: b.term})}</b></button>`).join("");
+  if(bank.unavailable) return `<div class="os-card os-fin" id="${prefix}Fin">${head}
+    <div class="os-fr"><span>${tt("gr.os.fin.lender", "Lender")}</span><nav class="os-seg">${lenders}</nav></div>
+    <p class="quiet">${spEsc(mcReason(bank.unavailable))}</p></div>`;
   const limit = Math.min(osLoanLimit(bank), Math.floor(total));
   const amount = Math.max(0, Math.min(limit, fin.amount ?? Math.round(total / 2)));
   return `<div class="os-card os-fin" id="${prefix}Fin">${head}
@@ -12558,6 +12562,7 @@ function planFinanceHtml(prefix, plan, total, offText, facts){
    and one cell says so; otherwise `cells(loan)` draws them. */
 const planFinCell = (lab, value, sub) => `<div><span class="os-lab">${lab}</span><b>${value}</b><small>${sub}</small></div>`;
 function planFinFacts(total, bank, amount, cells){
+  if(bank?.unavailable) return `<p class="quiet">${spEsc(mcReason(bank.unavailable))}</p>`;
   const loan = osLoan(amount, bank);
   if(!loan) return planFinCell(tt("gr.os.fin.upfront", "Cash upfront"), fmt(total), tt("gr.os.fin.min", "a bank lends {w} at least", {w: fmt((osFacts().finance || {}).minimum || 0)}));
   return cells(loan);
@@ -12567,7 +12572,7 @@ function planFinFacts(total, bank, amount, cells){
    being typed in. */
 function planFinanceUpdate(prefix, plan, total, amount, facts, save){
   const bank = planBank(plan);
-  if(!bank) return;
+  if(!bank || bank.unavailable || !Number.isFinite(total)) return;
   const limit = Math.min(osLoanLimit(bank), Math.floor(total)), asked = Math.round(+amount || 0);
   amount = Math.max(0, Math.min(limit, asked));
   plan.finance = {...(plan.finance || {}), amount};
@@ -13016,7 +13021,7 @@ function osToolbar(plan, inv, out){
     <button type="button" class="${mode === "firm" ? "on" : ""}" data-os-mode="firm" aria-pressed="${mode === "firm"}">${tt("gr.os.inv.firm", "Installation firm")} <b>${mcEstimateMoney(inv.firm)}</b></button>
     <button type="button" class="${mode === "self" ? "on" : ""}" data-os-mode="self" aria-pressed="${mode === "self"}">${tt("gr.os.inv.self", "Self-installation")} <b>${mcEstimateMoney(inv.self)}</b></button></nav>
     <div class="aside"><span>${osIsHq(plan) ? tt("gr.os.hq.default", "Default outfit") : tt("gr.os.inv.outfitted", "100% outfitted")}</span><b>${tt("gr.os.inv.items", {one: "{n} item", other: "{n} items"}, {n: inv.items})}</b>
-    <span>${tt("gr.os.inv.itemsLab", "Items")}</span><b>${fmt(out.furniture)}</b></div></div>
+    <span>${tt("gr.os.inv.itemsLab", "Items")}</span><b>${mcPriceMoney(osFacts(),out.lines,out.furniture)}</b></div></div>
     ${(out.opt || []).length ? `<div class="os-optbar"><label class="os-switch"><input type="checkbox" data-os-opt${osOptional() ? " checked" : ""}><span>${tt("gr.os.opt.switch", "Include optional items")}</span></label>
     <span class="quiet">${osOptional() ? tt("gr.os.opt.on", "Optional items count in the investment, the shopping list and the break-even estimate.")
       : tt("gr.os.opt.adds", "Adds what the store does not need to open: {items}.", {items: osOptKinds(out.opt).join(", ")})}</span></div>` : ""}`;
@@ -15015,7 +15020,7 @@ function ofInvestHtml(plan){
     <button type="button" class="${mode === "self" ? "on" : ""}" data-of-mode="self" aria-pressed="${mode === "self"}">${tt("gr.os.inv.self", "Self-installation")} <b>${mcEstimateMoney(inv.self)}</b></button></nav>
     <div class="aside"><span>${owned ? tt("gr.of.inv.added", "Added") : (inv.incomplete?.length || F.compatibility?.factoryOpening?.length) ? tt("gr.compat.equipment", "Partial estimate") : tt("gr.of.inv.ready", "Ready to produce")}</span><b>${owned ? tt("gr.os.inv.items", {one: "{n} item", other: "{n} items"}, {n: inv.items})
       : tt("gr.of.inv.itemsTruck", {one: "{n} item · 1 truck", other: "{n} items · 1 truck"}, {n: inv.items})}</b>
-    <span>${tt("gr.os.inv.itemsLab", "Items")}</span><b>${fmt(inv.furniture)}</b></div></div>`;
+    <span>${tt("gr.os.inv.itemsLab", "Items")}</span><b>${mcEstimateMoney(inv.furniture)}</b></div></div>`;
   if(!inv.items && owned) return planCompatibilityHtml(F, "factoryOpening") + mcCostsHtml(inv.modCosts, inv.modRequirements, inv.incomplete) + mcEducationHtml(inv.modEducation) + ofModInvestmentHtml(inv) + tool + `<p class="quiet os-gap">${tt("gr.of.inv.nothing", "Nothing to buy: the plan adds no machine and no shelf.")}</p>`;
   const body = mode === "self" ? ofSelfHtml(inv) : ofFirmHtml(inv);
   return planCompatibilityHtml(F, "factoryOpening") + mcCostsHtml(inv.modCosts, inv.modRequirements, inv.incomplete) + mcEducationHtml(inv.modEducation) + ofModInvestmentHtml(inv) + tool + body + (owned ? "" : ofFinHtml(plan, inv))

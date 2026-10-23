@@ -163,8 +163,7 @@ class HartTests(unittest.TestCase):
         self.assertIsNone(hart.module(load(company(block)), "factoryPurchases"))
 
     def test_unknown_native_building_keeps_equipment_applicability_unknown(self):
-        block = report()
-        block["modules"]["runningCosts"]["data"]["currentSites"][0]["equipmentApplies"] = None
+        block = report("missing-building")
         result = hart.module(load(company(block)), "runningCosts")
         self.assertIsNone(result["currentSites"][0]["equipmentApplies"])
 

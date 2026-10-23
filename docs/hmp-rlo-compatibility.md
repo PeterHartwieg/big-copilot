@@ -112,29 +112,35 @@ including undo.
 
 Producer validation (23 October 2026)
 
-- RLO candidate `0b911e4c`: native build with zero warnings/errors; 314 companion
-  checks and 99,286 Standard checks pass. Final DLL SHA256:
-  `14aa86b20dd354bc0784e0d482a3a2c8ed28dd8235b5224685ac8c0175d8f422`.
-- HART candidate `6b13fc4` reviewed that exact RLO binary: all 698 existing audited
-  entries unchanged, three pure helpers added. Its build, executable check-all
-  stages and refreshed import/package pins pass,
-  including both Windows/Mac API checks, legacy load order, duplicate ownership,
-  unknown-hash refusal, save publication and package pins.
-- Opus's producer review found and prompted fixes for legacy late-hour permit
-  authorization, rent request shape, home equipment classification, malformed
-  transaction rows, a changed gameplay cache path, abandoned utility state,
-  deterministic interior ordering and owned-property lease provenance.
+- RLO candidate `32e13e0b`: native build with zero warnings/errors; 318 companion
+  checks and 99,290 Standard checks pass locally. Frozen Mac-built DLL SHA256:
+  `e992a80637fd664ee63db651f7248ef7065d3041f15c77ab0b11e913f801d802`.
+  The native Windows build is a separate artifact, not an interchangeable hash.
+- HART candidate `bd8415e`, including integration base `62b2dcc`, reviewed that
+  exact RLO binary: all 698 existing audited entries unchanged, three pure
+  helpers added. The complete check-all gate passes: 227 Core checks, 287 API
+  checks on each Windows/Mac reference set, 36 accepted and 27 refused companion
+  checks, and the settings, billing, legacy load-order and package checks.
+- Producer reviews prompted fixes for legacy late-hour permit authorization,
+  rent request shape, unknown home/equipment classification, malformed
+  transaction rows, a changed gameplay cache path, deterministic interior
+  ordering and owned-property lease provenance. Both owners now distinguish a
+  failed billing director from an unavailable phone app: the latter still bills.
 - Game Link SDK harness: 119 synthetic assertions pass. This is not in-game
   save/load or Workshop acceptance.
-- RLO's complete gate is not green on macOS. Isolated unchanged base `850e2781`
-  reproduces the Windows DPAPI/Steamworks, locale/path and inventory failures.
-  Windows validation is still required; RLO currently has no GitHub CI workflow.
+- RLO's full gate requires Windows. The unchanged base `850e2781` reproduces
+  the DPAPI/Steamworks, locale/path and inventory failures seen on macOS.
+  Native Windows validation uses a fresh Git checkout and installed game
+  assemblies; its final results are recorded on the RLO PR. Neither producer
+  repository has a GitHub CI workflow.
 
 These are candidate integration results, not evidence of an upstream RLO release
 or a deployed HART build. HART is based on the pending modpack integration branch;
 merging that entire base requires its own release readiness. Any rebuilt upstream
 RLO binary must undergo the same hash/body review. Actual game acceptance and
-release status must be recorded separately from code review and CI.
+release status must be recorded separately from code review and CI. The producer
+changes are tracked in [HART PR 1](https://github.com/PeterHartwieg/big-ambitions-modpack/pull/1)
+and [RLO PR 27](https://github.com/AdultCudi/real-life-overhaul/pull/27).
 
 Local consumer evidence: vanilla synthetic payload snapshots pass. The private
 420-save comparison has 230 matching extraction errors and 190 readable saves;

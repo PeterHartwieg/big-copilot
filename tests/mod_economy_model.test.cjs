@@ -293,3 +293,20 @@ test('future and unknown factory courses affect only their mapped purchases',()=
   data.heldRecords.data.push({courseId:18,status:'unavailable'});
   assert.deepEqual(model.create(c).factoryRequirements([['ba:itemname_industrialsewingmachine',1]]).reasons,['held-course-unavailable']);
 });
+
+test('purchasing an invalid held licence follows owner-generated Grant expiry vectors',()=>{
+  const vectors=require('../contracts/rlo/planning-vectors.json').licenceGrants;
+  assert.ok(vectors.length>=20);
+  for(const v of vectors){
+    const c=planning(),p=officePlan();p.existing=true;p.day=v.day;
+    c.hart.modules.runningCosts=disabled();c.rlo.modules.utilities=disabled();
+    c.rlo.modules.company.data.partStates.staff='disabled';c.rlo.modules.company.data.partStates.cover='disabled';
+    c.rlo.modules.company.data.sites=[{address:{street:'Test',number:1},licences:[{kind:v.kind,valid:false,untilDay:v.untilDay}]}];
+    c.rlo.modules.requirements.data.types=[{typeId:'office',licenceNeedsMask:2**v.kind}];
+    c.rlo.modules.requirements.data.licences=[{kind:v.kind,feeCents:10000,termDays:v.termDays,closesWhenMissing:false}];
+    const quote=model.create(c).operating(p),renewal=v.expectedUntilDay-v.day+1;
+    assert.equal(quote.status,'ready');assert.equal(quote.startupCents,10000);
+    assert.equal(quote.renewals[0].first,renewal,JSON.stringify(v));
+    assert.equal(quote.dayCost(renewal),10000);assert.equal(quote.dayCost(renewal-1),0);
+  }
+});

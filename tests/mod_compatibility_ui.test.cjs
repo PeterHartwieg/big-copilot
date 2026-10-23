@@ -198,11 +198,12 @@ test('unknown investments are unavailable, never persisted or described as full 
   const {b}=fixture();
   vm.runInContext('D.openFactory={game:{},items:{},vendors:{},vehicles:{}};planTarget="new"',b);
   const inv={self:null,firm:null,upfrontSelf:null,upfrontFirm:null,b:{key:'A#1',address:'Test',deposit:null},out:{lines:[]},stores:[],items:1,
-    fee:50,furniture:100,deposit:null,truck:0,delivery:0,boxes:0,modEducation:{totalCents:null,startupCents:0,requirements:[{courseId:18,status:'in-progress'}]},incomplete:['course-future-cost-unavailable']};
+    fee:50,furniture:null,deposit:null,truck:0,delivery:0,boxes:0,modEducation:{totalCents:null,startupCents:0,requirements:[{courseId:18,status:'in-progress'}]},incomplete:['course-future-cost-unavailable']};
   for(const html of [b.ofSelfHtml(inv),b.ofFirmHtml(inv)]){
     assert.match(html,/Investment[\s\S]*Unavailable/);assert.doesNotMatch(html,/Includes full course tuition/);
   }
   Object.assign(b,{ofInvestment:()=>inv});
+  assert.match(b.ofInvestHtml({mode:'self'}),/Items<\/span><b>Unavailable<\/b>/);
   const plan={site:null,mode:'self',inv:12345};b.ofSyncInvestment(plan);assert.equal(Object.hasOwn(plan,'inv'),false);
   assert.equal(vm.runInContext('ofCashUpfront({self:100,upfrontSelf:null},"self")',b),null);
   Object.assign(b,{osEstimate:()=>({inv:{self:null,firm:null}})});assert.equal(b.osSnapOf({},{}),null);
@@ -215,4 +216,25 @@ test('finance refusal names unsupported credit or principal basis even with no b
     const html=b.planFinanceHtml('os',{},1000,'',()=> 'unused');assert.match(html,text);
     if(reason!=='vehiclePrices')assert.doesNotMatch(html,/vehicle prices/);
   }
+});
+
+
+test('a selected bank with unknown secured eligibility keeps lender choice but no zero borrowing claim',()=>{
+  const {b}=fixture(),bank={id:'secured',name:'Secured Bank',rate:10,term:100,unavailable:'secured-bank-eligibility'};
+  b.__bank=bank;vm.runInContext('D.openStore={finance:{banks:[__bank],multiplier:1}}',b);
+  Object.assign(b,{planBank:()=>bank});
+  const plan={finance:{on:true,amount:500}};
+  const html=b.planFinanceHtml('os',plan,1000,'',()=>{throw Error('must not quote');});
+  assert.match(html,/secured-account borrowing eligibility could not be verified/);
+  assert.match(html,/data-os-bank/);assert.doesNotMatch(html,/lends you up to|type="range"|data-os-fin-amount/);
+  b.planFinanceUpdate('os',plan,1000,100,()=>{},()=>{throw Error('must not save unknown amount');});
+  assert.equal(plan.finance.amount,500);
+});
+
+
+test('the store Items subtotal respects an unavailable selected equipment price',()=>{
+  const {b}=fixture();
+  vm.runInContext('D.openStore={priceUnavailable:["counter"]}',b);
+  const html=b.osToolbar({type:'shop',mode:'self'},{self:null,firm:null,items:1},{lines:[['counter',1]],furniture:98765});
+  assert.match(html,/Items<\/span><b>Unavailable<\/b>/);assert.doesNotMatch(html,/98,765/);
 });

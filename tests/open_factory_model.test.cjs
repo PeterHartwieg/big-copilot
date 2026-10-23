@@ -412,3 +412,17 @@ test('factory purchase timing and carried debt flags gate only dependent forecas
   model=create(f);inv=model.investment(input);run=model.running(input,inv);
   assert.ok(Number.isFinite(run.raw));assert.equal(run.total,null);assert.ok(run.incomplete.includes('company-carried-debt-unavailable'));
 });
+
+
+test('an unknown native lease is named as a missing quote rather than a mod adjustment',()=>{
+  const model=create(fixture());
+  for(const deposit of [null,undefined]){
+    const inv=model.investment({counts:{beer:1},building:{...factory,deposit}});
+    assert.equal(inv.self,null);assert.ok(inv.incomplete.includes('lease-quote-unavailable'));
+    assert.ok(!inv.incomplete.includes('deposit-adjustment-unavailable'));
+    const supported=model.investment({counts:{beer:1},building:factory,depot:{...depot,deposit}});
+    assert.ok(supported.incomplete.includes('lease-quote-unavailable'));
+  }
+  const withoutDepot=model.investment({counts:{beer:1},building:factory});
+  assert.ok(Number.isFinite(withoutDepot.self));assert.equal(withoutDepot.incomplete,undefined);
+});

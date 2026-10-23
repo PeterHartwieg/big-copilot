@@ -544,9 +544,12 @@ const OpenStoreModel = (() => {
           margin=marginByDay.reduce((sum,value)=>sum+value,0)/7;
         }
         const net = margin - loss - extraCost-utilityDelta;
-        const stock = l.units * l.cost * 7, investment = kit ? kit.setup + stock+startupDelta : null;
+        const nativeStock=l.units*l.cost*7;
+        const stock=companion && pricesModule.status==='ready'
+          ? demandModel.wholesaleDayCost(nativeStock,pricesModule.data):nativeStock;
+        const investment = kit ? kit.setup + stock+startupDelta : null;
         rows.push({...l, kit, margin, loss, extraCost:extraCost+utilityDelta, net, stock, investment,
-          ...(companion?{modOperatingDelta:utilityDelta,modStartupDelta:startupDelta,assumptions:[...new Set([...(m.assumptions||[]),...(delta.assumptions||[])])]}:{}),
+          ...(companion?{modOperatingDelta:utilityDelta,modStartupDelta:startupDelta,assumptions:[...new Set([...(m.assumptions||[]),...(delta.assumptions||[]),...(pricesModule.data?.livingExcludesWholesalePurchases===false?['initial-stock-single-purchase']:[])])]}:{}),
           payback:investment===null?null:!companion?osDays(investment,net):osBreakDay(investment,k=>{
             const extra=delta.dayCost(k);
             return extra===null?null:marginByDay[(companion.day+k)%7]-loss-extraCost-extra/100;

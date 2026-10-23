@@ -85,6 +85,21 @@ import multipliers; wholesale costs apply those multipliers once. Daily wages
 are adjusted as an aggregate estimate from captured settings, not a prediction
 of every future employee transaction.
 
+`livingExcludesWholesalePurchases` controls the later City settlement adjustment;
+it is separate from the registered catalogue and market/import multipliers.
+The store model applies that adjustment once to its daily goods category when
+wholesale purchases are included. Factory recipes provide weekly consumption,
+not dated purchase bills. When wholesale purchases are included and the City
+cost factor differs from 1000, factory raw-material costs, savings and complete
+running totals are unavailable. Ingredient quantities and observed catalogue
+quotes remain usable. The factory does not invent a daily purchase schedule.
+
+A report requesting carried company debt in site forecasts makes the complete
+site forecast unavailable; debt is not silently omitted. Loan estimates are also
+unavailable when bank terms require additional credit eligibility or treat
+principal as an expense. Recorded debt and statement observations stay separate
+from these forecast limits.
+
 ## Maintaining both sides
 
 RLO's EconomyCheck generates `ready.json` and `partial.json` using its production

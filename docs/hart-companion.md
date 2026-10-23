@@ -36,6 +36,12 @@ RLO internet accrual that already contains the seat charge. Factory course gates
 apply to purchases; owning an existing machine is not a new course purchase.
 Producer-owned models and their generated vectors define calculation support.
 
+A current site's `equipmentApplies` is a nullable boolean. `false` proves that
+HART equipment costs do not apply; `null` means the building could not be
+resolved and applicability is unknown. A cached equipment total does not turn
+that unknown into a disabled rule. The consumer blocks only the dependent site
+estimate, preserving other sites and modules.
+
 Factory planning applies the captured operating model to the new factory and
 supporting depot. At existing sites it subtracts the captured baseline from the
 same site with added equipment, so unchanged rent, equipment and licences are
@@ -48,6 +54,10 @@ existing assigned vehicle can serve another route.
 Course tuition is an economic investment once per required course; initial cash
 is shown separately. Existing enrollment does not trigger a second fee, and an
 unknown remaining payment schedule blocks a complete investment estimate.
+Required unknown lease deposits, setup charges or tuition leave investment and
+upfront totals null. The board displays them as unavailable and does not save a
+partial amount as the plan's investment. A separately known enrollment payment
+can still be shown without claiming that all tuition is included.
 Financing uses known initial cash, while incomplete investment suppresses loan
 recommendations. Owning a machine does not charge a course retroactively, but
 buying another copy still checks the current purchase gate.
