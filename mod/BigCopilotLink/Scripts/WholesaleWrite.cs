@@ -80,6 +80,11 @@ namespace BigCopilotLink
                     + "|" + string.Join(";", SaveGameManager.Current.DeliveryContracts.Where(c => c.businessAddress == p.Shop.Address).Select(State).ToArray()));
                 if (!dryRun && (string.IsNullOrEmpty(req.Quote) || req.Quote != p.Quote)) p.Error = "changed";
             }
+            if (p.Error == null)
+            {
+                var refusal = Ownership(p, dryRun ? "review" : "apply");
+                if (refusal.HasValue) return refusal.Value;
+            }
             if (dryRun || p.Error != null) return Answer(p, dryRun, false, null);
             if (!p.Changed) { ws.WholesaleUndo = null; return Answer(p, false, false, ws.RefreshAfterWrite()); }
             var before = p.Existing == null ? null : Clone(p.Existing);
@@ -174,12 +179,30 @@ namespace BigCopilotLink
             if (TimeHelper.CurrentDay != state.Day || !SaveGameManager.Current.DeliveryContracts.Contains(target)
                 || State(target) != state.After || !DeliveryHelper.CanModifyContract(target.nextDeliveryDay)) p.Error = "changed";
             else if (UnityEngine.Object.FindObjectsOfType<UI.Smartphone.Apps.BizMan.BizManDeliveries>().Any(x => x.isActiveAndEnabled)) p.Error = "screen_open";
+            if (p.Error == null)
+            {
+                var refusal = Ownership(p, "undo");
+                if (refusal.HasValue) return refusal.Value;
+            }
             if (dryRun || p.Error != null) return Answer(p, dryRun, true, null);
             if (state.Before == null) SaveGameManager.Current.DeliveryContracts.Remove(target);
             else Copy(state.Before, target);
             ws.WholesaleUndo = null;
             return Answer(p, false, true, ws.Applied("bigcopilotlink_notify_undo_wholesale", ""));
         }
+        private static WriteAnswer? Ownership(Plan plan, string phase)
+        {
+            var target = ModOwnership.Target(plan.Request.Address);
+            target["contractId"] = plan.Request.Address.Street + "#" + plan.Request.Address.Number + "|"
+                + plan.Request.Supplier.Street + "#" + plan.Request.Supplier.Number;
+            target["action"] = plan.After == null ? "remove" : "set";
+            // Includes removed lines: changing a contract cannot bypass Stock by omitting its products.
+            target["itemIds"] = new[] { plan.Existing, plan.After }.Where(c => c != null)
+                .SelectMany(c => c.items).Where(i => i != null).Select(i => i.itemName)
+                .Where(id => !string.IsNullOrEmpty(id)).Distinct().OrderBy(id => id, StringComparer.Ordinal).ToArray();
+            return ModOwnership.Check("wholesale", phase, new[] { target });
+        }
+
         private static DeliveryContract Clone(DeliveryContract c)
         {
             var copy = new DeliveryContract(); Copy(c, copy); return copy;

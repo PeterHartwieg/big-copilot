@@ -16,7 +16,7 @@ namespace BigCopilotLink
             w.Prop("model", "economy-capabilities-v1");
             w.BeginArray("providers");
             var providers = AppDomain.CurrentDomain.GetAssemblies()
-                .Where(a => a.GetName().Name == "HardModePatch" || a.GetName().Name == "RealLifeOverhaul")
+                .Where(a => a.GetName().Name == "HardModePatch" || a.GetName().Name == "HARTModPack" || a.GetName().Name == "RealLifeOverhaul")
                 .GroupBy(a => a.GetName().Name)
                 .OrderBy(group => group.Key, StringComparer.Ordinal);
             foreach (var provider in providers)
@@ -27,7 +27,7 @@ namespace BigCopilotLink
                     .Select(v => v == null ? "unknown" : v.ToString())
                     .Distinct().OrderBy(v => v, StringComparer.Ordinal).ToArray();
                 w.BeginObject();
-                w.Prop("id", provider.Key == "HardModePatch" ? "hard-mode-patch" : "real-life-overhaul");
+                w.Prop("id", provider.Key == "HardModePatch" ? "hard-mode-patch" : provider.Key == "HARTModPack" ? "hart-mod-pack" : "real-life-overhaul");
                 w.Prop("version", string.Join(", ", versions));
                 if (provider.Key == "HardModePatch")
                 {
@@ -40,10 +40,22 @@ namespace BigCopilotLink
                     w.Prop("status", equipment.HasValue && office.HasValue && diplomas.HasValue && available.HasValue
                         ? "observed" : "unavailable");
                     Bool(w, "runningCostsAvailable", available);
+                    w.Prop("provenance", "legacy-selected-options");
                     w.BeginObject("rules");
                     Bool(w, "equipmentUtilities", equipment);
                     Bool(w, "officeIt", office);
                     Bool(w, "factoryDiplomas", diplomas);
+                    w.EndObject();
+                }
+                else if (provider.Key == "HARTModPack")
+                {
+                    // Current pack effective state belongs to its pure companion runtime
+                    // module. Options (or a blocked pack) never prove legacy behaviour.
+                    w.Prop("status", "unavailable");
+                    w.Prop("source", "hartmodpack:companion");
+                    w.Prop("ambiguous", ambiguous);
+                    w.BeginObject("rules");
+                    w.PropNull("equipmentUtilities"); w.PropNull("officeIt"); w.PropNull("factoryDiplomas");
                     w.EndObject();
                 }
                 else

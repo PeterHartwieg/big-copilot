@@ -352,6 +352,11 @@ namespace BigCopilotLink
             }
 
             var ok = rows.Count == 0 && !blocked;
+            if (ok)
+            {
+                var refusal = ModOwnership.Check("hire", dryRun ? "review" : "apply", OwnershipTargets(hired, moved, sites));
+                if (refusal.HasValue) return refusal.Value;
+            }
             if (dryRun) return Answer(true, ok, blocked, null, hired, moved, skipped, sites, away, rows);
             if (rows.Count > 0) return Refused(rows);
 
@@ -463,6 +468,50 @@ namespace BigCopilotLink
         /// its own, as ScheduleWrite does; should the change itself throw part way, what
         /// was done is still marked, announced and refreshed, and the page hears "other".
         /// </summary>
+        private static IEnumerable<Dictionary<string, object>> OwnershipTargets(List<Hired> hired, List<Moved> moved, List<SiteState> sites)
+        {
+            var targets = new Dictionary<string, Dictionary<string, object>>(StringComparer.Ordinal);
+            foreach (var h in hired)
+            {
+                AddOwnership(targets, ModOwnership.Target(h.Req.Address), true, false, false);
+                var prior = h.Candidate.assignedAddress;
+                if (prior != null && !string.IsNullOrEmpty(prior.streetName))
+                    AddOwnership(targets, ModOwnership.Target(new WireAddress(prior.streetName, prior.streetNumber)), true, false, false);
+            }
+            foreach (var m in moved)
+            {
+                AddOwnership(targets, ModOwnership.Target(m.Req.To), false, true, false);
+                if (m.Req.HasFrom) AddOwnership(targets, ModOwnership.Target(m.Req.From), false, true, false);
+            }
+            // A move clears its source's hours before explicit weeks are applied.
+            foreach (var m in moved)
+            {
+                if (m.Source == null || m.ShiftsCleared == 0) continue;
+                var removed = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var other in moved)
+                    if (ReferenceEquals(other.Source, m.Source) && other.ShiftsCleared > 0) removed.Add(other.Req.EmployeeId);
+                AddOwnership(targets, ScheduleWrite.OwnershipCurrent(m.Source, m.Req.From, removed), false, true, true);
+            }
+            foreach (var site in sites)
+                if (site.Week != null) AddOwnership(targets,
+                    ScheduleWrite.OwnershipTarget(site.Reg, site.Req.Address, site.Week.After, site.Req.Week.OpenAllHours, null), false, false, true);
+            return targets.Values;
+        }
+
+        private static void AddOwnership(Dictionary<string, Dictionary<string, object>> targets, Dictionary<string, object> target,
+            bool hiring, bool moving, bool scheduling)
+        {
+            var key = (string)target["street"] + "#" + target["number"];
+            Dictionary<string, object> old;
+            if (targets.TryGetValue(key, out old))
+            {
+                hiring |= (bool)old["hiring"]; moving |= (bool)old["moving"]; scheduling |= (bool)old["scheduling"];
+                if (!target.ContainsKey("week") && old.ContainsKey("week")) target["week"] = old["week"];
+            }
+            target["hiring"] = hiring; target["moving"] = moving; target["scheduling"] = scheduling;
+            targets[key] = target;
+        }
+
         private static WriteAnswer Apply(WriteService ws, List<Hired> hired, List<Moved> moved, List<Skipped> skipped,
             List<SiteState> sites, HashSet<string> away, List<Row> rows)
         {
@@ -1004,6 +1053,26 @@ namespace BigCopilotLink
             }
 
             var ok = rows.Count == 0 && !blocked;
+            if (ok)
+            {
+                var targets = new Dictionary<string, Dictionary<string, object>>(StringComparer.Ordinal);
+                foreach (var h in state.Hires)
+                {
+                    AddOwnership(targets, ModOwnership.Target(h.Target), true, false, false);
+                    if (h.AssignedBefore != null && !string.IsNullOrEmpty(h.AssignedBefore.streetName))
+                        AddOwnership(targets, ModOwnership.Target(new WireAddress(h.AssignedBefore.streetName, h.AssignedBefore.streetNumber)), true, false, false);
+                }
+                foreach (var m in state.Moves)
+                {
+                    AddOwnership(targets, ModOwnership.Target(m.Target), false, true, false);
+                    if (m.Source != null && !string.IsNullOrEmpty(m.Source.streetName))
+                        AddOwnership(targets, ModOwnership.Target(new WireAddress(m.Source.streetName, m.Source.streetNumber)), false, true, false);
+                }
+                foreach (var restore in restores)
+                    AddOwnership(targets, ScheduleWrite.OwnershipTarget(restore.Reg, restore.State.Address, restore.Restored, false, restore.State), false, false, true);
+                var refusal = ModOwnership.Check("hire", "undo", targets.Values);
+                if (refusal.HasValue) return refusal.Value;
+            }
             if (dryRun) return UndoAnswer(true, ok, blocked, null, hires, moves, restores, siteErrors, rows);
             if (rows.Count > 0) return Refused(rows);
 

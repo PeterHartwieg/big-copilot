@@ -222,6 +222,45 @@ and unchanged live mod data. It restores the synthetic static state and reads
 no player saves. Before release, also run the in-game save/reload and unsaved
 wage/credit-change checks in RLO's companion contract README.
 
+## HART capture and fresh ownership validation
+
+Link independently discovers `HARTModPack.Companion.CaptureV1(GameInstance)`.
+Current HART and RLO reports compose with Street Food on the same private root.
+Fresh markers bind exact raw UTF-8 reports; unavailable providers remove copied
+stale reports. Canonical provider identity/version/modules are checked again
+before asynchronous publication. See [HART reporting](../../docs/hart-companion.md).
+
+The native schedule, hire/move/reschedule, wholesale and rent writes query RLO's
+pure `OwnershipV1` during review, apply and undo. Only allowed permits mutation;
+conditional/refused/unknown returns a semantic 409, preserving undo. Hire checks
+all actual source and destination sites and every scheduling suboperation before
+any change. Old RLO is allowed only with fresh effective-disabled manager/estate
+proof; a manager whose director is not running is still potentially active.
+Scheduling additionally needs fresh Company-disabled proof or a complete proposed
+week within 05:00–22:00, including hiring with scheduling and undo. Older reports
+cannot verify a current late-opening permit.
+
+For the isolated synthetic SDK check, keep real RLO, HART and Street Food provider
+DLLs and the other provider test harnesses out of that SDK. Copy
+`mod/build/compatibility-tests/` to `Assets/Editor/BclCompatibilityTests/`, then run:
+
+```sh
+BCL_OWNERSHIP_SCHEMA=<checkout>/contracts/rlo/ownership-request.schema.json Unity -batchmode -nographics -projectPath <SDK> -executeMethod BclCompatibilityTests.Run -logFile <log>
+```
+
+The harness checks one-copy composition, exact hashes and copied clock, failure
+isolation and stale removal, canonical mid-walk changes, distinct-assembly
+ambiguity, each ownership operation/phase and actual builder against the frozen
+request schema, strict responses, old-report permit fallbacks, owned-property
+zero-cost provenance,
+source-week projections and a 10,000-item catalogue. It reads no player saves and
+never triggers game save events. It uses synthetic provider APIs; run the separate
+real RLO provider harness too when the candidate DLL is ready. SDK checks prove
+neither in-game behaviour nor ordinary save/reload correctness. Release acceptance
+still requires option/gate changes, current report matching, manager changes
+between review/apply/undo, refusal without partial mutation, and an undo retained
+after refusal with the exact release candidates.
+
 ## Queue validation in the SDK
 
 HTTP admission and main-thread work are bounded as described in

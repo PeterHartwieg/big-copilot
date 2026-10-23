@@ -1,0 +1,9 @@
+{
+  "name": "BclCompatibilityTests.Editor",
+  "references": ["BigCopilotLink"],
+  "includePlatforms": ["Editor"],
+  "defineConstraints": ["BA_GAME_DLLS_IMPORTED"],
+  "overrideReferences": true,
+  "precompiledReferences": ["BigAmbitions.dll", "BigAmbitions.Items.dll", "DayNightCycle.dll"],
+  "autoReferenced": false
+}

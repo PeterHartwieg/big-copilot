@@ -401,11 +401,11 @@ namespace BigCopilotLink
             var day = TimeHelper.CurrentDay;
             var hour = TimeHelper.CurrentHour;
 
-            string facts;
+            string facts, companionDigest;
             try
             {
                 facts = BuildingFacts.Capture(instance);
-                instance = CompanionSnapshots.Capture(instance);
+                instance = CompanionSnapshots.CaptureWithDigest(instance, out companionDigest);
             }
             catch (Exception e) { return FailedStart("capturing building facts failed: " + e.Message, trigger == "retry"); }
             var character = instance.characterId;
@@ -431,7 +431,7 @@ namespace BigCopilotLink
                 // competes with the frame.
                 try
                 {
-                    var worker = new Thread(delegate () { SerializeAndCompressOnWorkerThread(instance, day, hour, trigger, facts, character); });
+                    var worker = new Thread(delegate () { SerializeAndCompressOnWorkerThread(instance, day, hour, trigger, facts, character, companionDigest); });
                     worker.Name = "BigCopilotLink.Serialize";
                     worker.IsBackground = true;
                     worker.Priority = ThreadPriority.BelowNormal;
@@ -465,7 +465,7 @@ namespace BigCopilotLink
             try
             {
                 LinkMod.LogInfo("serialized in " + clock.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture) + " ms on the main thread (" + trigger + ")");
-                var compressor = new Thread(delegate () { CompressAndPublishOnWorkerThread(raw, day, hour, false, fallbackRun, wasRetry, facts, character); });
+                var compressor = new Thread(delegate () { CompressAndPublishOnWorkerThread(raw, day, hour, false, fallbackRun, wasRetry, facts, character, companionDigest); });
                 compressor.Name = "BigCopilotLink.Compress";
                 compressor.IsBackground = true;
                 compressor.Priority = ThreadPriority.BelowNormal;
@@ -573,7 +573,7 @@ namespace BigCopilotLink
         /// OdinSerializer throw: that is caught, the previous bytes stay, and the main
         /// thread is told so it can retry or fall back.
         /// </summary>
-        private void SerializeAndCompressOnWorkerThread(GameInstance instance, int day, int hour, string trigger, string facts, string character)
+        private void SerializeAndCompressOnWorkerThread(GameInstance instance, int day, int hour, string trigger, string facts, string character, string companionDigest)
         {
             byte[] raw;
             var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -592,7 +592,7 @@ namespace BigCopilotLink
             // The city may have unloaded during the walk; the gzip is the longer half
             // of the job and its result would be thrown away at the publish.
             if (_cleared) return;
-            CompressAndPublishOnWorkerThread(raw, day, hour, true, false, trigger == "retry", facts, character);
+            CompressAndPublishOnWorkerThread(raw, day, hour, true, false, trigger == "retry", facts, character, companionDigest);
         }
 
         /// <summary>Main thread only, through the dispatcher.</summary>
@@ -620,7 +620,7 @@ namespace BigCopilotLink
         /// walk produced, with the game's own stateless call, and hands the result
         /// back.
         /// </summary>
-        private void CompressAndPublishOnWorkerThread(byte[] raw, int day, int hour, bool fromWorker, bool fallbackRun, bool wasRetry, string facts, string character)
+        private void CompressAndPublishOnWorkerThread(byte[] raw, int day, int hour, bool fromWorker, bool fallbackRun, bool wasRetry, string facts, string character, string companionDigest)
         {
             try
             {
@@ -639,7 +639,9 @@ namespace BigCopilotLink
                     if (_cleared) return;
                     try
                     {
-                        if (BuildingFacts.Capture(SaveGameManager.Current) != facts)
+                        if (SaveGameManager.Current == null || SaveGameManager.Current.characterId != character
+                            || BuildingFacts.Capture(SaveGameManager.Current) != facts
+                            || CompanionSnapshots.CurrentDigest(SaveGameManager.Current) != companionDigest)
                         {
                             _busy = false;
                             _retryPending = true;
@@ -648,7 +650,7 @@ namespace BigCopilotLink
                     }
                     catch (Exception e)
                     {
-                        LinkMod.LogWarn("building facts changed during refresh: " + e.Message);
+                        LinkMod.LogWarn("building facts or companion state changed during refresh: " + e.Message);
                         _busy = false;
                         _retryPending = true;
                         return;

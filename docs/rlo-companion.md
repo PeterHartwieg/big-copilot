@@ -1,6 +1,6 @@
 # Real Life Overhaul companion reporting
 
-This is the first reporting increment of RLO compatibility. Big Copilot detects
+Big Copilot detects
 RLO records and shows report availability under Mods, with validated business,
 employee and account counts and reported credit account balances. The masthead explains
 the current limits. Detection is evidence in the save, not proof that RLO is
@@ -10,8 +10,9 @@ RLO exports the meaning of its own data. `ba_rlo.py` reads the versioned compani
 report, without decoding RLO's private save formats. `ba_mods.detect()` includes
 the compact result in `mods.rlo`; the full validated report is available through
 `ba_rlo.read(save)`. Validation is cached on each Save and shared by CLI and Pyodide.
-No gameplay or forecast calculation is changed in this increment. In particular,
-additional debt and ordinary pay observations never get added to recorded profit.
+Producer-owned compatibility models are separate additive modules. Additional
+debt and ordinary pay observations never get added to recorded profit. Their
+availability does not establish completeness of a broader forecast.
 
 ## Transport and freshness
 
@@ -23,9 +24,12 @@ Big Copilot Link discovers this API by reflection. Before background serializati
 `CompanionSnapshots` copies the root and `modData` once. Each mod adapter reads
 the original live instance and writes only its own keys into the copy. RLO adds
 `bigcopilot:rlo-snapshot.v1` with `status: fresh` and the SHA-256 of the exact UTF-8
-report string. It never fires save events or edits the running instance. A missing,
+report string. It never fires save events or edits the running instance. HART and Street Food
+are composed into the same private copy. A canonical identity/version/modules
+comparison before and after asynchronous serialization detects changed provider
+state; only captured timestamps are excluded. A missing,
 throwing or invalid provider produces `status: unavailable`; retained reports
-then remain stale, even if the game clock has not moved.
+are removed from the private copy, even if the game clock has not moved.
 
 `ba_rlo` requires the capture's character and clock to match the accompanying
 save, truncating the game's fractional minute to a whole minute. Save names and
@@ -62,10 +66,24 @@ excludes ordinary game loan principal, private-lender debt and debts recorded by
 other RLO features. A zero balance covers only the reported credit accounts. Recorded statements remain authoritative
 for the activity they cover, without claiming complete RLO cash-flow coverage.
 
-Forecasts, staffing suggestions and game writes do not yet account for RLO rules
-or manager decisions. This increment provides no write permissions or automated
-coordination with RLO managers. Those require separate capability contracts before
-they can be presented as compatible.
+The original five modules grant no permission to modify manager-owned state.
+The additive compatibility contracts supply owner models and `OwnershipV1`.
+Link queries it freshly for review/apply/undo of schedule, hire, wholesale and
+rent; only allowed permits mutation. Conditional is a refusal with concrete
+manager effects, not an invitation to take over. Every source/destination and
+schedule suboperation is checked before any change. Refused undo remains available.
+See [the wire contract](game-link-api.md#fresh-mod-ownership) for exact request
+shapes and the conservative fallback for older RLO.
+
+Factory costs retain the native purchase boundaries: furniture delivery orders
+are `ba:transaction_deliverycontract`, while the installation firm's entire fee
+plus furniture is one `ba:transaction_interiorinstallation` bill. The latter
+receives the captured Living adjustment when listed; delivery contracts do not
+inherit an item-purchase adjustment. Carried in-store purchases are outside this
+self-installation estimate. Default catalogue prices exclude the market and
+import multipliers; wholesale costs apply those multipliers once. Daily wages
+are adjusted as an aggregate estimate from captured settings, not a prediction
+of every future employee transaction.
 
 ## Maintaining both sides
 

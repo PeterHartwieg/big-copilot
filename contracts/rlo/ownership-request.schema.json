@@ -1,0 +1,441 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "const": "schedule"
+        },
+        "phase": {
+          "enum": [
+            "review",
+            "apply",
+            "undo"
+          ]
+        },
+        "targets": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "properties": {
+              "street": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              "number": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "week": {
+                "type": "array",
+                "maxItems": 7,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "day": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 6
+                    },
+                    "isOpen": {
+                      "type": "boolean"
+                    },
+                    "hours": {
+                      "type": "array",
+                      "maxItems": 10000,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "from": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 24
+                          },
+                          "to": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 24
+                          }
+                        },
+                        "required": [
+                          "from",
+                          "to"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "shifts": {
+                      "type": "array",
+                      "maxItems": 10000,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "from": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 24
+                          },
+                          "to": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 24
+                          },
+                          "employeeId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1024
+                          },
+                          "itemInstanceId": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 1024
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "from",
+                          "to",
+                          "employeeId",
+                          "itemInstanceId"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "day",
+                    "isOpen",
+                    "hours",
+                    "shifts"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 7
+              }
+            },
+            "required": [
+              "street",
+              "number",
+              "week"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "phase",
+        "targets"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "const": "hire"
+        },
+        "phase": {
+          "enum": [
+            "review",
+            "apply",
+            "undo"
+          ]
+        },
+        "targets": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "properties": {
+              "street": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              "number": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "hiring": {
+                "type": "boolean"
+              },
+              "moving": {
+                "type": "boolean"
+              },
+              "scheduling": {
+                "type": "boolean"
+              },
+              "week": {
+                "type": "array",
+                "maxItems": 7,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "day": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 6
+                    },
+                    "isOpen": {
+                      "type": "boolean"
+                    },
+                    "hours": {
+                      "type": "array",
+                      "maxItems": 10000,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "from": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 24
+                          },
+                          "to": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 24
+                          }
+                        },
+                        "required": [
+                          "from",
+                          "to"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "shifts": {
+                      "type": "array",
+                      "maxItems": 10000,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "from": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 24
+                          },
+                          "to": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 24
+                          },
+                          "employeeId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1024
+                          },
+                          "itemInstanceId": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 1024
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "from",
+                          "to",
+                          "employeeId",
+                          "itemInstanceId"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "day",
+                    "isOpen",
+                    "hours",
+                    "shifts"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 7
+              }
+            },
+            "required": [
+              "street",
+              "number",
+              "hiring",
+              "moving",
+              "scheduling"
+            ],
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "scheduling": {
+                      "const": true
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "week"
+                  ]
+                }
+              }
+            ]
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "phase",
+        "targets"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "const": "wholesale"
+        },
+        "phase": {
+          "enum": [
+            "review",
+            "apply",
+            "undo"
+          ]
+        },
+        "targets": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "properties": {
+              "street": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              "number": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "contractId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              "action": {
+                "enum": [
+                  "set",
+                  "remove"
+                ]
+              },
+              "itemIds": {
+                "type": "array",
+                "maxItems": 10000,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                }
+              }
+            },
+            "required": [
+              "street",
+              "number",
+              "contractId",
+              "action",
+              "itemIds"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "phase",
+        "targets"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "const": "rent"
+        },
+        "phase": {
+          "enum": [
+            "review",
+            "apply",
+            "undo"
+          ]
+        },
+        "targets": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "properties": {
+              "street": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              "number": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "street",
+              "number"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "phase",
+        "targets"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}
