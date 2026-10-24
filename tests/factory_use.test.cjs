@@ -127,6 +127,31 @@ test('a line short of production reads short with the machine count, and is coun
   } finally { await both.close(); }
 });
 
+test('a line sharing its product with another factory names the link of the chain (#521)', async () => {
+  // The bread line is judged on its share of what the shops past the
+  // meeting factory draw; its tip names that factory and what the chain
+  // makes there together against the need, from either end of the route.
+  const base = fixture();
+  const s = base.supply.factories.sites[0].s;
+  const other = base.businesses.findIndex((b, i) => i !== s && b);
+  for(const [at, from, key] of [[other, [s], 'sb.line.chain.at'], [s, [other], 'sb.line.chain.here']]){
+    const data = shortOfMachines(fixture());
+    Object.assign(data.supply.factories.sites[0].lines.find(l => l.slug === 'bread'),
+      {chain: {at, from, makes: 1440, need: 2300}});
+    const page = await board(data);
+    try {
+      const prod = (await line(page, 'bread')).chips.find(c => c.word === MORE1);
+      assert.ok(prod, key);
+      const names = await page.evaluate(([at, from]) => ({at: shortName(D.businesses[at]), from: shortName(D.businesses[from[0]])}), [at, from]);
+      assert.match(prod.tip, enRe('sb.line.machines.tip', {n: 1, makes: 1440, need: 1150}));
+      assert.match(prod.tip, enRe(key, {...names, makes: 1440, need: 2300}));
+      // The factory page's read-out says the same link.
+      const read = await page.evaluate(() => spLinesRead(D.supply.factories.sites[0]));
+      assert.match(read, enRe(key, {...names, makes: 1440, need: 2300}));
+    } finally { await page.close(); }
+  }
+});
+
 test('a factory with a line critically short of machines opens, and its head says so', async () => {
   // Nothing else to read: every input covered, the cake's hours covered, so
   // there is no change to type and no other critical row.

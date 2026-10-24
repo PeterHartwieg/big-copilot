@@ -7205,7 +7205,8 @@ function spLinesRead(site){
   const lacking = sbProdWorst(site.lines || []);
   if(lacking) return tt("sp.lines.machines", {one: "Short of machines · <b>{item}</b> needs {n} more machine to cover the {need} a day it needs with the margin: what its shops sell and other lines use",
     other: "Short of machines · <b>{item}</b> needs {n} more machines to cover the {need} a day it needs with the margin: what its shops sell and other lines use"},
-    {item: spEsc(lacking.item), n: lacking.production.more, need: spNum(lacking.needDay)});
+    {item: spEsc(lacking.item), n: lacking.production.more, need: spNum(lacking.needDay)})
+    + (lacking.chain ? ` · ${spEsc(sbChainTip(lacking.chain, site.s))}` : "");
   let worst = null;
   (site.lines || []).forEach(l => (l.gaps || []).forEach((g, k) => {
     if(g && Number.isFinite(g.hours) && (!worst || g.hours < worst.g.hours))
@@ -7255,7 +7256,7 @@ function spMachines(count, gaps, slots){
 /* A line's production and ingredient statuses on the factory page, as the
    Supply page draws them (sbProdFact(), sbLineInputsFact()), each a chip. */
 function spLineChips(site, l){
-  const p = sbProdFact(l), g = sbLineInputsFact(site, l);
+  const p = sbProdFact(l, site.s), g = sbLineInputsFact(site, l);
   return (p ? " " + chipHtml(SZ_CHIP[p.lvl] || "warn", szShortWord(p), sbMachinesTip(p)) : "")
     + (g ? " " + chipHtml(SZ_CHIP[g.lvl] || "warn", szShortWord(g), sbInputsTip(g, x => x)) : "");
 }
@@ -9648,11 +9649,13 @@ function sbLineFact(l){
    in either sizing: short where the need with the margin is past what it
    makes round the clock, by whole machines (`more`, making `makesWith` a day
    with them). Hours cannot close it, so it is a status of its own beside the
-   hours'. Null where it keeps up, or Python sent no figure. */
-function sbProdFact(l){
+   hours'. Null where it keeps up, or Python sent no figure. `s` is the
+   line's factory, for the chain it shares its product with (`chain`, #521). */
+function sbProdFact(l, s = l.s){
   const p = l.production;
   if(l.named || !p || p.status !== "short") return null;
-  return {st: "short", why: "machines", lvl: p.level || "warn", more: p.more, makesWith: p.makesWith, need: l.needDay};
+  return {st: "short", why: "machines", lvl: p.level || "warn", more: p.more, makesWith: p.makesWith, need: l.needDay,
+    chain: l.chain || null, s};
 }
 /* The inputs a line eats that are short, without a plan or paused: one
    status for the line, named for its subject, the order where every one of
@@ -9686,8 +9689,24 @@ function szShortWord(f){
   }
 }
 /* What a production status's tip and an ingredient status's tip say. */
-const sbMachinesTip = p => tt("sb.line.machines.tip", {one: "{n} more machine makes {makes:,} a day against {need:,} needed",
-  other: "{n} more machines make {makes:,} a day against {need:,} needed"}, {n: p.more, makes: p.makesWith, need: p.need});
+const sbMachinesTip = p => [tt("sb.line.machines.tip", {one: "{n} more machine makes {makes:,} a day against {need:,} needed",
+  other: "{n} more machines make {makes:,} a day against {need:,} needed"}, {n: p.more, makes: p.makesWith, need: p.need}),
+  sbChainTip(p.chain, p.s)].filter(Boolean).join(". ");
+/* Where a line's product meets another site's of it on the way to the shops
+   (#521), the link of the chain it is judged on: the factory where the two
+   meet, the sites sending it there, and what the lines there and the
+   producers behind those routes make for it a day against what is drawn
+   with the margin. A feeder's tip names the chain at the meeting factory,
+   not one line: other sites may feed it too. */
+function sbChainTip(c, s){
+  if(!c || !D.businesses[c.at]) return "";
+  const at = shortName(D.businesses[c.at]);
+  const from = sbAnd((c.from || []).filter(i => D.businesses[i]).map(i => shortName(D.businesses[i])));
+  const nums = {makes: c.makes, need: c.need};
+  return c.at === s
+    ? tt("sb.line.chain.here", "It shares the demand with what {from} sends here: together they make {makes:,} a day against {need:,} needed", {from, ...nums})
+    : tt("sb.line.chain.at", "It shares the demand with the chain at {at}: together they make {makes:,} a day against {need:,} needed there", {at, ...nums});
+}
 const sbInputsTip = (g, esc = spEsc) => tt("sb.line.inputs.tip", "Short of {items}", {items: sbList(g.items.map(esc))});
 /* A line's production and ingredient statuses, each a chip of its own. A
    line short of machines drops its hours' covered chip (sbLineRow()): hours
@@ -10684,7 +10703,7 @@ function sbFactoryPart(d, claimed, ctx, view, o){
     const makers = {};
     site.lines.forEach(l => { makers[l.slug] = (makers[l.slug] || 0) + 1; });
     const lines = !o.lines ? [] : site.lines.map(l => {
-      const r = {...l, s, fact: sbLineFact(l), makers: makers[l.slug], prod: sbProdFact(l), ing: sbLineInputsFact(site, l)};
+      const r = {...l, s, fact: sbLineFact(l), makers: makers[l.slug], prod: sbProdFact(l, s), ing: sbLineInputsFact(site, l)};
       r.chk = sbChk(d, claimed, s, l.slug, SB_LINE_KINDS, l.rid);
       r.keep = sbWorth(r.fact, r.chk) || !!r.prod;
       return r;
