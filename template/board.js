@@ -9694,17 +9694,18 @@ const sbMachinesTip = p => [tt("sb.line.machines.tip", {one: "{n} more machine m
   sbChainTip(p.chain, p.s)].filter(Boolean).join(". ");
 /* Where a line's product meets another site's of it on the way to the shops
    (#521), the link of the chain it is judged on: the factory where the two
-   meet, the sites sending it there, and what the lines there and those
-   routes make a day together against what is drawn with the margin. Each
-   line there is judged on its share, so a short chain is short on each. */
+   meet, the sites sending it there, and what the lines there and the
+   producers behind those routes make for it a day against what is drawn
+   with the margin. A feeder's tip names the chain at the meeting factory,
+   not one line: other sites may feed it too. */
 function sbChainTip(c, s){
   if(!c || !D.businesses[c.at]) return "";
   const at = shortName(D.businesses[c.at]);
   const from = sbAnd((c.from || []).filter(i => D.businesses[i]).map(i => shortName(D.businesses[i])));
   const nums = {makes: c.makes, need: c.need};
   return c.at === s
-    ? tt("sb.line.chain.here", "It shares the shops' demand with what {from} sends here: together they make {makes:,} a day against {need:,} needed", {from, ...nums})
-    : tt("sb.line.chain.at", "It shares the shops' demand with the line at {at}: together they make {makes:,} a day against {need:,} needed there", {at, ...nums});
+    ? tt("sb.line.chain.here", "It shares the demand with what {from} sends here: together they make {makes:,} a day against {need:,} needed", {from, ...nums})
+    : tt("sb.line.chain.at", "It shares the demand with the chain at {at}: together they make {makes:,} a day against {need:,} needed there", {at, ...nums});
 }
 const sbInputsTip = (g, esc = spEsc) => tt("sb.line.inputs.tip", "Short of {items}", {items: sbList(g.items.map(esc))});
 /* A line's production and ingredient statuses, each a chip of its own. A

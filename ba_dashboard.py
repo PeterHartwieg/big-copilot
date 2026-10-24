@@ -7604,50 +7604,189 @@ class _DemandSizing:
         lines make, where routes from the company's other sites bring it
         there too (#521): Factory 2 makes soda and is topped up with Factory
         1's, and the shops past it sell 10,000 a week; the two make it
-        between them, never 10,000 each. The draw is split by what each can
-        bring a day: the lines' capacity, and each route's room (room()),
-        so a line here and the factories feeding it run equally loaded, and
-        all keep up, or all fall short, with the chain. A round brings no
-        more than its target a day, less the margin (demand() holds a
-        sender there), the routes together no more than the highest; what
-        the targets leave is the lines' to make, as a site's own supply
-        brings what is past them. 1.0 where no route brings it, 0.0 where
-        no line makes it here; None where a capacity on either side cannot
-        be read, and both are then asked for all of it, as before."""
+        between them, never 10,000 each. Every such split of the item is
+        worked out together (_splits()). 1.0 where no route brings it, 0.0
+        where no line makes it here; None where a capacity on either side
+        cannot be read, and both are then asked for all of it, as before."""
         if not self.graph["made"](site, item):
             return 0.0
         weights = self.graph["share"].get((site, item)) or {}
-        senders = [s for s in _in_order(weights) if weights[s] > 0]
-        if not senders:
+        if not any(w > 0 for w in weights.values()):
             return 1.0
-        memo = (site, item, eats is not None)
+        splits = self._splits(item, eats)
+        return None if splits is None else splits.get(site, 1.0)
+
+    def _splits(self, item: str, eats=None) -> dict | None:
+        """{site: made_share()} for every site whose own lines make `item`
+        and that routes bring it to as well, solved together so that no
+        answer depends on the order the sites are read in, and a sender's
+        capacity is counted once however many paths it reaches a site by.
+
+        The splits load every producer the same where the plans let them:
+        the lines at each such site, and the sites the routes take its draw
+        back to (the factories, imports and wholesale deliveries with no
+        route into them, and such sites further up the plans at their own
+        split), each by what it is asked a day against what it can make or
+        bring. They are the least sum of each producer's load squared over
+        its capacity, which the loads all equal where nothing else binds,
+        found a site at a time (the best split of one with the others held)
+        in passes until no split moves. A route's draw follows the plans'
+        shares as demand() reads them, and never passes a round's target a
+        day less the margin, nor at a site the routes topping it up the
+        highest of their targets (demand() and the walk hold them there):
+        what that leaves is the lines'. So a chain with room keeps up on
+        every line, and one that has none is short on all of them at once.
+        A split whose lines or any producer behind it the board cannot read
+        (an unnamed recipe), or whose routes lead back to a site that brings
+        nothing, is None. The chain each split shares (merges()) is noted in
+        `chain_at`: its senders, and what its lines and the producers behind
+        them make for it a day, each producer at the part of its load that
+        goes there."""
+        memo = (item, eats is not None)
         if memo in self.split_at:
             return self.split_at[memo]
-        self.split_at[memo] = None  # a plan back into here while it is worked out
-        makes = self.graph["makes"](site, item)
-        inbound, bound, reach = 0.0, 0.0, 0
-        for sender in senders:
-            target = max((a for d, i, a in self.graph["edges"].get(sender, []) if d == site and i == item),
-                         default=0)
-            room = self.room(sender, item, site, eats)
-            if room is None or not makes:
-                return None
-            if target:
-                inbound += min(room, target / (1 + SUPPLY_MARGIN))
-                bound += target / (1 + SUPPLY_MARGIN)
-            else:
-                inbound, bound = inbound + room, math.inf
-            reach = max(reach, target)
-        if reach:
-            inbound = min(inbound, reach / (1 + SUPPLY_MARGIN))
-            bound = min(bound, reach / (1 + SUPPLY_MARGIN))
-        drawn = self.demand(site, item, eats=eats, held_down=False)[0]
-        routed = inbound / (makes + inbound) if makes + inbound > 0 else 0.0
-        if drawn > 0:
-            routed = min(routed, bound / drawn)
-        self.split_at[memo] = 1.0 - routed
-        self.chain_at[memo] = (senders, makes + inbound)
-        return self.split_at[memo]
+        # Only a recipe loop back into the item reads it while it is solved
+        # (through `eats`): every split then reads None, the old figures.
+        self.split_at[memo] = None
+        senders, sends, reach = {}, collections.defaultdict(dict), {}
+        # In key order throughout, so that not even a float's last place
+        # follows the order the sites are read in.
+        for dest, it in _in_order(self.graph["share"]):
+            weights = self.graph["share"][(dest, it)]
+            if it != item or dest not in self.index:
+                continue
+            whole = sum(w for w in weights.values() if w > 0)
+            legs = {s: weights[s] / whole for s in _in_order(weights)
+                    if weights[s] > 0 and s in self.index and s != dest}
+            if not legs:
+                continue
+            senders[dest] = legs
+            for s, w in legs.items():
+                sends[s][dest] = w
+            reach[dest] = max((a or 0 for s in legs for d, i, a in self.graph["edges"].get(s, [])
+                               if d == dest and i == item), default=0)
+        made, makes, cap = self.graph["made"], self.graph["makes"], self.graph["cap"]
+        use_at = {}
+
+        def use(site):
+            if site not in use_at:
+                use_at[site] = self.sold_dem.get(site, {}).get(item, 0.0) + (
+                    eats(site, item) if eats is not None else 0.0)
+            return use_at[site]
+
+        def behind(site, seen=frozenset()):
+            """The sites up the plans from `site`, or None where one cannot
+            be read or brings nothing."""
+            out = set()
+            for up in senders[site]:
+                if up in seen:
+                    continue
+                if up in senders:
+                    if made(up, item) and not makes(up, item):
+                        return None
+                    further = behind(up, seen | {site})
+                    if further is None:
+                        return None
+                    out |= further | {up}
+                elif not cap(up, item):
+                    return None  # an unreadable line, or a site nothing brings to
+                else:
+                    out.add(up)
+            return out
+
+        shares, capacity = {}, {}
+        for site in _in_order(senders):
+            if made(site, item):
+                ups = behind(site) if makes(site, item) else None
+                shares[site] = None if ups is None else 1.0
+                if ups is not None:
+                    capacity[site] = makes(site, item)
+                    for up in ups:
+                        if up not in senders:
+                            capacity[up] = cap(up, item)
+        active = [site for site in _in_order(shares) if shares[site] is not None]
+        if active:
+            draw = {}
+
+            def drawn(site, seen=frozenset()):
+                """demand()'s figure, before any holding down, on the
+                splits as they stand."""
+                if site in draw:
+                    return draw[site]
+                if site in seen:
+                    return 0.0
+                total = use(site)
+                for dest, w in sends.get(site, {}).items():
+                    more = drawn(dest, seen | {site})
+                    total += w * more * (1.0 - (shares.get(dest) or 0.0))
+                draw[site] = total
+                return total
+
+            def load(site):
+                """What a producer is asked a day: a split's lines their
+                share, a site no route brings it to all it is asked."""
+                return drawn(site) * (shares[site] if site in shares else 1.0)
+
+            def spread(site):
+                """Where a unit of the routes' draw at `site` lands, {producer:
+                part}, and how much of it comes into each site on the way
+                ({site: part}, `site` itself 1)."""
+                land, into = collections.defaultdict(float), collections.defaultdict(float)
+
+                def up(here, amount, seen):
+                    into[here] += amount
+                    for sender, w in senders[here].items():
+                        if sender in seen:
+                            continue
+                        part = amount * w
+                        if sender in senders:
+                            kept = shares.get(sender) or 0.0
+                            if kept:
+                                land[sender] += part * kept
+                            up(sender, part * (1.0 - kept), seen | {sender})
+                        else:
+                            land[sender] += part
+                up(site, 1.0, frozenset({site}))
+                return land, into
+
+            def room_for(site, into):
+                """The most the routes into `site` can bring of its draw a
+                day, the splits elsewhere held: a round's target less the
+                margin into each site on the way."""
+                routed = drawn(site) * (1.0 - shares[site])
+                most = math.inf
+                for here, part in into.items():
+                    if part > 0 and reach.get(here):
+                        coming = drawn(here) * (1.0 - (shares.get(here) or 0.0))
+                        most = min(most, routed + (reach[here] / (1 + SUPPLY_MARGIN) - coming) / part)
+                return max(0.0, most)
+
+            for _pass in range(HAND_ON_PASSES):
+                moved = 0.0
+                for site in active:
+                    whole = drawn(site)
+                    if whole <= 0:
+                        continue
+                    land, into = spread(site)
+                    gap = load(site) / capacity[site] - sum(p * load(u) / capacity[u] for u, p in land.items())
+                    curve = 1 / capacity[site] + sum(p * p / capacity[u] for u, p in land.items())
+                    keep = whole * shares[site] - gap / curve
+                    keep = min(whole, max(keep, whole - room_for(site, into), 0.0))
+                    moved = max(moved, abs(keep / whole - shares[site]))
+                    shares[site] = keep / whole
+                    draw.clear()
+                if moved <= 1e-10:
+                    break
+            for site in active:
+                land, into = spread(site)
+                routed = drawn(site) * (1.0 - shares[site])
+                theirs = sum(capacity[u] * p * routed / load(u) for u, p in land.items() if load(u) > 0)
+                most = room_for(site, into)
+                if most < math.inf:
+                    theirs = min(theirs, most * (1 + SUPPLY_MARGIN))
+                self.chain_at[(site, item, eats is not None)] = (_in_order(senders[site]), capacity[site] + theirs)
+        self.split_at[memo] = shares
+        return shares
 
     def merges(self, site: str, item: str, eats=None) -> list:
         """The sites at or down the plans from `site` where its `item` meets
@@ -7674,42 +7813,6 @@ class _DemandSizing:
         it are asked for: what its own lines do not make (made_share())."""
         made = self.made_share(site, item, eats)
         return 1.0 - (made or 0.0)
-
-    def room(self, sender: str, item: str, toward: str, eats=None, seen: frozenset = frozenset()) -> float | None:
-        """What `sender` can send `toward` of `item` a day at most: its own
-        supply (lines at capacity, import, wholesale delivery) and what the
-        routes into it can bring, less what it sells and its lines eat, and
-        less its part of what its other routes' sites draw. None where a
-        capacity it rests on cannot be read."""
-        if sender not in self.index or sender in seen:
-            return 0.0
-        here = self.graph["cap"](sender, item)
-        if here is None:
-            if self.graph["made"](sender, item):
-                return None
-            here = 0.0
-        weights = self.graph["share"].get((sender, item)) or {}
-        inbound, reach = 0.0, 0
-        for source in _in_order(weights):
-            if weights[source] <= 0:
-                continue
-            target = max((a for d, i, a in self.graph["edges"].get(source, []) if d == sender and i == item),
-                         default=0)
-            got = self.room(source, item, sender, eats, seen | {sender})
-            if got is None:
-                return None
-            inbound += min(got, target) if target else got
-            reach = max(reach, target)
-        if reach:
-            inbound = min(inbound, reach)
-        used = self.sold_dem.get(sender, {}).get(item, 0.0) + (eats(sender, item) if eats is not None else 0.0)
-        for dest in _in_order({d for d, i, _a in self.graph["edges"].get(sender, []) if i == item}):
-            weights = self.graph["share"].get((dest, item)) or {}
-            if dest in (sender, toward) or not weights.get(sender):
-                continue
-            more, _behind = self.demand(dest, item, seen | {sender}, eats, held_down=False)
-            used += more * self.routed_share(dest, item, eats) * weights[sender] / sum(weights.values())
-        return max(0.0, here + inbound - used)
 
     def demand(self, key: str, item: str, seen: frozenset = frozenset(), eats=None,
                held_down: bool = True, shelves: str = "dem") -> tuple:
