@@ -2261,25 +2261,43 @@ as two chips.
 **Factories in a chain.** Where a factory makes a product and a route from another of your
 sites brings it the same product (Factory 1's soda topped up into Factory 2, which makes soda
 too, on the way to the shops), the two share what the shops past it draw, never both taking
-all of it (#521). Every such split of a product is worked out together, so the answer never
-depends on the order the sites are read in, and a factory that reaches the meeting factory
-by two paths (through a depot and straight) is counted once. The split loads every producer
-in the chain the same where the plans let it: the lines at the meeting factory, and the
-factories, imports and wholesale deliveries the routes take its draw back to, each by what it
-is asked against what it can make a day. A feeder's own shops and its other routes count in
-its load. A route never carries more than its top-up target a day less the margin, through a
-depot as straight, and the routes into one site never more than the highest of their targets;
-what that leaves is the meeting factory's lines' to make. Where nothing binds, every line in
-the chain runs at the same load and is short together: critical where the chain makes less
-than the shops sell, a warning where only the margin is past it. Shops selling 10,000 a week
-behind two factories making 5,000 each is short only by the margin, a warning on both. The
-loads can differ where a target binds, or where several routes top one site up, since their
-split follows their targets as before. A short line's tip then names the link: *it shares the
-demand with the chain at Factory 2: together they make 1,440 a day against 1,656 needed
-there*, where the make counts each producer behind the routes at the part of its load that
-goes there. A factory that only passes the product on, making none of it, splits nothing, and
-the factory behind it is judged on all of it. Where a capacity cannot be read (a recipe the
-board cannot name), both sides are still judged on all of it.
+all of it (#521). The board works out every such split of a product at once, over the whole
+chain: the lines at each meeting factory, the factories, depots and routes up the plans from
+it, and every import and wholesale delivery in the chain wherever it comes in. A route carries
+at most its top-up target a day less the margin, through a depot as well as straight, and the
+routes into one site together carry at most the highest of their targets. Within those limits
+the board picks the split that loads the producers most evenly: the least sum of each one's
+load squared over its capacity. There is exactly one such split, so it never depends on the
+sites' names or the order they are read in, and a factory that reaches the meeting factory by
+two paths counts once.
+
+Where nothing binds, every producer in the chain runs at the same load. A chain that can make
+what its shops draw then keeps every line within its capacity, and one that cannot is short on
+all of them at once: critical where the chain makes less than the shops sell, a warning where
+only the margin is past it. Shops selling 10,000 a week behind two factories making 5,000 each
+are short only by the margin, a warning on both. Where a target binds, the routes past it carry
+no more and the rest goes to the producers with room, so a tight depot on one path holds back
+only that path, and two factories behind one tight depot share its room. A feeder's own shops
+and its other routes count in its load. An import beside a factory's line in the chain is a
+producer of its own, so the line is judged only on what its machines make; a factory with an
+import and no chain is still judged on all its shops draw.
+
+The lines' shares are the split's. What the routes into a site bring is then shared out by
+their targets, as before, a sender with no room held down and the rest going to the others,
+so where several routes reach one site from producers loaded differently, the loads shown can
+differ from the split's. The lines that share a split round their sold days together so they
+add up to what the shops past them sell, except where the last unit would fall between equal
+shares: three equal shares of 1,400 each read 467.
+
+A short line's tip names the link: *it shares the demand with the chain at Factory 2: together
+they make 1,440 a day against 1,656 needed there*. The make is the most the chain can bring
+there a day: the lines there and its own import, and each producer and route behind it at the
+part of its output the split sends there, within the routes' targets. Two factories behind
+one depot each count only their part of it. A factory that only passes the product on, making
+none of it, splits nothing, and the factory behind it is judged on all of it. Where a capacity
+cannot be read (a recipe the board cannot name), or the product runs through a recipe loop (a
+product that is, line by line, an ingredient of itself), both sides are still judged on all
+of it.
 
 **Staffing for factory lines.** Under the factories, the same rules as a shop's Staffing:
 one person per machine per hour, 12 hours the longest entry. Each line's run for the sizing

@@ -219,11 +219,16 @@ standing in for a sale (#501), plus the margin; and
 null where no demand can be read. Where the product meets another site's of it on the way
 to the shops (a factory topped up with what it also makes, `_DemandSizing.made_share()`,
 #521), the figures are the line's share, and the line carries `chain`, `{at, from, makes,
-need}`: the meeting factory's index, the sites whose routes bring the product there, what
-the lines there and the producers behind those routes make for it a day (each producer at the
-part of its load that goes there, never past the routes' targets), and what is drawn from
-there with the margin; a line no route shares with has no `chain`. The splits are solved
-together per product (`_DemandSizing._splits()`), so they do not depend on site order. `supply.factories.sites[]` counts `running` machines (a recipe and
+need}`: the meeting factory's index, the sites whose routes bring the product there, the most
+the lines there, its own import and the producers behind those routes can bring it a day (a
+max flow, `_DemandSizing._carried()`: each producer and route target at the part of its flow
+that goes there), and what is drawn from there with the margin; a line no route shares with
+has no `chain`. The splits are one solve per product (`_DemandSizing._splits()`): the unique
+flow over the chain with the least sum of load squared over capacity, every route and every
+site's inbound at its target less the margin (`_least_load_flow()`, exact, None where it does
+not settle), so they depend on neither site names nor order. The `soldDay`s of lines sharing
+a split are rounded together, largest remainder first, unless the last unit falls between
+equal shares. `supply.factories.sites[]` counts `running` machines (a recipe and
 somebody posted) beside the placed ones (`machines`).
 
 Shop and office demand plans are read from their own reports, with no measurement to
