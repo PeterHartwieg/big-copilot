@@ -2258,6 +2258,22 @@ or **ingredients short** for the inputs it eats (the input's own row says *order
 *top-up short* or *input short*). A line short on both production and an input shows both,
 as two chips.
 
+**Factories in a chain.** Where a factory makes a product and a route from another of your
+sites brings it the same product (Factory 1's soda topped up into Factory 2, which makes soda
+too, on the way to the shops), the two share what the shops past it draw, never both taking
+all of it (#521). The share follows what each can bring a day: the lines' capacity at the
+factory where they meet, and what each route into it has room for, which is what its sender
+makes or brings in less what it sells and its other routes take, never past the route's top-up
+target less the margin. What a target leaves is the meeting factory's own lines' to make. So
+every line in the chain runs equally loaded and reads short exactly when the chain does:
+critical where the chain makes less than the shops sell, a warning where only the margin is
+past it. Shops selling 10,000 a week behind two factories making 5,000 each is short only by
+the margin, a warning on both. A short line's tip then names the link: *it shares the shops'
+demand with the line at Factory 2: together they make 1,440 a day against 1,656 needed
+there*. A factory that only passes the product on, making none of it, splits nothing, and the
+factory behind it is judged on all of it. Where either side's capacity cannot be read (a
+recipe the board cannot name), both are still judged on all of it.
+
 **Staffing for factory lines.** Under the factories, the same rules as a shop's Staffing:
 one person per machine per hour, 12 hours the longest entry. Each line's run for the sizing
 on screen is cut into entries of at most 12 hours, placed around the workers' own

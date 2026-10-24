@@ -216,7 +216,12 @@ it); `needDay`, the uncapped figure Demand sizing works from, but with no top-up
 standing in for a sale (#501), plus the margin; and
 `production`, `{status, level}` with `more` machines and `makesWith` a day where
 `needDay` is past what the line makes, so the 24 h cap on the hours stays. All three are
-null where no demand can be read. `supply.factories.sites[]` counts `running` machines (a recipe and
+null where no demand can be read. Where the product meets another site's of it on the way
+to the shops (a factory topped up with what it also makes, `_DemandSizing.made_share()`,
+#521), the figures are the line's share, and the line carries `chain`, `{at, from, makes,
+need}`: the meeting factory's index, the sites whose routes bring the product there, what
+the lines there and those routes make a day together, and what is drawn from there with the
+margin; a line no route shares with has no `chain`. `supply.factories.sites[]` counts `running` machines (a recipe and
 somebody posted) beside the placed ones (`machines`).
 
 Shop and office demand plans are read from their own reports, with no measurement to
