@@ -2452,8 +2452,12 @@ function supplyFact(s, slug){
   const f = (((D || {}).supply || {}).facts || {})[s];
   const fact = f && f[slug];
   if(!fact) return null;
-  return sizing === "dem" && fact.dem ? {...fact, ...fact.dem} : fact;
+  return szDemandApproxFact(sizing === "dem" && fact.dem ? {...fact, ...fact.dem} : fact);
 }
+/* Unverified figures remain visible, but stale verdicts cannot become changes. */
+const szDemandApproxFact = f => f && f.demandApproximate
+  ? {...f, st: "new", why: "demandApproximate", lvl: "info", setTo: null, lower: null, raise: null, catchUp: null, lowers: false,
+      ...(f.import ? {import: szDemandApproxFact({...f.import, demandApproximate: true})} : {})} : f;
 /* What a row reads when Python sent no fact for it: a recipe named in this
    browser since the last extract, whose figures only the next refresh (a new
    save on the web, a re-run or --watch here) can judge. */
@@ -2485,6 +2489,7 @@ const szRank = f => { const i = SZ_RANK.indexOf(f.st); return i < 0 ? SZ_RANK.le
    line here; `named` and `unjudged` are the board's own, for SZ_NEW and
    SZ_NONE. */
 const SZ_WHY = {
+  get "new:demandApproximate"(){ return sbDemandUnsettled(); },
   get "new:streetFood"(){ return tt("sb.streetFood.limited", "Street Food commissary demand is not yet included, so supply and production recommendations for its suppliers are withheld."); },
   get "paused:order"(){ return tt("sb.why.paused.order", "The import is paused, and no route from your own site brings it"); },
   get "paused:topup"(){ return tt("sb.why.paused.topup", "Paused; a depot's daily top-up feeds the line"); },
@@ -2538,7 +2543,8 @@ const szTip = f => SZ_WHY[`${f.st}:${f.why}`] || SZ_STATE[f.st] || "";
 const szWeekly = f => !!f && f.cad === "weekly";
 const szDaily = (f, fallback) => f && Number.isFinite(f.use) ? (szWeekly(f) ? f.use / 7 : f.use) : fallback;
 const szWeekOf = (f, fallback) => f && Number.isFinite(f.use) ? (szWeekly(f) ? f.use : f.use * 7) : fallback;
-const szChip = (f, word) => chipHtml(SZ_CHIP[f.lvl] || "dim", word || SZ_WORD[f.st] || f.st, szTip(f));
+const szChip = (f, word) => chipHtml(SZ_CHIP[f.lvl] || "dim", f.demandApproximate
+  ? tt("sb.line.demandApproximate", "Approximate demand") : word || SZ_WORD[f.st] || f.st, szTip(f));
 /* Under Demand, a figure built on a shop open under a week is its coming
    week's straight-line average, and says so beside the figure; the tip names
    the shops. */
@@ -2728,7 +2734,8 @@ function szSays(f, r, depot){
   }
 }
 /* An input's fact: its own, or new while its recipe was named in this browser. */
-const szNeed = (site, n) => n.named ? SZ_NEW : szFact(site ? site.s : n.s, n.slug);
+const szNeed = (site, n) => n.named ? SZ_NEW : szDemandApproxFact({
+  ...szFact(site ? site.s : n.s, n.slug), ...(sizing === "dem" && n.demandApproximate ? {demandApproximate: true} : {})});
 /* The view's figures under the sizing on screen; a row with no fact keeps its own. */
 const szUse = (f, fallback) => szDaily(f, fallback);
 const szWeek = (f, fallback) => szWeekOf(f, fallback);
@@ -7195,24 +7202,26 @@ function spMachineRead(slot, gap){
    rented that makes nothing, else the machine rostered for the fewest hours,
    else the word that every one runs around the clock. */
 function spLinesRead(site){
+  const note = (site.lines || []).some(l => l.demandApproximate) ? spEsc(sbDemandUnsettled()) : "";
   const idle = (site.unnamed || []).find(u => u.idle);
   if(idle){
     const slot = (idle.slots || [])[0];
-    return slot !== undefined
+    return (slot !== undefined
       ? tt("sp.lines.idle", "Making nothing · Machine {slot} is staffed and rented with <b>no recipe</b>", {slot: spEsc(slot)})
-      : tt("sp.lines.idle.any", "Making nothing · a machine is staffed and rented with <b>no recipe</b>");
+      : tt("sp.lines.idle.any", "Making nothing · a machine is staffed and rented with <b>no recipe</b>")) + (note ? ` · ${note}` : "");
   }
   const lacking = sbProdWorst(site.lines || []);
   if(lacking) return tt("sp.lines.machines", {one: "Short of machines · <b>{item}</b> needs {n} more machine to cover the {need} a day it needs with the margin: what its shops sell and other lines use",
     other: "Short of machines · <b>{item}</b> needs {n} more machines to cover the {need} a day it needs with the margin: what its shops sell and other lines use"},
-    {item: spEsc(lacking.item), n: lacking.production.more, need: spNum(lacking.needDay)});
+    {item: spEsc(lacking.item), n: lacking.production.more, need: spNum(lacking.needDay)})
+    + (lacking.chain ? ` · ${spEsc(sbChainTip(lacking.chain, site.s))}` : "") + (note ? ` · ${note}` : "");
   let worst = null;
   (site.lines || []).forEach(l => (l.gaps || []).forEach((g, k) => {
     if(g && Number.isFinite(g.hours) && (!worst || g.hours < worst.g.hours))
       worst = {l, g, slot: Number.isFinite(g.slot) ? g.slot : (l.slots || [])[k] ?? k + 1};
   }));
-  if(worst) return tt("sp.lines.least", "Least staffed · <b>{item}</b> · {read}", {item: spEsc(worst.l.item), read: spMachineRead(worst.slot, worst.g)});
-  return (site.lines || []).length ? tt("sp.lines.all2", "Every machine is staffed all <b>{n} h</b> of the week", {n: SP_STAFF_HOURS}) : "&nbsp;";
+  if(worst) return tt("sp.lines.least", "Least staffed · <b>{item}</b> · {read}", {item: spEsc(worst.l.item), read: spMachineRead(worst.slot, worst.g)}) + (note ? ` · ${note}` : "");
+  return ((site.lines || []).length ? tt("sp.lines.all2", "Every machine is staffed all <b>{n} h</b> of the week", {n: SP_STAFF_HOURS}) : "&nbsp;") + (note ? ` · ${note}` : "");
 }
 /* The Inputs block's read-out before a row is pointed at: the input whose
    fact is worst, by how soon it stops the line. */
@@ -7255,7 +7264,7 @@ function spMachines(count, gaps, slots){
 /* A line's production and ingredient statuses on the factory page, as the
    Supply page draws them (sbProdFact(), sbLineInputsFact()), each a chip. */
 function spLineChips(site, l){
-  const p = sbProdFact(l), g = sbLineInputsFact(site, l);
+  const p = sbProdFact(l, site.s), g = sbLineInputsFact(site, l);
   return (p ? " " + chipHtml(SZ_CHIP[p.lvl] || "warn", szShortWord(p), sbMachinesTip(p)) : "")
     + (g ? " " + chipHtml(SZ_CHIP[g.lvl] || "warn", szShortWord(g), sbInputsTip(g, x => x)) : "");
 }
@@ -7271,7 +7280,7 @@ function spLines(site){
   (site.lines || []).forEach(l => {
     const stop = !l.atRoster || (l.missing || []).length;
     html += `<div class="sp-line" data-line="${attr(spKeyTok(l.slug, l.item))}" data-el="${attr(spKeyTok(l.slug, l.item))}">
-      <div>${spEsc(l.item)}<span class="sub">${where(l)}</span>${spLineChips(site, l)}</div>
+      <div>${spEsc(l.item)}<span class="sub">${where(l)}</span>${sbDemandApproxNote(l)}${spLineChips(site, l)}</div>
       ${spMachines(l.machines, l.gaps, l.slots)}
       <div class="sp-belt${stop ? " sp-stop" : ""}"></div>
       <div class="sp-n">${spNum(l.atRoster)}<small>${tt("sp.lines.rated", "of {n} rated", {n: spNum(l.makes)})}</small></div>
@@ -8229,7 +8238,7 @@ function importSetting(fact, contract, edit){
   const inGame = current === undefined ? null
     : level !== null ? level
     : paused ? pausedWeekly : current;
-  const suggested = setTo !== null && fact.st !== "paused" ? setTo : inGame;
+  const suggested = fact.demandApproximate ? null : setTo !== null && fact.st !== "paused" ? setTo : inGame;
   /* A typed figure answers the game as it stood when it was typed. Once the
      game's own figure has moved, whether to the typed figure or elsewhere,
      that answer is stale: it is no longer an edit, the row goes back to the
@@ -8241,7 +8250,8 @@ function importSetting(fact, contract, edit){
   const typed = !!edit && Number.isFinite(edit.value) && edit.value >= 0;
   const stale = typed && (edit.inGame !== inGame || (inGame === null && fact.st === "covered"));
   const edited = typed && !stale;
-  const value = edited ? edit.value : suggested;
+  // Keep the game's display value when no recommendation can be made.
+  const value = edited ? edit.value : suggested ?? inGame;
   /* The basis the figure was planned on: the player's own where they typed
      one (null for one kept from before bases were recorded, which asks for a
      review before it is written), else the basis on screen (`basis`). */
@@ -8334,7 +8344,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
   const rows = [];
   const site = s => businesses[s];
   const address = s => site(s) ? `${site(s).name} · ${site(s).address}` : tt("sb.ck.depot.choose", "Choose a depot");
-  const set = f => f && Number.isFinite(f.setTo);
+  const set = f => f && !f.demandApproximate && Number.isFinite(f.setTo);
   /* `line` is the row the change is about: its item's key identifies the
      change, its name is only what the checklist prints. */
   const add = (kind, s, line, current, proposed, reason, source = null, mode = null, paused = false, tight = false, lower = false) => {
@@ -8365,6 +8375,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
   };
   const from = s => tt("sb.ck.from", "From {site}.", {site: address(s)});
   importRows.forEach(d => d.rows.forEach(r => {
+    if(r.fact && r.fact.demandApproximate) return;
     // The Set to box: the player's figure where they typed one, else the suggestion.
     const value = r.value !== undefined ? r.value : r.setTo;
     const mode = r.smart ? "smart" : "weekly";
@@ -8404,12 +8415,13 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
         sbCkJoin([setting(value), why]), null, mode, false, !r.edited && r.fit === "tight"), r);
     }
   }));
-  looseRows.forEach(r => add("imports", null, r, null, null,
+  looseRows.filter(r => !r.fact?.demandApproximate).forEach(r => add("imports", null, r, null, null,
     sbCkJoin([tt("sb.ck.loose", "Choose a supplying depot before setting an order."),
       tt("sb.ck.loose.use", {one: "The factory lines use {n:,} unit/week.", other: "The factory lines use {n:,} units/week."}, {n: Math.round(r.week)})]))
     .lead = tt("sb.ck.lead.loose", "choose a supplying depot before setting an order"));
   imports.forEach(r => {
     const f = r.fact || {};
+    if(f.demandApproximate || f.import?.demandApproximate) return;
     /* A factory input topped up each morning keeps its daily word; its own
        contract is judged beside it (`import`), and the run-out is that one's. */
     const fi = f.import || f;
@@ -8460,6 +8472,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
   });
   sites.forEach(s => s.rows.forEach(r => {
     const f = r.fact || {};
+    if(f.demandApproximate) return;
     if(set(f)) add("factory", s.s, r, r.target || 0, f.setTo,
       sbCkJoin([r.from === null || r.from === undefined ? tt("sb.ck.choose", "Choose a supplying depot.") : from(r.from),
         r.sizedFor === "dem"
@@ -8551,6 +8564,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
      hours to post workers for. A line with more than it needs is a
      suggestion on its row, never a change here. */
   lines.forEach(r => {
+    if(r.demandApproximate && r.sizedFor === "dem") return;
     const f = r.fact || {};
     if(f.st !== "short" || f.why !== "hours" || !Number.isFinite(r.need)) return;
     const now = Number.isFinite(r.hoursNow) ? r.hoursNow : null;
@@ -9527,7 +9541,7 @@ function supplyChecklistRows(){
       if(setting.edited && setting.ownBasis && setting.ownBasis !== sizing){
         const wWhole = szFactFor(s, slug, setting.ownBasis), wFact = wWhole ? wWhole.import || wWhole : null;
         if(wFact) setting.why = {basis: setting.ownBasis, other: sizing, parts: wFact.parts || {}, use: wFact.use, need: wFact.need,
-          setTo: importSetting(wFact, contract, undefined).setTo, alt: setting.suggested};
+          setTo: importSetting(wFact, contract, undefined).setTo, alt: setting.suggested, demandApproximate: !!wFact.demandApproximate};
       }
       return {item: label(s, slug), slug, s, fact, total: fact.use, use: fact.use, parts: fact.parts || {}, margin, sizedFor,
               /* What the import must bring: none where a route covers it, and none
@@ -9547,6 +9561,7 @@ function supplyChecklistRows(){
     if(n.named || own !== null || (n.from !== null && n.from !== undefined)) return;
     const fact = szNeed(site, n);
     const row = loose[n.slug] = loose[n.slug] || {item: n.item, slug: n.slug, week: 0, users: [], fact};
+    if(fact.demandApproximate) row.fact = szDemandApproxFact({...row.fact, demandApproximate: true});
     row.week += szWeek(fact, n.perWeek); row.users.push({s: site.s, perDay: szUse(fact, n.perDay)});
   }));
   const looseRows = Object.values(loose).sort((a, b) => b.week - a.week);
@@ -9565,7 +9580,7 @@ function supplyChecklistRows(){
   const depotTopups = factRows(fc => fc.role === "depot" && fc.cad === "daily" && Number.isFinite(fc.setTo));
   const wholesaleRows = factRows(fc => !!fc.wholesale);
   /* The hours each factory line should run, under the sizing on screen. */
-  const lines = f.sites.flatMap(site => site.lines.map(l => ({s: site.s, item: l.item, slug: l.slug, rid: l.rid, fact: sbLineFact(l),
+  const lines = f.sites.flatMap(site => site.lines.map(l => ({s: site.s, item: l.item, slug: l.slug, rid: l.rid, demandApproximate: l.demandApproximate, fact: sbLineFact(l),
     hoursNow: l.hoursNow, each: sbMachineHours(l), thinDay: l.thinDay || null, need: (l.needHours || {})[sizing], machines: l.machines, sizedFor})));
   /* The factory hours each proposed import figure assumes (sbDeps()). */
   importRows.forEach(x => x.rows.forEach(r => { r.deps = r.changed && Number.isFinite(r.value) ? sbDeps(f, r) : []; }));
@@ -9579,7 +9594,7 @@ function supplyChecklistRows(){
 function szFactFor(s, slug, mode){
   const fact = (((D.supply || {}).facts || {})[s] || {})[slug];
   if(!fact) return null;
-  return mode === "dem" && fact.dem ? {...fact, ...fact.dem} : fact;
+  return szDemandApproxFact(mode === "dem" && fact.dem ? {...fact, ...fact.dem} : fact);
 }
 /* Each machine's hours a day now, in the line's machine order: the weeks
    the payload names (`gaps`, every machine under the full week), the rest
@@ -9616,7 +9631,9 @@ function sbDeps(f, r){
     const own = n.factoryImportSite ?? (n.directImport ? site.s : null);
     if(n.from !== r.s && own !== r.s) return;
     site.lines.filter(l => (n.lineSlugs || []).includes(l.slug)).forEach(l => {
-      const need = (l.needHours || {})[basis], each = sbMachineHours(l);
+      // Keep observed consumption in feeds; never turn an unsettled Demand
+      // estimate into an hours dependency, including a saved import's basis.
+      const need = basis === "dem" && l.demandApproximate ? null : (l.needHours || {})[basis], each = sbMachineHours(l);
       const ing = ((recipes[l.slug] || {}).ingredients || []).find(i => (aliases[i.slug] || i.slug) === r.slug);
       const week = Number.isFinite(l.hoursWeek) && Array.isArray(l.gaps) ? l.hoursWeek : Math.round(each.reduce((a, h) => a + h, 0) * 7);
       if(!feeds.some(x => x.s === site.s && x.rid === l.rid && x.slug === l.slug))
@@ -9624,7 +9641,7 @@ function sbDeps(f, r){
       if(!Number.isFinite(need) || !each.length || each.every(h => h === need)) return;
       if(out.some(x => x.s === site.s && x.rid === l.rid && x.slug === l.slug)) return;
       /* `needNow`: the hours the basis on screen plans this line for. */
-      const needNow = (l.needHours || {})[sizing];
+      const needNow = sizing === "dem" && l.demandApproximate ? null : (l.needHours || {})[sizing];
       out.push({s: site.s, item: l.item, slug: l.slug, rid: l.rid, machines: l.machines, now: l.hoursNow, each, week, need, basis,
                 needNow: Number.isFinite(needNow) ? needNow : null,
                 thinDay: l.thinDay || null, perHour: ing ? ing.per : null, material: r.item, depot: r.s});
@@ -9639,6 +9656,7 @@ function sbDeps(f, r){
    no verdict for (an older save's) has none. */
 function sbLineFact(l){
   if(l.named) return SZ_NEW;
+  if(sizing === "dem" && l.demandApproximate) return null;
   const x = sizing === "dem" && l.dem ? {...l, ...l.dem} : l;
   if(!x.status) return null;
   return {st: x.status, why: x.why ?? null, lvl: x.level || "ok", lower: Number.isFinite(x.lower) ? x.lower : null,
@@ -9648,11 +9666,13 @@ function sbLineFact(l){
    in either sizing: short where the need with the margin is past what it
    makes round the clock, by whole machines (`more`, making `makesWith` a day
    with them). Hours cannot close it, so it is a status of its own beside the
-   hours'. Null where it keeps up, or Python sent no figure. */
-function sbProdFact(l){
+   hours'. Null where it keeps up, or Python sent no figure. `s` is the
+   line's factory, for the chain it shares its product with (`chain`, #521). */
+function sbProdFact(l, s = l.s){
   const p = l.production;
-  if(l.named || !p || p.status !== "short") return null;
-  return {st: "short", why: "machines", lvl: p.level || "warn", more: p.more, makesWith: p.makesWith, need: l.needDay};
+  if(l.named || l.demandApproximate || !p || p.status !== "short") return null;
+  return {st: "short", why: "machines", lvl: p.level || "warn", more: p.more, makesWith: p.makesWith, need: l.needDay,
+    chain: l.chain || null, s};
 }
 /* The inputs a line eats that are short, without a plan or paused: one
    status for the line, named for its subject, the order where every one of
@@ -9673,6 +9693,9 @@ function sbProdWorst(lines){
     .sort(([, p, x], [, q, y]) => (q.lvl === "critical") - (p.lvl === "critical") || q.more - p.more || y - x)
     .map(([l]) => l)[0] || null;
 }
+const sbDemandUnsettled = () => tt("sb.line.demandUnsettled", "Demand sharing did not settle; affected figures are approximate, so machine, hours, staffing and ingredient advice is unavailable.");
+const sbDemandApproxNote = l => l.demandApproximate
+  ? `<span class="sub" data-tip="${attr(sbDemandUnsettled())}">${tt("sb.line.demandApproximate", "Approximate demand")}</span>` : "";
 /* "short" never stands alone on a factory row: it names what is short. */
 function szShortWord(f){
   if(!f || f.st !== "short") return "";
@@ -9686,8 +9709,25 @@ function szShortWord(f){
   }
 }
 /* What a production status's tip and an ingredient status's tip say. */
-const sbMachinesTip = p => tt("sb.line.machines.tip", {one: "{n} more machine makes {makes:,} a day against {need:,} needed",
-  other: "{n} more machines make {makes:,} a day against {need:,} needed"}, {n: p.more, makes: p.makesWith, need: p.need});
+const sbMachinesTip = p => [tt("sb.line.machines.tip", {one: "{n} more machine makes {makes:,} a day against {need:,} needed",
+  other: "{n} more machines make {makes:,} a day against {need:,} needed"}, {n: p.more, makes: p.makesWith, need: p.need}),
+  sbChainTip(p.chain, p.s)].filter(Boolean).join(". ");
+/* Where a line's product meets another site's of it on the way to the shops
+   (#521), the link of the chain it is judged on: the factory where the two
+   meet, the sites sending it there, and what the lines there, its own
+   import and the producers behind those routes (lines, imports and
+   wholesale deliveries) bring it a day against what is drawn with the
+   margin. A feeder's tip names the chain at the meeting factory, not one
+   line: other sites may feed it too. */
+function sbChainTip(c, s){
+  if(!c || !D.businesses[c.at]) return "";
+  const at = shortName(D.businesses[c.at]);
+  const from = sbAnd((c.from || []).filter(i => D.businesses[i]).map(i => shortName(D.businesses[i])));
+  const nums = {makes: c.makes, need: c.need};
+  return c.at === s
+    ? tt("sb.line.chain.here", "It shares the demand with what {from} sends here: made here and brought in, {makes:,} a day against {need:,} needed", {from, ...nums})
+    : tt("sb.line.chain.at", "It shares the demand with the chain at {at}: made there and brought in, {makes:,} a day against {need:,} needed there", {at, ...nums});
+}
 const sbInputsTip = (g, esc = spEsc) => tt("sb.line.inputs.tip", "Short of {items}", {items: sbList(g.items.map(esc))});
 /* A line's production and ingredient statuses, each a chip of its own. A
    line short of machines drops its hours' covered chip (sbLineRow()): hours
@@ -9703,6 +9743,7 @@ const SB_WORD_ICON = {covered: "tick", tight: "clock", short: "down", noplan: "a
                       idle: "crate", made: "gear", new: "sparkle"};
 function sbStatus(f, reason, tip, word){
   if(!f) return "—";
+  if(f.demandApproximate) return `<span class="sb-v new" data-tip="${attr(sbDemandUnsettled())}">${tt("sb.line.demandApproximate", "Approximate demand")}</span>`;
   const cls = f.st === "idle" ? "idle" : f.st === "new" ? "new" : f.st === "made" ? "made" : f.st === "noplan" ? "plan"
     : ({critical: "bad", warn: "warn", info: "new", ok: "ok"})[f.lvl] || "new";
   /* The sentence behind the word is its tip, with the fuller one after it
@@ -10593,18 +10634,21 @@ function sbLineRow(d, r, site){
     <td class="l">${spMachines(r.machines, r.gaps, r.slots)}</td><td class="l">—</td><td>—</td><td>—</td><td>—</td><td>—</td><td class="l st">—</td></tr>`;
   const now = Number.isFinite(r.hoursNow) ? r.hoursNow : r.fullWeek ? Math.round(r.hoursWeek / r.fullWeek * 24) : null;
   const need = (r.needHours || {})[sizing];
+  const approximateHours = sizing === "dem" && r.demandApproximate;
   const chk = r.chk || [];
-  const set = chk.find(c => c.kind === "hours");
+  const set = !approximateHours && chk.find(c => c.kind === "hours");
   /* The basis switch on the view says what the hours are planned for; only
      the one surprise is said here (declutter G5). */
   const sized = sizing === "dem" && r.demBasis === "none" ? tt("sb.line.sized.none", "nothing downstream is drawn, so Demand sizes it round the clock too") : "";
   let hoursTip = r.thinDay ? tt("sb.line.rostered.thin", "Staffed {now} h a day on average; {day} has {hours} h", {now, day: sbDayShort(r.thinDay.day), hours: r.thinDay.hours})
     : tt("sb.line.rostered", "Staffed {now} h a day", {now});
-  if(Number.isFinite(need)) hoursTip = sized ? tt("sb.line.rostered.needs", "{rostered}; needs {need} h {sized}", {rostered: hoursTip, need, sized})
+  if(approximateHours) hoursTip += "; " + tt("sb.line.estimatedHours", "Estimated demand: {n} h a day; staffing advice is withheld.", {n: need});
+  else if(Number.isFinite(need)) hoursTip = sized ? tt("sb.line.rostered.needs", "{rostered}; needs {need} h {sized}", {rostered: hoursTip, need, sized})
     : tt("sb.line.rostered.needs2", "{rostered}; needs {need} h", {rostered: hoursTip, need});
-  const hours = now === null ? "—" : `<span class="sb-hrs">${sbDayStrip(now, Number.isFinite(need) ? need : now, hoursTip)}<span class="n">${set
+  const hours = now === null ? "—" : `<span class="sb-hrs">${sbDayStrip(now, !approximateHours && Number.isFinite(need) ? need : now, hoursTip)}<span class="n">${set
       ? sbChg(now, set.proposed, tt("sb.unit.h", "h"))
-      : `<b>${tt("sb.unit.nh", "{n} h", {n: now})}</b>${Number.isFinite(need) && need !== now ? ` · ${tt("sb.line.needs", "needs {n}", {n: need})}` : ""}`}</span></span>`;
+      : `<b>${tt("sb.unit.nh", "{n} h", {n: now})}</b>${approximateHours ? ` · ${tt("sb.line.approxHours", "approximately {n} needed", {n: need})}`
+        : Number.isFinite(need) && need !== now ? ` · ${tt("sb.line.needs", "needs {n}", {n: need})}` : ""}`}</span></span>`;
   const reason = !f ? "" : f.st === "short" && f.why === "hours"
       ? (r.thinDay ? tt("sb.line.short.thin2", {one: "staffed {now} ({day} {hours} h) of the {n} hour a day it needs",
           other: "staffed {now} ({day} {hours} h) of the {n} hours a day it needs"},
@@ -10630,7 +10674,7 @@ function sbLineRow(d, r, site){
         attr(tt("sb.line.forget", "Forget this name"))}">${CLOSE_ICON}</button>` : ""}
       <span class="sub">${tt("sb.line.rate", "{station}{slots}, {rate}/h a machine", {station: spEsc(r.workstation), slots: slotText(r), rate: r.rate})}${r.limitHeld && Number.isFinite(r.limit)
         ? ` · <span data-tip="${attr(tt("sb.line.limit.tip", "Produce up to stops the line once {item} holds {n:,}", {item: r.item, n: r.limit}))}">${
-          tt("sb.line.limit", "held by Produce up to {n:,}", {n: r.limit})}</span>` : ""}</span></td>
+        tt("sb.line.limit", "held by Produce up to {n:,}", {n: r.limit})}</span>` : ""}</span>${sbDemandApproxNote(r)}</td>
     <td class="l">${spMachines(r.machines, r.gaps, r.slots)}</td>
     <td class="l">${hours}</td>
     <td>${num(r.makes ?? 0)}${r.missing && r.missing.length ? `<span class="sub">${tt("sb.line.stopped", "stopped: no {items}", {items: sbList(r.missing.map(spEsc))})}</span>`
@@ -10661,7 +10705,7 @@ function sbInputRow(d, r, site){
   const says = szSays(f, r, depot);
   return `${sbTr(d, r, r.chk, null)}<td class="sb-tk">${sbTick(d, r.chk, sbTickAt(r.item, b, "factory"))}</td>
     <td class="l nm">${spEsc(r.item)}<span class="sub">${factoryLineText(site, r)}</span></td>
-    <td>${num(szUse(f, r.perDay))}${szRamp(f)}</td>
+    <td>${num(szUse(f, r.perDay))}${sbDemandApproxNote(f)}${szRamp(f)}</td>
     <td>${num(r.stock ?? 0)}</td>
     <td>${r.known ? num(r.arrives) : "—"}${r.known && r.perDay ? `<span class="sub"> ${Math.round(r.arrives / r.perDay * 100)}%</span>` : ""}</td>
     <td>${setting}</td>
@@ -10684,16 +10728,16 @@ function sbFactoryPart(d, claimed, ctx, view, o){
     const makers = {};
     site.lines.forEach(l => { makers[l.slug] = (makers[l.slug] || 0) + 1; });
     const lines = !o.lines ? [] : site.lines.map(l => {
-      const r = {...l, s, fact: sbLineFact(l), makers: makers[l.slug], prod: sbProdFact(l), ing: sbLineInputsFact(site, l)};
+      const r = {...l, s, fact: sbLineFact(l), makers: makers[l.slug], prod: sbProdFact(l, s), ing: sbLineInputsFact(site, l)};
       r.chk = sbChk(d, claimed, s, l.slug, SB_LINE_KINDS, l.rid);
-      r.keep = sbWorth(r.fact, r.chk) || !!r.prod;
+      r.keep = sbWorth(r.fact, r.chk) || !!r.prod || !!r.demandApproximate;
       return r;
     }).concat(site.unnamed.map(u => ({...u, s, unnamed: true, slug: null, fact: null, chk: [], keep: true})));
     if(!o.inputs) site = {...site, needs: []};
     const inputs = site.needs.map(n => {
       const r = {...n, s, fact: szNeed(site, n)};
       r.chk = sbChk(d, claimed, s, n.slug, SB_INPUT_KINDS);
-      r.keep = sbWorth(r.fact, r.chk);
+      r.keep = sbWorth(r.fact, r.chk) || !!r.fact.demandApproximate;
       (r.fact.ramp || []).forEach(x => ramping.add(x));
       return r;
     }).sort((a, b) => szRank(a.fact) - szRank(b.fact) || szUse(b.fact, b.perDay) - szUse(a.fact, a.perDay));
@@ -10720,7 +10764,7 @@ function sbFactoryPart(d, claimed, ctx, view, o){
         : tt("sb.fac.imports.n", {one: "{n} import", other: "{n} imports"}, {n: imports.length}), "", planLink);
     const shownLines = whole ? lines : lines.filter(r => r.keep);
     const objectKey = `${view}|${b ? b.key : "none"}`;
-    const defaultOpen = left > 0 || keep.some(r => (r.fact && r.fact.lvl === "critical") || (r.prod && r.prod.lvl === "critical"));
+    const defaultOpen = left > 0 || keep.some(r => r.demandApproximate || (r.fact && r.fact.lvl === "critical") || (r.prod && r.prod.lvl === "critical"));
     const objectOpen = !!arrivedHere || (sbOpenObj.has(objectKey) ? sbOpenObj.get(objectKey) : defaultOpen || sbWhich === "all");
     if(o.lines) drawnLines.push(...shownLines.map(r => ({...r, objectKey, objectOpen})));
     const shownInputs = whole ? inputs : inputs.filter(r => r.keep);
@@ -10763,17 +10807,19 @@ function sbFactoryPart(d, claimed, ctx, view, o){
       other: "{n} lines here make less round the clock than they need with the margin: more machines close that, more hours cannot"}, {n: lacking.length}) : "";
     const short = worst ? " " + sbStatus(sbProdFact(worst), lackTip, lackTip, tt("sb.fac.machines.chip",
       {one: "{n} line short of machines", other: "{n} lines short of machines"}, {n: lacking.length})) : "";
-    return sbObject(view, s, {icon: "gear", how, stats: stats + short, left,
+    return sbObject(view, s, {icon: "gear", how, stats: stats + short + sbDemandApproxNote({demandApproximate: lines.some(r => r.demandApproximate)}), left,
       open: defaultOpen, body});
   });
-  const lineN = szTally(everyLine.filter(r => r.fact), r => r.fact);
+  const lineN = szTally(everyLine.filter(r => r.fact && !r.fact.demandApproximate), r => r.fact);
   const hoursShort = everyLine.filter(r => r.fact && r.fact.st === "short" && r.fact.why === "hours").length;
-  const inN = szTally(everyInput, r => r.fact);
+  const inN = szTally(everyInput.filter(r => !r.fact?.demandApproximate), r => r.fact);
   const unnamed = f.unnamed || 0;
   const young = (lineN.new || 0) + (inN.new || 0);
   /* Short hours, short and tight inputs are counted on the row of views and
      marked on their rows (declutter U6); these are said nowhere else. */
   const machinesShort = everyLine.filter(r => r.prod).length;
+  const approximateInputs = everyInput.filter(r => r.fact?.demandApproximate).length;
+  const approximate = everyLine.some(r => r.demandApproximate) || approximateInputs > 0;
   const problems = [machinesShort ? tt("sb.fac.machines", {one: "{n} line makes less than its shops need, even round the clock",
       other: "{n} lines make less than their shops need, even round the clock"}, {n: machinesShort}) : "",
     inN.stalled ? tt("sb.fac.stalled", {one: "{n} input is stalled", other: "{n} inputs are stalled"}, {n: inN.stalled}) : "",
@@ -10791,18 +10837,21 @@ function sbFactoryPart(d, claimed, ctx, view, o){
   if(!f.sites.length) verdict = D.meta.locale === false
     ? tt("sb.fac.noLocale", "Factory lines need the game's recipe pages: load en.json (More menu) to see them.") : tt("sb.fac.none", "No factory is set up.");
   else {
-    verdict = problems.length ? `<b>${sbSemi(problems)}</b>` : slack ? ""
+    verdict = problems.length ? `<b>${sbSemi(problems)}</b>` : slack || approximate ? ""
       : tt("sb.fac.allGood", "Every line runs the hours it needs and every factory input covers what the lines need");
     if(slack) verdict = verdict ? sbThen(verdict, sbCap(slack)) : sbCap(slack);
     if(young) verdict = sbThen(verdict, tt("sb.fac.young", {one: "{n} row is too new to judge", other: "{n} rows are too new to judge"}, {n: young}));
-    verdict += ".";
+    if(approximateInputs) verdict = sbThen(verdict, tt("sb.fac.approxInputs", {one: "{n} input has approximate demand", other: "{n} inputs have approximate demand"}, {n: approximateInputs}));
+    if(verdict) verdict += ".";
   }
-  const calm = !every.some(r => r.fact && ["critical", "warn"].includes(r.fact.lvl)) && !machinesShort && !unnamed;
+  if(approximate) verdict += (verdict ? " " : "") + sbDemandUnsettled();
+  const calm = !every.some(r => r.fact && ["critical", "warn"].includes(r.fact.lvl)) && !machinesShort && !unnamed && !approximate;
   const names = [...ramping].map(x => D.businesses[x] ? spEsc(shortName(D.businesses[x])) : null).filter(Boolean);
-  const ramp = sizing === "dem" && names.length ? `<div class="sb-ramp"><span class="ic">${spIcon("alert")}</span><span>${tt("sb.fac.ramp",
+  const ramp = (approximate ? `<div class="sb-ramp"><span class="ic">${spIcon("alert")}</span><span>${tt("sb.fac.demandUnsettled", "Approximate demand is shown below; changes based on these estimates are withheld until demand sharing settles.")}</span></div>` : "")
+    + (sizing === "dem" && names.length ? `<div class="sb-ramp"><span class="ic">${spIcon("alert")}</span><span>${tt("sb.fac.ramp",
     {one: "<b>{n} shop downstream has traded under a week</b>: {shops}. Their use is a straight line through the days they have traded, so the figures below <b>may still be ramping</b>.",
      other: "<b>{n} shops downstream have traded under a week</b>: {shops}. Their use is a straight line through the days they have traded, so the figures below <b>may still be ramping</b>."},
-    {n: names.length, shops: sbList(names)})}</span></div>` : "";
+    {n: names.length, shops: sbList(names)})}</span></div>` : "");
   return {blocks: blocks.join(""), verdict, calm, ramp, every, keptAll, everyLine, everyInput, drawnLines};
 }
 
@@ -11037,25 +11086,19 @@ function sbiRail(cover, arrive){
 function sbiScale(r, draw, cap){
   if(!Number.isFinite(draw) && !Number.isFinite(cap)) return "";
   const marks = [[tt("sb.card.scale.now", "order now"), r.inGame, "now"], [tt("sb.card.scale.plan", "planned"), r.value, "plan"],
-    [tt("sb.card.scale.draw", "today's draw"), draw, "draw"], [tt("sb.card.scale.cap", "importer cap"), cap, "cap"]].filter(m => Number.isFinite(m[1]));
+    [r.fact?.demandApproximate ? tt("sb.card.scale.drawApprox", "today's draw (approximate demand)") : tt("sb.card.scale.draw", "today's draw"), draw, "draw"], [tt("sb.card.scale.cap", "importer cap"), cap, "cap"]].filter(m => Number.isFinite(m[1]));
   if(marks.length < 2) return "";
   const top = Math.max(...marks.map(m => m[1]), 1) * 1.08;
   const pc = v => `${(v / top * 100).toFixed(1)}%`;
   const now = Number.isFinite(r.inGame) ? r.inGame : 0, plan = Number.isFinite(r.value) ? r.value : 0;
-  /* Marks within a tenth of the scale of each other share one label, and
-     labels near each other take turns above and below, so none print over
-     another. */
-  const groups = [];
-  [...marks].sort((a, z) => a[1] - z[1]).forEach(m => {
-    const last = groups[groups.length - 1];
-    if(last && (m[1] - last.at) / top < 0.1) last.marks.push(m);
-    else groups.push({at: m[1], marks: [m]});
-  });
-  groups.forEach((g, i) => { const prev = groups[i - 1]; g.lo = !!prev && (g.at - prev.at) / top < 0.3 && !prev.lo; });
+  /* Keep ticks at their values, with a wrapping legend in normal flow.
+     Label widths are independent of how close the values are, including
+     equal values and longer translated or approximation labels. */
+  marks.sort((a, z) => a[1] - z[1]);
   return `<div class="sbi-scale" role="img" aria-label="${attr(marks.map(([l, v]) => `${l} ${num(v)}`).join(", "))}"><div class="sbi-bar"><i class="base" style="width:${pc(Math.min(now, plan))}"></i>${
     plan > now ? `<i class="add" style="left:${pc(now)};width:${pc(plan - now)}"></i>` : plan < now ? `<i class="cut" style="left:${pc(plan)};width:${pc(now - plan)}"></i>` : ""}${
-    groups.map(g => g.marks.map(([, v, k], j) => `<u class="${k}${g.lo ? " lo" : ""}" style="left:${pc(v)}">${j ? "" : `<span${g.marks.length > 1 ? ` class="many"` : ""}>${
-      g.marks.map(([l, v2, k2]) => `<em class="sbi-m-${k2}">${spEsc(l)}<b>${num(v2)}</b></em>`).join("")}</span>`}</u>`).join("")).join("")}</div></div>`;
+    marks.map(([, v, k]) => `<u class="sbi-t-${k}" style="left:${pc(v)}"></u>`).join("")}</div><div class="sbi-scale-labels">${
+      marks.map(([l, v, k]) => `<em class="sbi-m-${k}">${spEsc(l)}<b>${num(v)}</b></em>`).join("")}</div></div>`;
 }
 function sbImportCard(d){
   /* With no line picked, the first one the list asks a change of: the view
@@ -11147,21 +11190,22 @@ function sbImportCard(d){
   /* Why the figure, and how to set it by hand: from the same row, on the
      basis the figure was planned for (`r.why` where that is not the one on
      screen). */
-  const w = r.why || {basis: r.edited && r.ownBasis ? r.ownBasis : sizing, other: r.other, parts: r.parts || {}, use: r.use, need: f.need, setTo: r.setTo, alt: r.alt};
+  const w = r.why || {basis: r.edited && r.ownBasis ? r.ownBasis : sizing, other: r.other, parts: r.parts || {}, use: r.use, need: f.need, setTo: r.setTo, alt: r.alt, demandApproximate: !!f.demandApproximate};
   const p = w.parts || {};
-  const whyRows = [p.lines ? [tt("sb.card.why.lines", "Factory lines, a week"), p.lines] : null,
-    p.sites ? [tt("sb.card.why.shops", "Shops, a week"), p.sites] : null,
-    p.route ? [tt("sb.card.why.route", "Less what a route from your own site brings"), -p.route] : null,
-    Number.isFinite(w.use) ? [tt("sb.card.why.use", "Uses a week"), w.use, "sum"] : null,
-    Number.isFinite(w.need) && w.need !== w.use ? [Number.isFinite(r.margin) ? tt("sb.card.why.margin", "With the {pct}% chain margin", {pct: Math.round(r.margin * 100)})
-      : tt("sb.card.why.margin0", "With the chain margin"), w.need] : null,
+  const useLabel = label => w.demandApproximate ? tt("sb.card.why.approx", "{label} (approximate demand)", {label}) : label;
+  const whyRows = [p.lines ? [useLabel(tt("sb.card.why.lines", "Factory lines, a week")), p.lines] : null,
+    p.sites ? [useLabel(tt("sb.card.why.shops", "Shops, a week")), p.sites] : null,
+    p.route ? [useLabel(tt("sb.card.why.route", "Less what a route from your own site brings")), -p.route] : null,
+    Number.isFinite(w.use) ? [useLabel(tt("sb.card.why.use", "Uses a week")), w.use, "sum"] : null,
+    Number.isFinite(w.need) && w.need !== w.use ? [useLabel(Number.isFinite(r.margin) ? tt("sb.card.why.margin", "With the {pct}% chain margin", {pct: Math.round(r.margin * 100)})
+      : tt("sb.card.why.margin0", "With the chain margin")), w.need] : null,
     Number.isFinite(w.setTo) ? [r.smart ? tt("sb.card.why.level", "The level whose deliveries bring that week") : tt("sb.card.why.ten", "Rounded up to the ten"), w.setTo, "sum"] : null,
     r.edited ? [tt("sb.card.why.own", "Your figure"), r.value, "sum"] : null,
     Number.isFinite(w.alt) && w.alt !== w.setTo ? [tt("sb.card.why.alt", "With {basis} instead", {basis: szNameLow(w.other)}), w.alt, "alt"] : null].filter(Boolean);
   // The basis is said where it is not the one the switch shows.
   const whyHead = w.basis !== sizing ? tt("sb.card.why.head", "Why {n} {unit} · planned for {basis}", {n: num(r.value ?? 0), unit, basis: szNameLow(w.basis)})
     : tt("sb.card.why.head2", "Why {n} {unit}", {n: num(r.value ?? 0), unit});
-  const why = `<div class="sbi-panel" data-panel="why"${sbiOpen === "why" ? "" : " hidden"}><h4>${whyHead}</h4>${whyRows.length ? `<table class="sbi-why">${whyRows.map(([l, v, k]) =>
+  const why = `<div class="sbi-panel" data-panel="why"${sbiOpen === "why" ? "" : " hidden"}><h4>${whyHead}</h4>${w.demandApproximate ? `<p class="quiet">${spEsc(sbDemandUnsettled())}</p>` : ""}${whyRows.length ? `<table class="sbi-why">${whyRows.map(([l, v, k]) =>
     `<tr class="${k || ""}"><td>${l}</td><td>${num(v)}</td></tr>`).join("")}</table>` : `<p class="quiet">${tt("sb.card.why.none", "No figure to explain: nothing is used a week.")}</p>`}</div>`;
   const who = r.levelName || importers[0] || tt("sb.imp.importer", "Importer");
   const steps = [];
@@ -11174,7 +11218,8 @@ function sbImportCard(d){
     : tt("sb.card.do.gap", "Buy about <b>{n}</b> <b>{item}</b> for <b>{depot}</b> as an urgent order.", {n: num(once.proposed), item: spEsc(r.item), depot: spEsc(shortName(b))}));
   deps.forEach(x => steps.push(tt("sb.card.do.hours.each2", {one: "BizMan › <b>{site}</b> › Schedule: staff <b>{item}</b> {need} h a day on its {m} machine (now {now}).",
     other: "BizMan › <b>{site}</b> › Schedule: staff <b>{item}</b> {need} h a day on each of its {m} machines (now {now})."},
-    {site: spEsc(D.businesses[x.s] ? shortName(D.businesses[x.s]) : "?"), item: spEsc(x.item), need: x.need, m: x.machines, n: x.machines, now: sbHoursWords(x.each)})));
+    {site: spEsc(D.businesses[x.s] ? shortName(D.businesses[x.s]) : "?"), item: spEsc(x.item), need: x.need, m: x.machines, n: x.machines, now: sbHoursWords(x.each)}) +
+    (x.basis && x.basis !== sizing ? ` ${tt("sb.ck.basis", "Planned for {basis}.", {basis: szNameLow(x.basis)})}` : "")));
   const manual = `<div class="sbi-panel" data-panel="manual"${sbiOpen === "manual" ? "" : " hidden"}><h4>${tt("sb.card.manual", "Manual instructions")}</h4><ol class="sbi-steps">${
     steps.map(x => `<li>${x}</li>`).join("")}</ol></div>`;
   /* No copy of its own: Manual instructions says the same, and Changes'
@@ -11390,7 +11435,7 @@ function sbProdTiles(sites){
   return `<div class="sbp-tiles" role="group" aria-label="${attr(tt("sb.prod.tiles", "Machine-hours a day"))}" data-tip="${attr(tt("sb.prod.tiles", "Machine-hours a day"))}">${
     tile("now", tt("sb.prod.now", "Staffed now · observation"), now)}${
     tile("cap", szName("cap"), cap)}${
-    tile("dem", szName("dem"), dem)}</div>`;
+    tile("dem", lines.some(l => l.demandApproximate) ? tt("sb.prod.demIncludesApprox", "Shop demand · includes approximate hours") : szName("dem"), dem)}</div>`;
 }
 function drawProductionView(){
   const sec = $("secProduction");
@@ -11834,8 +11879,8 @@ function drawFlowPanel(){
   const fitRank = it => ({short: 0, tight: 1})[it.fit] ?? 2;
   const lines = (node.items || []).map(x => sizing === "dem" && x.dem ? {...x, ...x.dem} : x);
   if(sizing === "dem") lines.sort((a, b) => fitRank(a) - fitRank(b) || !!b.low - !!a.low || (b.need || 0) - (a.need || 0));
-  const items = lines.slice(0, 12).map(it => `<tr><td class="l">${spEsc(it.item)}</td><td>${num(it.stock || 0)}</td><td>${num(it.need || 0)}</td><td>${num(it.provision || 0)}</td><td class="l">${
-    it.st && SZ_WORD[it.st] ? `<span class="sbf-w ${it.st}">${SZ_WORD[it.st]}</span>` : ""}</td></tr>`).join("");
+  const items = lines.slice(0, 12).map(it => `<tr><td class="l">${spEsc(it.item)}</td><td>${num(it.stock || 0)}</td><td>${num(it.need || 0)}${sbDemandApproxNote(it)}</td><td>${num(it.provision || 0)}</td><td class="l">${
+    !it.demandApproximate && it.st && SZ_WORD[it.st] ? `<span class="sbf-w ${it.st}">${SZ_WORD[it.st]}</span>` : ""}</td></tr>`).join("");
   const into = s >= 0 ? (sbTabOf(s) === "factories" ? "production" : sbTabOf(s) === "shops" ? "deliveries" : "imports") : "deliveries";
   host.innerHTML = `<div class="sbf-card"><h3>${spEsc(node.name)}${node.sub ? `<small>${spEsc(node.sub)}</small>` : ""}</h3>${items
     ? `<div class="scrollx"><table class="sb-t sbf-t"><thead><tr><th class="l">${tt("sb.col.product", "Product")}</th><th>${tt("sb.col.onHand", "On hand")}</th><th>${
@@ -11878,7 +11923,8 @@ function drawFactoryStaffing(keep = () => true, drawnLines = []){
     /* The factory's own page has its lines and inputs, not a staffing block. */
     const go = b ? `<a class="link go" href="${attr(siteHref(b.key))}" data-sb-lines="${attr(b.key)}">${tt("sb.staff.open", "Open factory page ›")}</a>` : "";
     if(r.failed) return `<div class="sb-sfac"><div class="sb-sfh"><span>${name}</span><span class="sb-hc">${
-      r.unavailable === "modCompatibility" ? spEsc(mcStaffText(r)) : r.unavailable === "streetFood" ? SZ_WHY["new:streetFood"] : tt("sb.staff.failed", "No plan could be built for this factory's workers.")}</span><span></span>${go}</div></div>`;
+      r.unavailable === "modCompatibility" ? spEsc(mcStaffText(r)) : r.unavailable === "streetFood" ? SZ_WHY["new:streetFood"]
+        : r.unavailable === "demandApproximate" ? spEsc(sbDemandUnsettled()) : tt("sb.staff.failed", "No plan could be built for this factory's workers.")}</span><span></span>${go}</div></div>`;
     const hc = r.headcount || {}, dl = r.delta || {};
     workers += dl.workers || 0; perDay += dl.perDay || 0;
     const chip = dl.workers ? `<span class="d ${dl.workers > 0 ? "up" : "dn"}">${dl.workers > 0 ? tt("sb.staff.hire", "hire +{n}", {n: dl.workers}) : `−${-dl.workers}`}</span>` : "";

@@ -34,7 +34,10 @@ async function grid() {
         {type: 'Law Firm', slug: 'ba:businesstype_lawfirm', fees: ['Lawyer Fee (Hourly)'],
           mine: true, cells: [fee(hoods[0], 33, 2, true), null, fee(hoods[2], 99, 0)]}]}};
     document.querySelectorAll('.page').forEach(el => { el.hidden = el.id !== 'pageGrowth'; });
-    document.querySelectorAll('#pageGrowth section').forEach(el => { el.hidden = el.id !== 'secMarket'; });
+    document.querySelectorAll('#pageGrowth section').forEach(el => {
+      el.hidden = el.id !== 'secMarket';
+      el.classList.add('measured');
+    });
     marketView = 'types';
     drawMarket();
     wireHeat();

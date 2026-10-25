@@ -216,7 +216,72 @@ it); `needDay`, the uncapped figure Demand sizing works from, but with no top-up
 standing in for a sale (#501), plus the margin; and
 `production`, `{status, level}` with `more` machines and `makesWith` a day where
 `needDay` is past what the line makes, so the 24 h cap on the hours stays. All three are
-null where no demand can be read. `supply.factories.sites[]` counts `running` machines (a recipe and
+null where no demand can be read. Where the product meets another site's of it on the way
+to the shops (a factory topped up with what it also makes, `_DemandSizing.made_share()`,
+#521), the figures are the line's share, and the line carries `chain`, `{at, from, makes,
+need}`: the meeting factory's index, the sites whose routes bring the product there, the most
+the lines there, its own import and the producers behind those routes can bring it a day (a
+max flow, `_DemandSizing._carried()`: each producer and route target at the part of its flow
+that goes there), and what is drawn from there with the margin; a line no route shares with
+has no `chain`. The splits are one solve per product (`_DemandSizing._splits()`): the flow
+over the chain with the least sum of load squared over capacity, every route and every
+site's inbound at its target less the margin (`_least_load_flow()`, exact, None where it does
+not settle, and the old figures stand). The producers' outputs are unique, so they depend on
+neither site names nor order; the routes come from a tie-break solved again with the outputs
+pinned (skipped past `ROUTE_POLISH_SITES` sites, and the first answer's routes stand where it
+does not settle). Past that the tip follows the routes' last places, so the address order can
+change which link becomes the tip, not only move `chain.makes` and `chain.need` by a unit: a
+site counts as a link only where its own share is between nothing and all of it (`merges()`,
+outside `MERGE_SHARE_SLACK` of either), and the link with the least room wins. What a site
+past the chain draws from it is held down as `demand()` holds it, and `_splits()` solves again
+on those draws until they agree: the draws a pass asks equal the ones it solved on, the lines'
+loads read on its split (`demand()` times the share) equal the solve's outputs, and the draws,
+routes and loads match the pass before. Each pass solves on what the last one asked and drops
+the item's `demand()` memos first (`_forget()`), so a site past the chain is read on that
+pass's split. At `CHAIN_DRAW_PASSES` (`CHAIN_DRAW_PASSES_LARGE` past `ROUTE_POLISH_SITES`
+sites) the last split stands as approximate and stderr is told. The stop rule checks
+agreement between successive passes and solve/read-back consistency to 1e-7 relative to
+each figure (or one unit for figures under one); it does not bound the distance to a
+fixed point. `_line_use()` allows `LINE_FULL_SLACK` relative to a line's capacity for
+numerical residue, not as a general bound on the split's error. The large-site cap is
+150 passes; the smaller chains retain 300.
+
+`_DemandSizing.unsettled` records the item and whether recipe demand was included when
+the outer passes exhaust their cap or the inner solve returns no answer. After all
+lines are sized, `_factories()` marks their payload rows `demandApproximate: true` and
+sets `production` and `dem.status` to null, withholding covered verdicts, machine-upgrade
+advice and Demand hours advice.
+This conservatively covers every line making the affected item, including factories
+outside the solved chain that share its customers. From these lines it follows local
+recipe inputs and actual inbound supply edges (including depots) to upstream ingredient
+lines; recipe membership alone does not flag a disconnected producer. Other products
+keep their verdicts. Affected input and upstream supply facts keep their estimated
+use/need in Demand but carry `demandApproximate: true`, `st: new`, `why: demandApproximate`
+and no changes or lowering suggestions. Full-production hours and input facts stay
+independent of this estimate. No Demand staffing finding is made for an affected line;
+the whole factory's Demand staffing plan is unavailable, because planning only its
+settled lines could overwrite other hours or count needed workers as spare. Affected lines
+keep their last sold share and Demand hours estimate, with an approximation label; their
+machine verdict and its need-with-margin and chain-shortage details are withheld. Current
+staffed hours, output, stock and delivery settings remain observations. Ingredient use and
+Goods flow's needs before refill stay visible as labelled estimates. Player-entered import
+figures survive, but cannot derive hours dependencies or basis clashes from uncertain Demand
+hours. Production explains this and marks affected rows, including in Changes; the factory
+page keeps its staffing observations and settled lines' real machine shortages beside the
+uncertainty note. The import Review card labels estimated use on the basis it explains, including a saved
+figure from another basis. It keeps the game's amount available as a reset without presenting
+it as a Demand suggestion or alternative while Demand is approximate.
+The total Demand hours tile says when it includes estimates, and approximate
+inputs are counted separately from rows too new to judge. `set_made()` clears the unsettled state on a
+new sizing. A settled split has no `demandApproximate` key.
+
+`demand()` shares what reaches a site in the chain between its senders as the solve routes it
+(`routed_split()`), so each line's share of its site's draw is the solve's output, and the
+Demand-mode walk asks each route into such a site the same part (`walk_split()`, the
+`routed` argument of `_supply_walk()`), its own supply bringing the rest. The `soldDay`s of
+the lines of one chain are rounded together, largest remainder first (`_rounded_together()`),
+unless the last unit falls between fractions within 1e-4 of each other; they add up to the
+chain's manufactured total, not the shops' sales where an import in the chain brings part. `supply.factories.sites[]` counts `running` machines (a recipe and
 somebody posted) beside the placed ones (`machines`).
 
 Shop and office demand plans are read from their own reports, with no measurement to

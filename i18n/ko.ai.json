@@ -3084,6 +3084,8 @@
  "sb.in.lower": "claude-opus-5-5",
  "sb.in.route": "claude-opus-5-5",
  "sb.line.atRoster": "gpt-6-sol",
+ "sb.line.chain.at": "claude-opus-5-5",
+ "sb.line.chain.here": "claude-opus-5-5",
  "sb.line.choose": "claude-opus-5-5",
  "sb.line.fewer": "claude-opus-5-5",
  "sb.line.fewer.tip": "claude-opus-5-5",

@@ -3395,6 +3395,8 @@
  "sb.in.lower": "claude-sonnet-5",
  "sb.in.route": "claude-sonnet-5",
  "sb.line.atRoster": "claude-sonnet-5",
+ "sb.line.chain.at": "claude-opus-5-5",
+ "sb.line.chain.here": "claude-opus-5-5",
  "sb.line.choose": "claude-sonnet-5",
  "sb.line.fewer": "claude-sonnet-5",
  "sb.line.fewer.tip": "claude-sonnet-5",

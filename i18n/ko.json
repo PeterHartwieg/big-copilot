@@ -3084,6 +3084,8 @@
  "sb.in.lower": "{n:,}개면 충분",
  "sb.in.route": "경로 확인",
  "sb.line.atRoster": "이 시간대에 {n:,}개",
+ "sb.line.chain.at": "{at}의 공급망과 수요를 나눕니다: 그곳에서 생산하고 들여오는 양은 하루 {makes:,}, 그곳의 필요량은 {need:,}",
+ "sb.line.chain.here": "{from}에서 이곳으로 보내는 물량과 수요를 나눕니다: 이곳에서 생산하고 들여오는 양은 하루 {makes:,}, 필요량은 {need:,}",
  "sb.line.choose": "게임에 표시된 레시피를 선택하세요. 지금은 재료가 합계에서 빠져 있어요",
  "sb.line.fewer": "{now}시간 중 {lower}시간만 필요: 줄여도 돼요",
  "sb.line.fewer.tip": "변경이 아닌 제안이에요. 시간을 줄여도 라인이 필요량을 채워요",

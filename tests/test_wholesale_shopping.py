@@ -56,6 +56,17 @@ class WholesaleShopping(unittest.TestCase):
         [full] = self.rows(self.company(stock=900))
         self.assertEqual((full["buy"], full["boxes"], full["weekly"]), (0, 0, 810))
 
+    def test_null_route_target_is_not_managed_supply(self):
+        results = []
+        for amount in (None, 0):
+            c = self.company()
+            c.site(DEPOT, "Depot")
+            c.hold(DEPOT, SODA, 1000)
+            c.plan(DEPOT, SHOP, SODA, amount)
+            results.append(self.rows(c))
+        self.assertEqual(results[0], results[1])
+        self.assertEqual(results[0][0]["weekly"], 810)
+
     def test_uses_measured_week_not_seven_trading_days(self):
         c = self.company(stock=0)
         c.lines[SHOP][SODA]["weekSold"] = 200  # opens two days a week

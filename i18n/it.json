@@ -3799,6 +3799,8 @@
  "sb.in.lower": "basterebbero {n:,}",
  "sb.in.route": "verifica il percorso",
  "sb.line.atRoster": "{n:,} con questi orari",
+ "sb.line.chain.at": "La linea condivide la domanda con la catena di {at}: tra prodotto lì e consegnato, {makes:,} al giorno contro {need:,} necessari lì",
+ "sb.line.chain.here": "La linea condivide la domanda con ciò che {from} invia qui: tra prodotto qui e consegnato, {makes:,} al giorno contro {need:,} necessari",
  "sb.line.choose": "Scegli la ricetta mostrata nel gioco; i suoi materiali mancano dai totali",
  "sb.line.fewer": "richiede {lower} delle {now} ore attuali: ne basterebbero meno",
  "sb.line.fewer.tip": "Un suggerimento, non una modifica: la linea coprirebbe ancora il fabbisogno con meno ore",
