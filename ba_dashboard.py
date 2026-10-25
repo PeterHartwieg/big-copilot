@@ -7677,7 +7677,7 @@ def _supply_leaves(businesses: list, index: dict, sold_week: dict, target_at: di
     # A plan left topping up what a converted shop no longer sells needs nothing.
     retired = {(b["key"], line["slug"]) for b in businesses for line in b["lines"] if line.get("retired")}
     for (dest, item), (amount, _source) in target_at.items():
-        if not (dest in index and amount > 0 and (dest, item) not in leaves) or (dest, item) in retired:
+        if not (dest in index and (amount or 0) > 0 and (dest, item) not in leaves) or (dest, item) in retired:
             continue
         shop = businesses[index[dest]]
         if shop["status"] != "retail" or shop.get("closed"):
@@ -9258,6 +9258,7 @@ def _supply_graph(save: Save, names: Names, businesses: list, index: dict, *, ed
                     fit = NODE_FIT.get(fact["st"], "ok")
                 return {
                     "st": fact["st"] if fact else None,
+                    **({"demandApproximate": True} if fact and fact.get("demandApproximate") else {}),
                     "need": need,
                     "cycleNeed": cycle_need,
                     "provision": provision,
@@ -9921,7 +9922,7 @@ def _supply(
             (
                 [index[shop], item]
                 for shop, item in (
-                    {k for k, (amount, _src) in target_at.items() if amount > 0}
+                    {k for k, (amount, _src) in target_at.items() if (amount or 0) > 0}
                     | set(wholesale)
                 )
                 if shop in index
@@ -11893,7 +11894,7 @@ def _factories(
         incoming = collections.defaultdict(list)
         for source, legs in flow["edges"].items():
             for dest, item, amount in legs:
-                if amount > 0 and source != dest:
+                if (amount or 0) > 0 and source != dest:
                     incoming[(dest, item)].append((source, item))
         lines_at = collections.defaultdict(list)
         for site in sites:

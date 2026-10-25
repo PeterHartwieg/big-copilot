@@ -1550,6 +1550,37 @@ def dense_five_breweries():
 
 
 class UnsettledDemandTests(unittest.TestCase):
+    def test_goods_flow_keeps_approximation_on_ingredient_need(self):
+        c = two_breweries(1000)
+        for addr in (F1, F2):
+            c.contract(addr, WATER, 100)
+        run_with(c, RECIPES)
+        def water(addr):
+            node = next(n for n in c.supply["graph"]["nodes"] if n["id"] == site_key(addr))
+            item = next(i for i in node["items"] if i["slug"] == WATER)
+            return {**item, **item.get("dem", {})}
+        for addr in (F1, F2):
+            self.assertEqual(water(addr)["need"], 584)
+            self.assertFalse(water(addr).get("demandApproximate"))
+        with patch.object(ba_dashboard, "LEAST_LOAD_STEPS", 0):
+            quietly(c)
+        for addr in (F1, F2):
+            self.assertEqual(water(addr)["need"], 840)
+            self.assertTrue(water(addr).get("demandApproximate"))
+
+    def test_unrelated_null_target_does_not_break_unsettled_propagation(self):
+        c = two_breweries(1000)
+        source, dest = ("unrelated", 1), ("unrelated", 2)
+        c.site(source, "Unrelated depot")
+        c.site(dest, "Unrelated recipient")
+        c.hold(source, WATER, 100)
+        c.hold(dest, WATER, 100)
+        c.plan(source, dest, WATER, None)
+        with patch.object(ba_dashboard, "LEAST_LOAD_STEPS", 0):
+            quietly(c)
+        self.assertApproximate(c, (F1, F2))
+        self.assertFalse(c.fact(dest, WATER, "dem").get("demandApproximate"))
+
     def test_inner_fallback_keeps_estimates_but_withholds_hours_inputs_and_staffing(self):
         from tests.test_factory_staffing import People, factory_rows
 

@@ -241,6 +241,86 @@ test('an approximate sibling adds a note without hiding a settled machine shorta
   } finally { await page.close(); }
 });
 
+test('saved import edits survive reload without deriving hours from unsettled demand', async () => {
+  const {spawnSync} = require('node:child_process');
+  const made = spawnSync(process.env.PYTHON || 'python', ['-m', 'tests.multistage_fixture'], {cwd: root, encoding: 'utf8'});
+  assert.equal(made.status, 0, made.stderr);
+  const data = JSON.parse(made.stdout);
+  for(const which of ['all', 'changes']) for(const mode of ['cap', 'dem']) for(const basis of ['cap', 'dem']){
+    const page = await board(data.settled, {which, mode});
+    try {
+      await page.evaluate(basis => {
+        sizing = basis;
+        for(const group of sbData().importRows) for(const r of group.rows)
+          impSetKeep(r.impId, {value: 1800, inGame: r.inGame, basis});
+      }, basis);
+      await page.reload();
+      const got = await page.evaluate(([data, which, mode]) => {
+        D = data; sizing = mode; sbWhich = which;
+        sbMode.imports = sbMode.deliveries = sbMode.production = which;
+        sbSelOff = true; sbSel = null; sub.supply = 'production';
+        const d = sbData();
+        drawProductionView(); drawChangesView();
+        flowPickId = D.businesses[0].key; drawFlowView();
+        const imports = d.importRows.flatMap(g => g.rows);
+        const manual = imports.map(r => {
+          sbSel = {s: r.s, slug: r.slug};
+          const el = document.createElement('div'); el.innerHTML = sbImportCard(d);
+          return el.querySelector('[data-panel="manual"]').textContent;
+        });
+        return {rows: d.rows, imports, manual,
+          text: orderChecklistText(d.rows, 'Review', sizing),
+          production: document.querySelector('#secProduction').textContent,
+          changes: document.querySelector('#secChanges').textContent,
+          flow: document.querySelector('#sbFlowPanel').textContent};
+      }, [data.fallback, which, mode]);
+      assert.ok(got.imports.every(r => r.value === 1800 && r.basis === basis));
+      if(basis === 'dem') assert.ok(got.imports.every(r => r.deps.length === 0));
+      if(mode === 'dem'){
+        if(basis === 'dem') assert.deepEqual(got.rows, []);
+        else {
+          assert.ok(got.rows.filter(r => r.kind === 'hours').every(r => r.dep && r.proposed === 24));
+          assert.ok(got.imports.flatMap(r => r.deps).every(dep => dep.needNow === null));
+        }
+        assert.doesNotMatch(got.rows.map(r => r.reason).join(' '), /where shop demand plans|Reset the figure/);
+        assert.match(got.flow, /approximate/i);
+        if(basis === 'dem'){
+          assert.doesNotMatch(got.text + got.changes, /hours\/day|Staff Beer|20\s*→\s*24/);
+          assert.doesNotMatch(got.production, /20\s*→\s*24/);
+          assert.match(got.production, /approximately 24 needed/);
+          assert.doesNotMatch(got.manual.join(' '), /Schedule: staff/);
+        }
+      }
+    } finally { await page.close(); }
+  }
+});
+
+test('uncertainty preserves observed staffing and distinguishes new inputs and mixed totals', async () => {
+  const data = fixture(), site = data.supply.factories.sites[0];
+  const bread = site.lines.find(l => l.slug === 'bread');
+  bread.demandApproximate = true;
+  data.supply.facts[String(site.s)].flour.dem = {use: 240, need: 240, demandApproximate: true, st: 'new', why: 'demandApproximate'};
+  const page = await board(data, {mode: 'dem'});
+  try {
+    const got = await page.evaluate(() => {
+      const site = D.supply.factories.sites[0], d = sbData();
+      const node = document.createElement('div'); node.innerHTML = sbProdTiles(d.f.sites);
+      const part = sbFactoryPart(d, new Set(), sbImportCtx(d), 'production', {lines: true, inputs: true});
+      const stale = part.everyLine.find(r => r.slug === 'bread');
+      const row = document.createElement('tbody');
+      row.innerHTML = sbLineRow(d, {...stale, chk: [{kind: 'hours', proposed: 24}]}, site);
+      return {read: spLinesRead(site), verdict: part.verdict, staleHours: row.querySelector('.sb-hrs').textContent,
+        tiles: node.textContent};
+    });
+    assert.match(got.read, enRe('sp.lines.least'));
+    assert.match(got.read, enRe('sb.line.demandUnsettled'));
+    assert.doesNotMatch(got.verdict, /too new to judge/);
+    assert.match(got.verdict, enRe('sb.fac.approxInputs', {n: 1}, {cap: true}));
+    assert.match(got.tiles, /includes approximate hours/);
+    assert.doesNotMatch(got.staleHours, /→/);
+  } finally { await page.close(); }
+});
+
 test('a factory with a line critically short of machines opens, and its head says so', async () => {
   // Nothing else to read: every input covered, the cake's hours covered, so
   // there is no change to type and no other critical row.

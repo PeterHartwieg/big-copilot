@@ -7215,14 +7215,13 @@ function spLinesRead(site){
     other: "Short of machines · <b>{item}</b> needs {n} more machines to cover the {need} a day it needs with the margin: what its shops sell and other lines use"},
     {item: spEsc(lacking.item), n: lacking.production.more, need: spNum(lacking.needDay)})
     + (lacking.chain ? ` · ${spEsc(sbChainTip(lacking.chain, site.s))}` : "") + (note ? ` · ${note}` : "");
-  if(note) return note;
   let worst = null;
   (site.lines || []).forEach(l => (l.gaps || []).forEach((g, k) => {
     if(g && Number.isFinite(g.hours) && (!worst || g.hours < worst.g.hours))
       worst = {l, g, slot: Number.isFinite(g.slot) ? g.slot : (l.slots || [])[k] ?? k + 1};
   }));
-  if(worst) return tt("sp.lines.least", "Least staffed · <b>{item}</b> · {read}", {item: spEsc(worst.l.item), read: spMachineRead(worst.slot, worst.g)});
-  return (site.lines || []).length ? tt("sp.lines.all2", "Every machine is staffed all <b>{n} h</b> of the week", {n: SP_STAFF_HOURS}) : "&nbsp;";
+  if(worst) return tt("sp.lines.least", "Least staffed · <b>{item}</b> · {read}", {item: spEsc(worst.l.item), read: spMachineRead(worst.slot, worst.g)}) + (note ? ` · ${note}` : "");
+  return ((site.lines || []).length ? tt("sp.lines.all2", "Every machine is staffed all <b>{n} h</b> of the week", {n: SP_STAFF_HOURS}) : "&nbsp;") + (note ? ` · ${note}` : "");
 }
 /* The Inputs block's read-out before a row is pointed at: the input whose
    fact is worst, by how soon it stops the line. */
@@ -9631,7 +9630,9 @@ function sbDeps(f, r){
     const own = n.factoryImportSite ?? (n.directImport ? site.s : null);
     if(n.from !== r.s && own !== r.s) return;
     site.lines.filter(l => (n.lineSlugs || []).includes(l.slug)).forEach(l => {
-      const need = (l.needHours || {})[basis], each = sbMachineHours(l);
+      // Keep observed consumption in feeds; never turn an unsettled Demand
+      // estimate into an hours dependency, including a saved import's basis.
+      const need = basis === "dem" && l.demandApproximate ? null : (l.needHours || {})[basis], each = sbMachineHours(l);
       const ing = ((recipes[l.slug] || {}).ingredients || []).find(i => (aliases[i.slug] || i.slug) === r.slug);
       const week = Number.isFinite(l.hoursWeek) && Array.isArray(l.gaps) ? l.hoursWeek : Math.round(each.reduce((a, h) => a + h, 0) * 7);
       if(!feeds.some(x => x.s === site.s && x.rid === l.rid && x.slug === l.slug))
@@ -9639,7 +9640,7 @@ function sbDeps(f, r){
       if(!Number.isFinite(need) || !each.length || each.every(h => h === need)) return;
       if(out.some(x => x.s === site.s && x.rid === l.rid && x.slug === l.slug)) return;
       /* `needNow`: the hours the basis on screen plans this line for. */
-      const needNow = (l.needHours || {})[sizing];
+      const needNow = sizing === "dem" && l.demandApproximate ? null : (l.needHours || {})[sizing];
       out.push({s: site.s, item: l.item, slug: l.slug, rid: l.rid, machines: l.machines, now: l.hoursNow, each, week, need, basis,
                 needNow: Number.isFinite(needNow) ? needNow : null,
                 thinDay: l.thinDay || null, perHour: ing ? ing.per : null, material: r.item, depot: r.s});
@@ -10634,7 +10635,7 @@ function sbLineRow(d, r, site){
   const need = (r.needHours || {})[sizing];
   const approximateHours = sizing === "dem" && r.demandApproximate;
   const chk = r.chk || [];
-  const set = chk.find(c => c.kind === "hours");
+  const set = !approximateHours && chk.find(c => c.kind === "hours");
   /* The basis switch on the view says what the hours are planned for; only
      the one surprise is said here (declutter G5). */
   const sized = sizing === "dem" && r.demBasis === "none" ? tt("sb.line.sized.none", "nothing downstream is drawn, so Demand sizes it round the clock too") : "";
@@ -10808,15 +10809,16 @@ function sbFactoryPart(d, claimed, ctx, view, o){
     return sbObject(view, s, {icon: "gear", how, stats: stats + short + sbDemandApproxNote({demandApproximate: lines.some(r => r.demandApproximate)}), left,
       open: defaultOpen, body});
   });
-  const lineN = szTally(everyLine.filter(r => r.fact), r => r.fact);
+  const lineN = szTally(everyLine.filter(r => r.fact && !r.fact.demandApproximate), r => r.fact);
   const hoursShort = everyLine.filter(r => r.fact && r.fact.st === "short" && r.fact.why === "hours").length;
-  const inN = szTally(everyInput, r => r.fact);
+  const inN = szTally(everyInput.filter(r => !r.fact?.demandApproximate), r => r.fact);
   const unnamed = f.unnamed || 0;
   const young = (lineN.new || 0) + (inN.new || 0);
   /* Short hours, short and tight inputs are counted on the row of views and
      marked on their rows (declutter U6); these are said nowhere else. */
   const machinesShort = everyLine.filter(r => r.prod).length;
-  const approximate = everyLine.some(r => r.demandApproximate);
+  const approximateInputs = everyInput.filter(r => r.fact?.demandApproximate).length;
+  const approximate = everyLine.some(r => r.demandApproximate) || approximateInputs > 0;
   const problems = [machinesShort ? tt("sb.fac.machines", {one: "{n} line makes less than its shops need, even round the clock",
       other: "{n} lines make less than their shops need, even round the clock"}, {n: machinesShort}) : "",
     inN.stalled ? tt("sb.fac.stalled", {one: "{n} input is stalled", other: "{n} inputs are stalled"}, {n: inN.stalled}) : "",
@@ -10838,6 +10840,7 @@ function sbFactoryPart(d, claimed, ctx, view, o){
       : tt("sb.fac.allGood", "Every line runs the hours it needs and every factory input covers what the lines need");
     if(slack) verdict = verdict ? sbThen(verdict, sbCap(slack)) : sbCap(slack);
     if(young) verdict = sbThen(verdict, tt("sb.fac.young", {one: "{n} row is too new to judge", other: "{n} rows are too new to judge"}, {n: young}));
+    if(approximateInputs) verdict = sbThen(verdict, tt("sb.fac.approxInputs", {one: "{n} input has approximate demand", other: "{n} inputs have approximate demand"}, {n: approximateInputs}));
     if(verdict) verdict += ".";
   }
   if(approximate) verdict += (verdict ? " " : "") + sbDemandUnsettled();
@@ -11435,7 +11438,7 @@ function sbProdTiles(sites){
   return `<div class="sbp-tiles" role="group" aria-label="${attr(tt("sb.prod.tiles", "Machine-hours a day"))}" data-tip="${attr(tt("sb.prod.tiles", "Machine-hours a day"))}">${
     tile("now", tt("sb.prod.now", "Staffed now · observation"), now)}${
     tile("cap", szName("cap"), cap)}${
-    tile("dem", lines.some(l => l.demandApproximate) ? tt("sb.prod.demApprox", "Shop demand · approximate") : szName("dem"), dem)}</div>`;
+    tile("dem", lines.some(l => l.demandApproximate) ? tt("sb.prod.demIncludesApprox", "Shop demand · includes approximate hours") : szName("dem"), dem)}</div>`;
 }
 function drawProductionView(){
   const sec = $("secProduction");
@@ -11879,8 +11882,8 @@ function drawFlowPanel(){
   const fitRank = it => ({short: 0, tight: 1})[it.fit] ?? 2;
   const lines = (node.items || []).map(x => sizing === "dem" && x.dem ? {...x, ...x.dem} : x);
   if(sizing === "dem") lines.sort((a, b) => fitRank(a) - fitRank(b) || !!b.low - !!a.low || (b.need || 0) - (a.need || 0));
-  const items = lines.slice(0, 12).map(it => `<tr><td class="l">${spEsc(it.item)}</td><td>${num(it.stock || 0)}</td><td>${num(it.need || 0)}</td><td>${num(it.provision || 0)}</td><td class="l">${
-    it.st && SZ_WORD[it.st] ? `<span class="sbf-w ${it.st}">${SZ_WORD[it.st]}</span>` : ""}</td></tr>`).join("");
+  const items = lines.slice(0, 12).map(it => `<tr><td class="l">${spEsc(it.item)}</td><td>${num(it.stock || 0)}</td><td>${num(it.need || 0)}${sbDemandApproxNote(it)}</td><td>${num(it.provision || 0)}</td><td class="l">${
+    !it.demandApproximate && it.st && SZ_WORD[it.st] ? `<span class="sbf-w ${it.st}">${SZ_WORD[it.st]}</span>` : ""}</td></tr>`).join("");
   const into = s >= 0 ? (sbTabOf(s) === "factories" ? "production" : sbTabOf(s) === "shops" ? "deliveries" : "imports") : "deliveries";
   host.innerHTML = `<div class="sbf-card"><h3>${spEsc(node.name)}${node.sub ? `<small>${spEsc(node.sub)}</small>` : ""}</h3>${items
     ? `<div class="scrollx"><table class="sb-t sbf-t"><thead><tr><th class="l">${tt("sb.col.product", "Product")}</th><th>${tt("sb.col.onHand", "On hand")}</th><th>${

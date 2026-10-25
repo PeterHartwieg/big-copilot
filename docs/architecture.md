@@ -260,10 +260,16 @@ use/need in Demand but carry `demandApproximate: true`, `st: new`, `why: demandA
 and no changes or lowering suggestions. Full-production hours and input facts stay
 independent of this estimate. No Demand staffing finding is made for an affected line;
 the whole factory's Demand staffing plan is unavailable, because planning only its
-settled lines could overwrite other hours or count needed workers as spare. The last
-sold/need, hours and chain figures remain available as labelled estimates. Production shows a visible
-explanation and marks affected rows, including in Changes; the factory page shows the
-note alongside settled lines' real machine shortages. `set_made()` clears the unsettled state on a
+settled lines could overwrite other hours or count needed workers as spare. Affected lines
+keep their last sold share and Demand hours estimate, with an approximation label; their
+machine verdict and its need-with-margin and chain-shortage details are withheld. Current
+staffed hours, output, stock and delivery settings remain observations. Ingredient use and
+Goods flow's needs before refill stay visible as labelled estimates. Player-entered import
+figures survive, but cannot derive hours dependencies or basis clashes from uncertain Demand
+hours. Production explains this and marks affected rows, including in Changes; the factory
+page keeps its staffing observations and settled lines' real machine shortages beside the
+uncertainty note. The total Demand hours tile says when it includes estimates, and approximate
+inputs are counted separately from rows too new to judge. `set_made()` clears the unsettled state on a
 new sizing. A settled split has no `demandApproximate` key.
 
 `demand()` shares what reaches a site in the chain between its senders as the solve routes it
