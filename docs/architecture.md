@@ -268,7 +268,10 @@ Goods flow's needs before refill stay visible as labelled estimates. Player-ente
 figures survive, but cannot derive hours dependencies or basis clashes from uncertain Demand
 hours. Production explains this and marks affected rows, including in Changes; the factory
 page keeps its staffing observations and settled lines' real machine shortages beside the
-uncertainty note. The total Demand hours tile says when it includes estimates, and approximate
+uncertainty note. The import Review card labels estimated use on the basis it explains, including a saved
+figure from another basis. It keeps the game's amount available as a reset without presenting
+it as a Demand suggestion or alternative while Demand is approximate.
+The total Demand hours tile says when it includes estimates, and approximate
 inputs are counted separately from rows too new to judge. `set_made()` clears the unsettled state on a
 new sizing. A settled split has no `demandApproximate` key.
 

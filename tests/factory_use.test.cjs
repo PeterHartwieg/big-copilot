@@ -295,6 +295,69 @@ test('saved import edits survive reload without deriving hours from unsettled de
   }
 });
 
+test('import review withholds approximate suggestions and labels use on its own saved basis', async () => {
+  const {spawnSync} = require('node:child_process');
+  const made = spawnSync(process.env.PYTHON || 'python', ['-m', 'tests.multistage_fixture'], {cwd: root, encoding: 'utf8'});
+  assert.equal(made.status, 0, made.stderr);
+  const data = JSON.parse(made.stdout);
+  for(const which of ['all', 'changes']) for(const settled of [false, true])
+    for(const mode of ['dem', 'cap']) for(const basis of [null, 'dem', 'cap']){
+      const page = await board(data.settled, {which, mode});
+      try {
+        const errors = []; page.on('pageerror', error => errors.push(error.message));
+        if(basis) await page.evaluate(basis => {
+          sizing = basis;
+          const r = sbData().importRows[0].rows[0];
+          impSetKeep(r.impId, {value: 1800, inGame: r.inGame, basis});
+        }, basis);
+        await page.reload();
+        const got = await page.evaluate(([data, which, mode]) => {
+          D = data; sizing = mode; sbMode.imports = which; sub.supply = 'imports';
+          const d = sbData(), r = d.importRows[0].rows[0];
+          sbSel = {s: r.s, slug: r.slug}; sbiOpen = 'why';
+          drawImportsView();
+          const card = document.querySelector('#sbCard');
+          return {r, rows: d.rows, text: card.textContent, value: card.querySelector('.imp-in').value,
+            scale: card.querySelector('.sbi-scale').textContent,
+            scaleLabel: card.querySelector('.sbi-scale').getAttribute('aria-label'),
+            why: [...card.querySelectorAll('.sbi-why tr')].map(tr => tr.textContent),
+            manual: card.querySelector('[data-panel="manual"]').textContent};
+        }, [settled ? data.settled : data.fallback, which, mode]);
+        const context = JSON.stringify({which, settled, mode, basis});
+        assert.equal(got.r.inGame, 100, context);
+        assert.equal(got.value, String(basis ? 1800 : mode === 'cap' ? 1680 : settled ? 1350 : 100), context);
+        if(basis) assert.equal(got.r.basis, basis, context);
+        if(!settled){
+          assert.doesNotMatch(got.text, /Shop demand (?:would suggest|suggests)|With shop demand instead/i, context);
+          if(mode === 'dem' && basis) assert.match(got.text, /Reset to the game's 100/, context);
+          if(mode === 'cap' && basis) assert.match(got.text, /Full production suggests 1,680/, context);
+          if(mode === 'dem' && !basis) assert.match(got.text, /Full production would suggest 1,680/, context);
+        } else {
+          if(mode === 'dem' && basis) assert.match(got.text, /Shop demand suggests 1,350/, context);
+          if(mode === 'cap' && !basis) assert.match(got.text, /Shop demand would suggest 1,350/, context);
+        }
+        const approximateScale = !settled && mode === 'dem';
+        assert.equal(/approximate demand/i.test(got.scale), approximateScale, context);
+        assert.equal(/approximate demand/i.test(got.scaleLabel), approximateScale, context);
+        assert.match(got.scale, new RegExp(settled && mode === 'dem' ? '1,169' : '1,680'), context);
+        const approximateWhy = !settled && (basis || mode) === 'dem';
+        for(const label of ['Factory lines, a week', 'Uses a week']){
+          const row = got.why.find(text => text.startsWith(label));
+          assert.ok(row, context);
+          assert.equal(/approximate demand/i.test(row), approximateWhy, context + row);
+          assert.match(row, new RegExp(settled && (basis || mode) === 'dem' ? '1,169' : '1,680'), context);
+        }
+        if(!settled && basis === 'cap' && mode === 'dem'){
+          assert.match(got.manual, /staff.*Beer.*24 h/i, context);
+          assert.match(got.text, /Your figure, set while planning for full production/, context);
+          assert.match(got.rows.filter(r => r.kind === 'hours').map(r => r.reason).join(' '), /Planned for full production/, context);
+          assert.doesNotMatch(got.manual, /where shop demand plans/, context);
+        }
+        assert.deepEqual(errors, [], context);
+      } finally { await page.close(); }
+    }
+});
+
 test('uncertainty preserves observed staffing and distinguishes new inputs and mixed totals', async () => {
   const data = fixture(), site = data.supply.factories.sites[0];
   const bread = site.lines.find(l => l.slug === 'bread');

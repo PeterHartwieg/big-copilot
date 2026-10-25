@@ -8238,7 +8238,7 @@ function importSetting(fact, contract, edit){
   const inGame = current === undefined ? null
     : level !== null ? level
     : paused ? pausedWeekly : current;
-  const suggested = setTo !== null && fact.st !== "paused" ? setTo : inGame;
+  const suggested = fact.demandApproximate ? null : setTo !== null && fact.st !== "paused" ? setTo : inGame;
   /* A typed figure answers the game as it stood when it was typed. Once the
      game's own figure has moved, whether to the typed figure or elsewhere,
      that answer is stale: it is no longer an edit, the row goes back to the
@@ -8250,7 +8250,8 @@ function importSetting(fact, contract, edit){
   const typed = !!edit && Number.isFinite(edit.value) && edit.value >= 0;
   const stale = typed && (edit.inGame !== inGame || (inGame === null && fact.st === "covered"));
   const edited = typed && !stale;
-  const value = edited ? edit.value : suggested;
+  // Keep the game's display value when no recommendation can be made.
+  const value = edited ? edit.value : suggested ?? inGame;
   /* The basis the figure was planned on: the player's own where they typed
      one (null for one kept from before bases were recorded, which asks for a
      review before it is written), else the basis on screen (`basis`). */
@@ -9540,7 +9541,7 @@ function supplyChecklistRows(){
       if(setting.edited && setting.ownBasis && setting.ownBasis !== sizing){
         const wWhole = szFactFor(s, slug, setting.ownBasis), wFact = wWhole ? wWhole.import || wWhole : null;
         if(wFact) setting.why = {basis: setting.ownBasis, other: sizing, parts: wFact.parts || {}, use: wFact.use, need: wFact.need,
-          setTo: importSetting(wFact, contract, undefined).setTo, alt: setting.suggested};
+          setTo: importSetting(wFact, contract, undefined).setTo, alt: setting.suggested, demandApproximate: !!wFact.demandApproximate};
       }
       return {item: label(s, slug), slug, s, fact, total: fact.use, use: fact.use, parts: fact.parts || {}, margin, sizedFor,
               /* What the import must bring: none where a route covers it, and none
@@ -11085,7 +11086,7 @@ function sbiRail(cover, arrive){
 function sbiScale(r, draw, cap){
   if(!Number.isFinite(draw) && !Number.isFinite(cap)) return "";
   const marks = [[tt("sb.card.scale.now", "order now"), r.inGame, "now"], [tt("sb.card.scale.plan", "planned"), r.value, "plan"],
-    [tt("sb.card.scale.draw", "today's draw"), draw, "draw"], [tt("sb.card.scale.cap", "importer cap"), cap, "cap"]].filter(m => Number.isFinite(m[1]));
+    [r.fact?.demandApproximate ? tt("sb.card.scale.drawApprox", "today's draw (approximate demand)") : tt("sb.card.scale.draw", "today's draw"), draw, "draw"], [tt("sb.card.scale.cap", "importer cap"), cap, "cap"]].filter(m => Number.isFinite(m[1]));
   if(marks.length < 2) return "";
   const top = Math.max(...marks.map(m => m[1]), 1) * 1.08;
   const pc = v => `${(v / top * 100).toFixed(1)}%`;
@@ -11195,21 +11196,22 @@ function sbImportCard(d){
   /* Why the figure, and how to set it by hand: from the same row, on the
      basis the figure was planned for (`r.why` where that is not the one on
      screen). */
-  const w = r.why || {basis: r.edited && r.ownBasis ? r.ownBasis : sizing, other: r.other, parts: r.parts || {}, use: r.use, need: f.need, setTo: r.setTo, alt: r.alt};
+  const w = r.why || {basis: r.edited && r.ownBasis ? r.ownBasis : sizing, other: r.other, parts: r.parts || {}, use: r.use, need: f.need, setTo: r.setTo, alt: r.alt, demandApproximate: !!f.demandApproximate};
   const p = w.parts || {};
-  const whyRows = [p.lines ? [tt("sb.card.why.lines", "Factory lines, a week"), p.lines] : null,
-    p.sites ? [tt("sb.card.why.shops", "Shops, a week"), p.sites] : null,
-    p.route ? [tt("sb.card.why.route", "Less what a route from your own site brings"), -p.route] : null,
-    Number.isFinite(w.use) ? [tt("sb.card.why.use", "Uses a week"), w.use, "sum"] : null,
-    Number.isFinite(w.need) && w.need !== w.use ? [Number.isFinite(r.margin) ? tt("sb.card.why.margin", "With the {pct}% chain margin", {pct: Math.round(r.margin * 100)})
-      : tt("sb.card.why.margin0", "With the chain margin"), w.need] : null,
+  const useLabel = label => w.demandApproximate ? tt("sb.card.why.approx", "{label} (approximate demand)", {label}) : label;
+  const whyRows = [p.lines ? [useLabel(tt("sb.card.why.lines", "Factory lines, a week")), p.lines] : null,
+    p.sites ? [useLabel(tt("sb.card.why.shops", "Shops, a week")), p.sites] : null,
+    p.route ? [useLabel(tt("sb.card.why.route", "Less what a route from your own site brings")), -p.route] : null,
+    Number.isFinite(w.use) ? [useLabel(tt("sb.card.why.use", "Uses a week")), w.use, "sum"] : null,
+    Number.isFinite(w.need) && w.need !== w.use ? [useLabel(Number.isFinite(r.margin) ? tt("sb.card.why.margin", "With the {pct}% chain margin", {pct: Math.round(r.margin * 100)})
+      : tt("sb.card.why.margin0", "With the chain margin")), w.need] : null,
     Number.isFinite(w.setTo) ? [r.smart ? tt("sb.card.why.level", "The level whose deliveries bring that week") : tt("sb.card.why.ten", "Rounded up to the ten"), w.setTo, "sum"] : null,
     r.edited ? [tt("sb.card.why.own", "Your figure"), r.value, "sum"] : null,
     Number.isFinite(w.alt) && w.alt !== w.setTo ? [tt("sb.card.why.alt", "With {basis} instead", {basis: szNameLow(w.other)}), w.alt, "alt"] : null].filter(Boolean);
   // The basis is said where it is not the one the switch shows.
   const whyHead = w.basis !== sizing ? tt("sb.card.why.head", "Why {n} {unit} · planned for {basis}", {n: num(r.value ?? 0), unit, basis: szNameLow(w.basis)})
     : tt("sb.card.why.head2", "Why {n} {unit}", {n: num(r.value ?? 0), unit});
-  const why = `<div class="sbi-panel" data-panel="why"${sbiOpen === "why" ? "" : " hidden"}><h4>${whyHead}</h4>${whyRows.length ? `<table class="sbi-why">${whyRows.map(([l, v, k]) =>
+  const why = `<div class="sbi-panel" data-panel="why"${sbiOpen === "why" ? "" : " hidden"}><h4>${whyHead}</h4>${w.demandApproximate ? `<p class="quiet">${spEsc(sbDemandUnsettled())}</p>` : ""}${whyRows.length ? `<table class="sbi-why">${whyRows.map(([l, v, k]) =>
     `<tr class="${k || ""}"><td>${l}</td><td>${num(v)}</td></tr>`).join("")}</table>` : `<p class="quiet">${tt("sb.card.why.none", "No figure to explain: nothing is used a week.")}</p>`}</div>`;
   const who = r.levelName || importers[0] || tt("sb.imp.importer", "Importer");
   const steps = [];

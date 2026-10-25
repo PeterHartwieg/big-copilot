@@ -7051,7 +7051,7 @@ def _supply_plans(save: Save, businesses: list) -> tuple:
 
     for line, offers in list(target_at.items()):
         able = [o for o in offers if has_it(o[1], line[1])] or offers
-        target_at[line] = max(able, key=lambda o: (o[0], str(o[1])))
+        target_at[line] = max(able, key=lambda o: (o[0] or 0, str(o[1])))
     return edges, target_at
 
 
@@ -7167,7 +7167,7 @@ def _wholesale_shopping(save: Save, names: Names, businesses: list) -> dict:
                 # Free units past the services are bottles given away at a $0 price.
                 week = max(0.0, week - min(line.get("weekFree", 0), service_use)) + service_use
             deals = contracts.get((business["key"], slug), [])
-            managed = "route" if targets.get((business["key"], slug), (0,))[0] > 0 else \
+            managed = "route" if (targets.get((business["key"], slug), (0,))[0] or 0) > 0 else \
                 "import" if imports.get((business["key"], slug), {}).get("active") else None
             unknown = any(days is None or days <= 0 for days, _amount, _recurring in deals)
             arrivals = [[days, amount] for days, amount, _recurring in deals if days is not None and 0 < days < 7]
@@ -7860,7 +7860,7 @@ class _DemandSizing:
         the site keep there); with no route in, the contract's whole week."""
         n = (site, item)
         able = self.graph["share"].get(n) or {}
-        reach = max((a for source, legs in self.graph["edges"].items() if source in able
+        reach = max((a or 0 for source, legs in self.graph["edges"].items() if source in able
                      for d, i, a in legs if d == site and i == item), default=0)
         return ((_import_drop(reach, self.drops[n]) / 7 if self.drops.get(n) else 0.0)
                 + (self.wholesale[n]["weekly"] / 7 if n in self.wholesale else 0.0))
@@ -7946,7 +7946,7 @@ class _DemandSizing:
                          and sum(1 for w in weights.values() if w > 0) <= 1}
                 other = (used(source) + sum(v for d, v in first.items() if d != site)) * (1 + SUPPLY_MARGIN)
                 mine = first.get(site, 0.0) * (1 + SUPPLY_MARGIN)
-                target = max((a for d, i, a in self.graph["edges"].get(source, []) if d == site and i == item),
+                target = max((a or 0 for d, i, a in self.graph["edges"].get(source, []) if d == site and i == item),
                              default=0)
                 reach = max(reach, target)
                 if site in first and other + mine > there > 0:
@@ -7986,7 +7986,7 @@ class _DemandSizing:
                     if not several:
                         fixed[sender] += residual * w / whole if whole else 0.0
                     elif self.has_own(dest, item):
-                        target = max((a for d, i, a in self.graph["edges"].get(sender, [])
+                        target = max((a or 0 for d, i, a in self.graph["edges"].get(sender, [])
                                       if d == dest and i == item), default=0)
                         if target:
                             caps_at[(sender, dest)] = target / (1 + SUPPLY_MARGIN)
@@ -8479,7 +8479,7 @@ class _DemandSizing:
             # the chain asks it for less.
             part = residual * solved.get(key, 0.0)
             if self.has_own(dest_key, item):
-                target = max((a for d, i, a in self.graph["edges"].get(key, [])
+                target = max((a or 0 for d, i, a in self.graph["edges"].get(key, [])
                               if d == dest_key and i == item), default=0)
                 if target:
                     part = min(part, target / (1 + SUPPLY_MARGIN))
@@ -8500,7 +8500,7 @@ class _DemandSizing:
                 # the rest is that supply's to bring, even past what it
                 # brings now (its own fact asks for it).
                 for sender in weights:
-                    target = max((a for d, i, a in self.graph["edges"].get(sender, [])
+                    target = max((a or 0 for d, i, a in self.graph["edges"].get(sender, [])
                                   if d == dest_key and i == item), default=0)
                     if target:
                         targets[sender] = target / (1 + SUPPLY_MARGIN)
@@ -11485,8 +11485,8 @@ def _factories(
             share = staffing["hoursWeek"] / staffing["fullWeek"] if staffing["fullWeek"] else 0.0
             ships = _shipped(flow, key, slug)
             stock = _held_at(flow, key, slug)
-            to_city = sum(a for d, i, a in flow["edges"].get(key, []) if i == slug and d in index)
-            to_pier = sum(a for d, i, a in flow["edges"].get(key, []) if i == slug and d not in index)
+            to_city = sum(a or 0 for d, i, a in flow["edges"].get(key, []) if i == slug and d in index)
+            to_pier = sum(a or 0 for d, i, a in flow["edges"].get(key, []) if i == slug and d not in index)
             stopped = _missing_inputs(flow, recipes, resolve, key, slug)
             # Held by its production limit: the output held is at the limit, or
             # under it by no more than the machines could have made back of

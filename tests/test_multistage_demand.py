@@ -1581,6 +1581,30 @@ class UnsettledDemandTests(unittest.TestCase):
         self.assertApproximate(c, (F1, F2))
         self.assertFalse(c.fact(dest, WATER, "dem").get("demandApproximate"))
 
+    def test_null_competing_target_keeps_the_highest_numeric_offer(self):
+        c = two_breweries(1000)
+        c.plan(F1, F2, BEER, None)
+        quietly(c)
+        _edges, targets = ba_dashboard._supply_plans(c.save(), c.business_list)
+        self.assertEqual(targets[(site_key(F2), BEER)][0], 2000)
+        self.assertEqual(sold(c, F1, F2), (500, 500))
+
+    def test_null_factory_export_target_counts_as_zero(self):
+        c = two_breweries(1000)
+        c.plan(F1, ("pier", 1), BEER, None)
+        quietly(c)
+        self.assertEqual(sold(c, F1, F2), (500, 500))
+        self.assertEqual(line(c, F1)["toPier"], 0)
+
+    def test_null_factory_city_targets_match_zero_targets(self):
+        results = []
+        for amount in (None, 0):
+            c = two_breweries(1000)
+            c.targets = [(src, dest, item, amount) for src, dest, item, _ in c.targets]
+            quietly(c)
+            results.append([line(c, addr) for addr in (F1, F2)])
+        self.assertEqual(results[0], results[1])
+
     def test_inner_fallback_keeps_estimates_but_withholds_hours_inputs_and_staffing(self):
         from tests.test_factory_staffing import People, factory_rows
 
