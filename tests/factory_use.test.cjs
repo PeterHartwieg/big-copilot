@@ -152,7 +152,7 @@ test('unsettled demand is visible on both factory views and withholds machine ad
       const bread = await line(page, 'bread');
       assert.match(Object.values(bread.cells).join(' | '), enRe('sb.line.demandApproximate'));
       assert.ok(!bread.chips.some(c => enRe('sb.word.short.machines').test(c.word)));
-      assert.match(await page.locator('#secProduction').innerText(), enRe('sb.line.demandUnsettled'));
+      assert.match(await page.locator('#secProduction').innerText(), enRe('sb.fac.demandUnsettled'));
       assert.doesNotMatch(await page.evaluate(() => viewTips['supply/production'] || ''), enRe('sb.fac.machines', {n: 1}));
       const panel = await page.evaluate(() => {
         const site = D.supply.factories.sites[0];
@@ -166,6 +166,79 @@ test('unsettled demand is visible on both factory views and withholds machine ad
       assert.doesNotMatch(panel.text, enRe('sb.word.short.machines'));
     } finally { await page.close(); }
   }
+});
+
+test('unsettled demand keeps hour and ingredient estimates without checklist or staffing advice', async () => {
+  for(const which of ['all', 'changes']){
+    const data = fixture(), site = data.supply.factories.sites[0];
+    const bread = site.lines.find(l => l.slug === 'bread');
+    Object.assign(bread, {demandApproximate: true, soldDay: 1000, needDay: 1150, hoursNow: 12,
+      needHours: {cap: 24, dem: 24}, dem: {status: 'short', why: 'hours', level: 'critical', lower: 20}});
+    const flour = site.needs.find(n => n.slug === 'flour');
+    flour.demandApproximate = true;
+    // Defend against stale verdicts on both the input and its canonical fact.
+    Object.assign(data.supply.facts[String(site.s)].flour, {dem: {use: 240, need: 240,
+      demandApproximate: true, st: 'short', why: 'target', lvl: 'critical', setTo: 240, lower: 167}});
+    data.factoryStaffing = {dem: [{s: site.s, key: data.businesses[site.s].key,
+      failed: true, unavailable: 'demandApproximate'}]};
+    const page = await board(data, {which, mode: 'dem'});
+    try {
+      const got = await page.evaluate(() => {
+        const site = D.supply.factories.sites[0], bread = site.lines.find(l => l.slug === 'bread');
+        const ctx = sbData(), input = ctx.allSites.flatMap(s => s.rows).find(r => r.slug === 'flour');
+        const uncertain = {...input.fact, st: 'short', setTo: 500, lower: 167};
+        const raw = {...input, fact: uncertain, s: site.s, setTo: 500, use: 240, week: 1680,
+          fit: 'short', catchUp: 100, shortBy: 1};
+        // Cover unsourced inputs and raw one-off/import rows too: neither
+        // canonical nor stale facts may manufacture an actionable checklist.
+        const rawChanges = buildOrderChecklist([{s: site.s, rows: [raw]}], [raw],
+          [{s: site.s, rows: [raw]}], [], [raw], D.businesses);
+        const staffing = drawFactoryStaffing();
+        const flour = site.needs.find(n => n.slug === 'flour');
+        Object.assign(flour, {from: null, directImport: false, factoryImportSite: null});
+        const settled = {...site, s: 0, lines: [], needs: [{...flour, demandApproximate: false}]};
+        D.supply.factories.sites.unshift(settled);
+        D.supply.facts[0] ||= {};
+        D.supply.facts[0].flour = {st: 'noplan', why: 'target', lvl: 'critical', use: 100, need: 115, imp: false};
+        // A settled user's fact comes first in the grouped, unsourced input.
+        // Its combined week must still inherit the later user's uncertainty.
+        const mixed = supplyChecklistRows();
+        return {fact: sbLineFact(bread), input: input.fact, changes: ctx.rows.filter(r =>
+          r.site === site.s && ['bread', 'flour'].includes(r.slug)), rawChanges,
+          mixedChanges: mixed.rows.filter(r => r.slug === 'flour'),
+          staffing, banner: document.querySelector('#secProduction .sb-ramp').textContent,
+          tip: viewTips['supply/production']};
+      });
+      assert.equal(got.fact, null);
+      assert.equal(got.input.use, 240);
+      assert.equal(got.input.setTo, null);
+      assert.equal(got.input.lower, null);
+      assert.deepEqual(got.changes, []);
+      assert.deepEqual(got.rawChanges, []);
+      assert.deepEqual(got.mixedChanges, []);
+      assert.match(got.staffing, enRe('sb.line.demandUnsettled'));
+      assert.notEqual(got.banner.trim(), got.tip.trim());
+      const row = await line(page, 'bread');
+      assert.match(Object.values(row.cells).join(' '), /24/);
+      assert.ok(!row.chips.some(c => c.word === HOURS));
+      assert.doesNotMatch(Object.values(row.cells).join(' '), enRe('sb.line.fewer'));
+      const input = page.locator('#secProduction [data-sb-table="factory-inputs"] tr[data-slug="flour"]');
+      assert.match(await input.innerText(), /240/);
+      assert.match(await input.innerText(), enRe('sb.line.demandApproximate'));
+    } finally { await page.close(); }
+  }
+});
+
+test('an approximate sibling adds a note without hiding a settled machine shortage', async () => {
+  const data = shortOfMachines(fixture());
+  data.supply.factories.sites[0].lines.find(l => l.slug === 'cake').demandApproximate = true;
+  const page = await board(data);
+  try {
+    const read = await page.evaluate(() => spLinesRead(D.supply.factories.sites[0]));
+    assert.match(read, enRe('sp.lines.machines', {item: 'Bread', n: 1, need: '1,150'}));
+    assert.match(read, enRe('sb.line.demandUnsettled'));
+    assert.ok((await line(page, 'bread')).chips.some(c => c.word === MORE1));
+  } finally { await page.close(); }
 });
 
 test('a factory with a line critically short of machines opens, and its head says so', async () => {

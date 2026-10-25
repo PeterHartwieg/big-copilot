@@ -1550,6 +1550,112 @@ def dense_five_breweries():
 
 
 class UnsettledDemandTests(unittest.TestCase):
+    def test_inner_fallback_keeps_estimates_but_withholds_hours_inputs_and_staffing(self):
+        from tests.test_factory_staffing import People, factory_rows
+
+        settled = two_breweries(1000)
+        with patch.object(ba_dashboard, "LEAST_LOAD_STEPS", 0):
+            with contextlib.redirect_stderr(io.StringIO()):
+                fallback = two_breweries(1000)
+        for addr in (F1, F2):
+            self.assertEqual(line(settled, addr)["needHours"]["dem"], 20)
+            self.assertEqual(settled.fact(addr, WATER)["dem"]["use"], 167)
+            row = line(fallback, addr)
+            self.assertEqual(row["needHours"]["dem"], 24)
+            self.assertIsNone(row["dem"]["status"])
+            self.assertNotIn("lower", row["dem"])
+            fact = ba_dashboard._supply_fact(fallback.supply["facts"], fallback.index(addr), WATER, "dem")
+            self.assertEqual(fact["use"], 240)
+            self.assertTrue(fact["demandApproximate"])
+            self.assertEqual((fact["st"], fact["why"], fact["setTo"]),
+                             ("new", "demandApproximate", None))
+        # Demand staffing must not write a partial factory week or count its
+        # other workers as spare. Full-production planning is independent.
+        plans = factory_rows(fallback, People())
+        self.assertTrue(all(r.get("unavailable") == "demandApproximate" for r in plans["dem"]))
+        self.assertTrue(all(not r.get("failed") for r in plans["cap"]))
+        # A real short schedule must not become a demand staffing finding.
+        for site in fallback.supply["factories"]["sites"]:
+            site["lines"][0]["gaps"] = [{"slot": 1, "hours": 140, "off": "Sunday"}]
+        self.assertEqual(ba_dashboard._staff_notes(fallback.business_list,
+                         fallback.supply["factories"], set(), "dem"), [])
+        self.assertEqual(len(ba_dashboard._staff_notes(fallback.business_list,
+                             fallback.supply["factories"], set(), "cap")), 2)
+        self.assertEqual(ba_dashboard._feed_notes(fallback.business_list,
+                         fallback.supply["factories"], set(), "dem"), [])
+
+    def test_unsettled_inputs_withhold_upstream_topup_and_import_advice(self):
+        c = two_breweries(1000)
+        c.site(DEPOT, "Water depot")
+        c.hold(DEPOT, WATER, 100)
+        c.contract(DEPOT, WATER, 100)
+        for addr in (F1, F2):
+            c.plan(DEPOT, addr, WATER, 100)
+        with patch.object(ba_dashboard, "LEAST_LOAD_STEPS", 0):
+            with contextlib.redirect_stderr(io.StringIO()):
+                run_with(c, RECIPES)
+        for addr in (F1, F2, DEPOT):
+            fact = ba_dashboard._supply_fact(c.supply["facts"], c.index(addr), WATER, "dem")
+            self.assertTrue(fact["demandApproximate"])
+            self.assertEqual((fact["st"], fact["setTo"], fact.get("lower")), ("new", None, None))
+            self.assertNotEqual(c.fact(addr, WATER)["st"], "new")
+        self.assertEqual(ba_dashboard._import_notes(c.business_list, c.supply, set(), "dem"), [])
+
+    def test_recipe_ingredient_selling_only_to_its_own_shop_stays_settled(self):
+        c, _addrs = dense_five_breweries()
+        maltings, shop = ("maltings", 1), ("malt_shop", 1)
+        c.factory(maltings, "Maltings", rid=MALT_RID)
+        c.hold(maltings, MALT, 500)
+        c.shop(shop, "Malt shop")
+        c.hold(shop, MALT, 100, 100)
+        c.plan(maltings, shop, MALT, 3000)
+        quietly(c, MALT_RECIPES)
+        row = line(c, maltings, MALT)
+        self.assertEqual((row["soldDay"], row["needDay"]), (100, 115))
+        self.assertFalse(row.get("demandApproximate"))
+        self.assertEqual(row["production"], {"status": "covered", "level": "ok"})
+
+    def test_two_actual_ingredient_stages_preserve_unrelated_machine_shortage(self):
+        extra = list(dict((item, rid) for rid, item in sorted(RECIPE_ITEMS.items())
+                          if item not in {BEER, MALT, WATER}).items())
+        (grain, grain_rid), (other, other_rid) = extra[:2]
+        for same_site in (False, True):
+            with self.subTest(same_site=same_site):
+                c, addrs = dense_five_breweries()
+                maltings, mill, depot = ("maltings", 1), ("mill", 1), ("malt_depot", 1)
+                c.factory(maltings, "Maltings", rid=MALT_RID)
+                c.hold(maltings, MALT, 500)
+                c.hold(maltings, grain, 300)
+                c.factory(mill, "Mill", rid=grain_rid)
+                c.hold(mill, grain, 500)
+                c.plan(mill, maltings, grain, 18000)
+                c.site(depot, "Malt depot")
+                c.plan(maltings, depot, MALT, 18000)
+                for addr in addrs:
+                    c.hold(addr, MALT, 300)
+                    c.plan(depot, addr, MALT, 18000)
+                unrelated = addrs[0] if same_site else ("unrelated", 1)
+                if same_site:
+                    c.sites[0]["machines"].append(other_rid)
+                else:
+                    c.factory(unrelated, "Unrelated", rid=other_rid)
+                c.hold(unrelated, other, 500)
+                shop = ("other_shop", 1)
+                c.shop(shop, "Other shop")
+                c.hold(shop, other, 100, 2000)
+                c.plan(unrelated, shop, other, 18000)
+                recipes = {**MALT_RECIPES,
+                           MALT: {**MALT_RECIPES[MALT], "ingredients": [{"slug": grain, "item": "Grain", "per": 10}]},
+                           grain: {"slug": grain, "item": "Grain", "out": 30, "workstation": "bottledgoods", "ingredients": []},
+                           other: {"slug": other, "item": "Other", "out": 30, "workstation": "bottledgoods", "ingredients": []}}
+                quietly(c, recipes)
+                for addr, slug in [(a, BEER) for a in addrs] + [(maltings, MALT), (mill, grain)]:
+                    self.assertTrue(line(c, addr, slug).get("demandApproximate"))
+                    self.assertIsNone(line(c, addr, slug)["production"])
+                row = line(c, unrelated, other)
+                self.assertFalse(row.get("demandApproximate"))
+                self.assertEqual((row["production"]["level"], row["production"]["more"]), ("critical", 3))
+
     def assertApproximate(self, c, addrs):
         for addr in addrs:
             with self.subTest(addr=addr):

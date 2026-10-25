@@ -249,13 +249,21 @@ numerical residue, not as a general bound on the split's error. The large-site c
 `_DemandSizing.unsettled` records the item and whether recipe demand was included when
 the outer passes exhaust their cap or the inner solve returns no answer. After all
 lines are sized, `_factories()` marks their payload rows `demandApproximate: true` and
-sets `production` to null, withholding both covered verdicts and machine-upgrade advice.
+sets `production` and `dem.status` to null, withholding covered verdicts, machine-upgrade
+advice and Demand hours advice.
 This conservatively covers every line making the affected item, including factories
-outside the solved chain that share its customers, and ingredient lines whose draw
-depends on an affected product. Other products keep their verdicts. The last sold/need,
-hours and chain figures remain available as estimates. Production shows a visible
+outside the solved chain that share its customers. From these lines it follows local
+recipe inputs and actual inbound supply edges (including depots) to upstream ingredient
+lines; recipe membership alone does not flag a disconnected producer. Other products
+keep their verdicts. Affected input and upstream supply facts keep their estimated
+use/need in Demand but carry `demandApproximate: true`, `st: new`, `why: demandApproximate`
+and no changes or lowering suggestions. Full-production hours and input facts stay
+independent of this estimate. No Demand staffing finding is made for an affected line;
+the whole factory's Demand staffing plan is unavailable, because planning only its
+settled lines could overwrite other hours or count needed workers as spare. The last
+sold/need, hours and chain figures remain available as labelled estimates. Production shows a visible
 explanation and marks affected rows, including in Changes; the factory page shows the
-same note and withholds machine advice. `set_made()` clears the unsettled state on a
+note alongside settled lines' real machine shortages. `set_made()` clears the unsettled state on a
 new sizing. A settled split has no `demandApproximate` key.
 
 `demand()` shares what reaches a site in the chain between its senders as the solve routes it

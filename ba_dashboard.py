@@ -6256,8 +6256,10 @@ def _solve_linear(rows: list, rhs: list) -> list:
 
 LEAST_LOAD_STEPS = 200  # the most Newton steps _least_load_flow() takes
 # The most times _splits() solves a chain on its own hold-down's draws, and
-# the most for a chain past ROUTE_POLISH_SITES sites, where one solve takes up
-# to 0.4 s. Each pass solves on the last pass's asks; they stop where two
+# the most for a chain past ROUTE_POLISH_SITES sites. Raising the large cap
+# from 50 to 150 added ~0.14-0.29 s native / ~0.4 s Pyodide at 31-32 sites,
+# and ~0.5 s native / ~1.5 s Pyodide at 60 sites (the drifting-pair probe).
+# Each pass solves on the last pass's asks; they stop where two
 # passes agree to 1e-7. Fuzzed chains of up to ten sites: of 12,000 shapes
 # with two shops, the slowest settled within 254 solves; of 8,000 denser ones
 # with three shops, 40 were still moving at 300 passes and 6 at 3,000. At the
@@ -9576,6 +9578,8 @@ def _supply_idle(businesses: list, *, index: dict, factories: dict, edges: dict,
             target, source = target_at.get((key, item), (0, None))
             supply = imports.get((key, item))
             for mode in SIZING_MODES:
+                if mode == "dem" and (key, item) in factories.get("_approximate", ()):
+                    continue  # unsettled ingredient use cannot advise reducing stock
                 row = need_rows.get((key, item))
                 if business["status"] == "retail":
                     if young_shop(key):
@@ -9738,6 +9742,7 @@ def _supply_reconcile(names: Names, businesses: list, *, index: dict, factories:
                 "level": "critical" if fact["lvl"] == "critical" else "warn",
             })
     factories.pop("_ramp", None)
+    factories.pop("_approximate", None)
     # The factory view's rows carry their fact's verdict: `status`, `why` and
     # `level` in 24/7 sizing, and under `dem` what Demand sizing changes.
     for site in factories.get("sites", []):
@@ -10717,6 +10722,18 @@ def _supply_facts(ctx: dict) -> dict:
                 ramp = sorted(ramp_at.get((key, slug)) or ())
                 if ramp:
                     fact["ramp"] = ramp
+            if mode == "dem" and (key, slug) in factories.get("_approximate", ()):
+                # Keep the last use/need estimate, but no actionable verdict,
+                # including a factory's own import beside its daily top-up.
+                def withhold(f):
+                    f.update(st="new", why="demandApproximate", lvl="info",
+                             demandApproximate=True, setTo=None, lower=None)
+                    for field in ("raise", "catchUp", "lowers"):
+                        if field in f:
+                            f[field] = None
+                withhold(fact)
+                if fact.get("import"):
+                    withhold(fact["import"])
             by_mode[mode] = fact
         if not by_mode:
             continue
@@ -11865,17 +11882,42 @@ def _factories(
         )
     sites.sort(key=lambda s: -s["machines"])
     depots = _depot_flow(flow, index)
-    # A capped split can change what another factory sharing its shops is
-    # asked, even outside the solved chain. Conservatively mark every line
-    # of the item, and any ingredient whose draw depends on it. Read this
-    # after all lines are sized: a later recipe can expose the uncertainty.
+    # A capped split can change another factory's share even outside the
+    # solved chain. Seed every line making that item, then follow actual
+    # inbound supply edges and local recipe inputs. Recipe membership alone
+    # does not make a disconnected ingredient producer uncertain.
+    # Read after all lines are sized: a later recipe can expose uncertainty.
     unsettled = {item for item, _flag in flow.get("unsettled", ())}
+    approximate = set()
     if unsettled:
+        incoming = collections.defaultdict(list)
+        for source, legs in flow["edges"].items():
+            for dest, item, amount in legs:
+                if amount > 0 and source != dest:
+                    incoming[(dest, item)].append((source, item))
+        lines_at = collections.defaultdict(list)
         for site in sites:
+            key = businesses[site["s"]]["key"]
             for line in site["lines"]:
-                if unsettled & ({line["slug"]} | fed_by(line["slug"])):
-                    line["demandApproximate"] = True
-                    line["production"] = None
+                lines_at[(key, line["slug"])].append(line)
+        stack = [pair for pair in lines_at if pair[1] in unsettled]
+        while stack:
+            pair = stack.pop()
+            if pair in approximate:
+                continue
+            approximate.add(pair)
+            stack.extend(incoming.get(pair, ()))
+            for line in lines_at.get(pair, ()):
+                line["demandApproximate"] = True
+                line["production"] = None
+                line["dem"] = {"status": None, "why": None, "level": "info"}
+                stack.extend((pair[0], resolve(ing)) for ing in recipes[line["slug"]]["ingredients"]
+                             if ing["per"] > 0)
+        for site in sites:
+            key = businesses[site["s"]]["key"]
+            for row in site["needs"]:
+                if (key, row["slug"]) in approximate:
+                    row["demandApproximate"] = True
     return {
         "sites": sites,
         "machines": sum(s["machines"] for s in sites),
@@ -11891,6 +11933,7 @@ def _factories(
         "depotRoutes": _depot_routes(flow, index),
         # Read by _supply_facts() and dropped before the payload.
         "_ramp": ramp_at,
+        "_approximate": approximate,
     }
 
 
@@ -16020,6 +16063,12 @@ def _factory_staffing(save: Save, names, businesses: list, factories: dict, staf
         drawn = set()
         rows = {}
         for mode in SIZING_MODES:
+            if mode == "dem" and any(line.get("demandApproximate") for line in site["lines"]):
+                # Planning only the settled subset could dismiss workers or
+                # overwrite hours needed by the unsettled lines.
+                rows[mode] = {"key": business["key"], "s": site["s"], "name": business["name"],
+                              "failed": True, "unavailable": "demandApproximate"}
+                continue
             # Both sizings asking for the same hours of every line is one week
             # placed twice over (a factory whose lines run all day either way):
             # the second is a copy of the first, never the same row.
@@ -23696,6 +23745,8 @@ def _staff_notes(businesses: list, factories: dict, silent: set, mode: str = "ca
         if business["key"] in silent:
             continue
         for line in site["lines"] + site["unnamed"]:
+            if mode == "dem" and line.get("demandApproximate"):
+                continue
             name = line.get("item") or line["workstation"]
             named = (tok(line.get("slug"), line["item"]) if line.get("item")
                      else tok(line.get("workstationKey"), line["workstation"]))
