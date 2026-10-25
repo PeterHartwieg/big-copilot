@@ -229,16 +229,18 @@ site's inbound at its target less the margin (`_least_load_flow()`, exact, None 
 not settle, and the old figures stand). The producers' outputs are unique, so they depend on
 neither site names nor order; the routes come from a tie-break solved again with the outputs
 pinned (skipped past `ROUTE_POLISH_SITES` sites, and the first answer's routes stand where it
-does not settle), so past that the route-derived `chain.makes` and `chain.need` can move by a
-unit with the order. What a site past the chain draws from it is held down as `demand()` holds
-it, and `_splits()` solves again on those draws until they agree: the draws a pass asks equal
-the ones it solved on, the lines' loads read on its split (`demand()` times the share) equal
-the solve's outputs, and the draws, routes and loads match the pass before. Each pass drops the
-item's `demand()` memos (`_forget()`), so a site past the chain is read on that pass's split.
-After `LEAP_AFTER` plain passes, `_leap()` steps the draws ahead where three in a row line up
-(Aitken's extrapolation where the steps shrink, a doubling stride where they hold, the
-hold-down's room growing until a share binds); the stop rule stays the fixed point's. At
-`CHAIN_DRAW_PASSES` the last split stands and stderr is told.
+does not settle). Past that the tip follows the routes' last places, so the address order can
+change which link becomes the tip, not only move `chain.makes` and `chain.need` by a unit: a
+site counts as a link only where its own share is between nothing and all of it (`merges()`,
+outside `MERGE_SHARE_SLACK` of either), and the link with the least room wins. What a site
+past the chain draws from it is held down as `demand()` holds it, and `_splits()` solves again
+on those draws until they agree: the draws a pass asks equal the ones it solved on, the lines'
+loads read on its split (`demand()` times the share) equal the solve's outputs, and the draws,
+routes and loads match the pass before. Each pass solves on what the last one asked and drops
+the item's `demand()` memos first (`_forget()`), so a site past the chain is read on that
+pass's split. At `CHAIN_DRAW_PASSES` (`CHAIN_DRAW_PASSES_LARGE` past `ROUTE_POLISH_SITES`
+sites) the last split stands and stderr is told. The passes stop within 1e-7 of the fixed
+point, so `_line_use()` reads a need within `LINE_FULL_SLACK` of a line's capacity as fitting.
 `demand()` shares what reaches a site in the chain between its senders as the solve routes it
 (`routed_split()`), so each line's share of its site's draw is the solve's output, and the
 Demand-mode walk asks each route into such a site the same part (`walk_split()`, the

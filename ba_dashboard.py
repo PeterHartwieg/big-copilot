@@ -6255,13 +6255,22 @@ def _solve_linear(rows: list, rhs: list) -> list:
 
 
 LEAST_LOAD_STEPS = 200  # the most Newton steps _least_load_flow() takes
-# The most times _splits() solves a chain on its own hold-down's draws. Plain
-# passes close in linearly, by 0.8 to 0.98 a pass in the slow shapes, or drift
-# by the same step each pass until a share binds, which took up to 374 passes;
-# _leap() steps ahead in both, and 12,000 fuzzed shapes settled in at most 47.
-CHAIN_DRAW_PASSES = 50
-LEAP_AFTER = 8  # the passes _splits() runs plainly before _leap() may step ahead
-LEAP_RATIO = 0.99  # the slowest closing-in _leap() extrapolates; steps within 1% of the last drift
+# The most times _splits() solves a chain on its own hold-down's draws, and
+# the most for a chain past ROUTE_POLISH_SITES sites, where one solve takes up
+# to 0.4 s. Each pass solves on the last pass's asks; they stop where two
+# passes agree to 1e-7. Fuzzed chains of up to ten sites: of 12,000 shapes
+# with two shops, the slowest settled within 254 solves; of 8,000 denser ones
+# with three shops, 40 were still moving at 300 passes and 6 at 3,000. At the
+# cap the last split stands, and stderr is told.
+CHAIN_DRAW_PASSES = 300
+CHAIN_DRAW_PASSES_LARGE = 50
+# How far past its capacity, as a share of it, a line's need may read and
+# still count as fitting (_line_use()). The passes stop where two agree to
+# 1e-7, which on a chain closing in slowly leaves the split further than that
+# from its fixed point: at a need of exactly the capacity, the settled fuzz
+# runs above read up to 5.1e-7 past it.
+LINE_FULL_SLACK = 1e-6
+MERGE_SHARE_SLACK = 1e-9  # how near nothing or all a site's own share is read as that (merges())
 ROUTE_POLISH_SITES = 30  # the most sites _least_load_flow() solves the routes' tie-break again for
 
 # What extraction has told stderr already, so a watch server rebuilding every
@@ -6275,45 +6284,6 @@ def _agree(new, old, rel: float = 1e-7) -> bool:
     figure is under one."""
     pairs = ((new[k], old[k]) for k in old) if isinstance(old, dict) else zip(new, old)
     return all(abs(a - b) <= rel * max(1.0, abs(b)) for a, b in pairs)
-
-
-def _leap(trail: list, order: list, drift: tuple) -> tuple:
-    """Where three draws in a row (each the last's ask) step the same way,
-    a point further along: (draws or None, the drift to carry on).
-
-    Steps that shrink by the same ratio each pass close in on their fixed
-    point, and the draws go straight there: the steps still to come, summed
-    (Aitken's extrapolation, the whole vector at once). Steps that stay the
-    same are a drift, the hold-down's room growing pass by pass until a
-    share binds: the draws go `stride` steps on, twice as far each leap
-    while the drift keeps its way, and a quarter as far once it turns back,
-    having passed the point. `drift` is (stride, the last drift's step).
-    Never to a point asking a site for less than nothing."""
-    stride, heading = drift
-    x0, x1, x2 = trail
-    a = [x1[s] - x0[s] for s in order]
-    b = [x2[s] - x1[s] for s in order]
-    aa, bb = sum(v * v for v in a), sum(v * v for v in b)
-    if aa <= 0 or bb <= 0:
-        return None, drift
-    r = sum(u * v for u, v in zip(a, b)) / aa
-    if sum((v - r * u) ** 2 for u, v in zip(a, b)) > 1e-4 * bb:
-        return None, drift
-    if 0 < r < LEAP_RATIO:
-        ahead, drift = r / (1 - r), (1.0, None)
-    elif abs(r - 1) <= 1 - LEAP_RATIO:
-        if heading is not None and sum(u * v for u, v in zip(b, heading)) < 0:
-            stride = max(1.0, stride / 4)
-        ahead, drift = stride, (stride * 2, b)
-    else:
-        return None, drift
-    # No further than leaves every draw at nothing or more.
-    for s, v in zip(order, b):
-        if v < 0:
-            ahead = min(ahead, -x2[s] / v)
-    if ahead <= 0:
-        return None, drift
-    return {s: max(0.0, x2[s] + ahead * v) for s, v in zip(order, b)}, drift
 
 
 def _said_once(text: str) -> None:
@@ -8090,8 +8060,9 @@ class _DemandSizing:
         no room, the chain is asked for the rest. They agree where the draws
         a pass asks are the ones it was solved on, the lines' loads read on
         its split are the solve's outputs, and the draws, the routes and the
-        loads are the last pass's; _leap() steps ahead where the passes
-        close in slowly, and at CHAIN_DRAW_PASSES the last split stands.
+        loads are the last pass's; at CHAIN_DRAW_PASSES
+        (CHAIN_DRAW_PASSES_LARGE past ROUTE_POLISH_SITES sites) the last
+        split stands.
         The producers' outputs at that optimum are unique, so no share
         depends on the sites' names or the order they are read in, and a
         sender's capacity counts once however many paths it reaches a site
@@ -8237,8 +8208,9 @@ class _DemandSizing:
         # outputs alone can hold while the draws still move between sites at
         # the same load, and the shares follow the draws, so the outputs
         # holding settles nothing.
-        last, trail, drift = None, [], (1.0, None)
-        for _pass in range(CHAIN_DRAW_PASSES):
+        last = None
+        cap_passes = CHAIN_DRAW_PASSES if len(order) <= ROUTE_POLISH_SITES else CHAIN_DRAW_PASSES_LARGE
+        for _pass in range(cap_passes):
             self._forget(item, flag)
             solved = _least_load_flow(draws, [(site, c) for site, c, _line in producers], routes, most)
             if solved is None:
@@ -8270,16 +8242,10 @@ class _DemandSizing:
             if (_agree(asked, draws) and _agree(made_here, loads)
                     and (last is None or all(_agree(n, l) for n, l in zip(now, last)))):
                 break
-            # Where the passes close in slowly or drift, the draws step ahead
-            # (_leap()), after a few plain passes: most chains settle in
-            # those, on the split plain passes find.
-            last, trail = now, trail + [draws]
-            leapt, drift = (_leap(trail[-2:] + [asked], order, drift)
-                            if len(trail) >= 2 and _pass + 1 >= LEAP_AFTER else (None, drift))
-            draws, trail = (asked, trail) if leapt is None else (leapt, [])
+            last, draws = now, asked
         else:
             _said_once(f"the draw on a chain of {len(order)} sites making {item} did not settle "
-                       f"in {CHAIN_DRAW_PASSES} passes: the last split stands")
+                       f"in {cap_passes} passes: the last split stands")
         # The demand() and levels() figures read on the passes' splits go,
         # so each is read again on the one that stands.
         for key in [k for k in self.drawn if k[1] == item and k[2] == flag]:
@@ -8393,13 +8359,16 @@ class _DemandSizing:
         [(merge site, [the sites whose routes bring it there], what the
         lines there and those routes bring a day together)]. Where a line
         falls short, one of them is the link of the chain it shares with
-        others (#521)."""
+        others (#521). A share within MERGE_SHARE_SLACK of nothing or of
+        all of it counts as that: a route carrying a billionth of a unit a
+        day meets nothing."""
         seen, ring = {site}, [site]
         while ring:
             out = []
             for here in ring:
                 share = self.made_share(here, item, eats)
-                if share is not None and 0 < share < 1 and (here, item, eats is not None) in self.chain_at:
+                if (share is not None and MERGE_SHARE_SLACK < share < 1 - MERGE_SHARE_SLACK
+                        and (here, item, eats is not None) in self.chain_at):
                     out.append((here, *self.chain_at[(here, item, eats is not None)]))
             if out:
                 return out
@@ -11089,11 +11058,19 @@ def _line_use(machines: int, rate: float, makes: float, sold: float | None,
     out = {"soldDay": round(round(sold, 6)), "needDay": round(round(need, 6)),
            "production": {"status": "covered", "level": "ok"}}
     each = rate * 24
-    if each and round(need, 6) > round(makes, 6):
+    if each and _past_capacity(need, makes):
         total = max(machines + 1, math.ceil(round(need / each, 6)))
-        out["production"] = {"status": "short", "level": "critical" if round(use, 6) > round(makes, 6) else "warn",
+        out["production"] = {"status": "short", "level": "critical" if _past_capacity(use, makes) else "warn",
                              "more": total - machines, "makesWith": round(total * each)}
     return out
+
+
+def _past_capacity(figure: float, makes: float) -> bool:
+    """Whether a line's figure is past what it makes by more than
+    LINE_FULL_SLACK of it: a chain's split is solved to a fixed point a
+    pass at a time (_splits()), and a line asked exactly its capacity can
+    stop a few millionths past it."""
+    return round(figure, 6) > round(makes * (1 + LINE_FULL_SLACK), 6)
 
 
 # --- _factories()' helpers: one factory line or input, read off the flow
@@ -11532,12 +11509,14 @@ def _factories(
             # sending are listed by name too, so neither goes by the sites'
             # addresses. Only where the names are the same as well does the
             # address decide, and then the tip reads the same either way.
+            # Both figures are read to a millionth first, as `needDay` is: a
+            # half in the last places follows the sites' addresses.
             chain = None
             for at, via, brings in (merges(key, slug, dem_eats) if merges and demand else ()):
                 drawn = demand(at, slug, eats=dem_eats, shelves="sales")[0]
                 link = {"at": index[at],
                         "from": [index[v] for v in sorted((v for v in via if v in index), key=named_by)],
-                        "makes": round(brings), "need": round(drawn * (1 + SUPPLY_MARGIN))}
+                        "makes": round(round(brings, 6)), "need": round(round(drawn * (1 + SUPPLY_MARGIN), 6))}
                 if chain is None or (chain["makes"] - chain["need"], named_by(chain_key)) > (
                         link["makes"] - link["need"], named_by(at)):
                     chain, chain_key = link, at

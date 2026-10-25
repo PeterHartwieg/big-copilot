@@ -2273,8 +2273,10 @@ meeting factory by two paths counts once. Where several routings give those same
 tie-break weighted by the plans' targets picks the routes; on a chain of more than 30 sites, or
 where that tie-break does not settle, the routes can differ in their last places with the
 order, the outputs never. A line's load and level follow the outputs; a chain's tip (what the
-link brings and what is drawn from it) is read along the routes, so on such a chain it can
-move by a unit with the order.
+link brings and what is drawn from it) is read along the routes, so on such a chain the order
+can change which meeting factory the tip names, not only move its figures by a unit. A line
+asked exactly what it makes reads as covered: the board works the split out a pass at a time,
+and a need within a millionth of the line's capacity counts as within it.
 
 Where nothing binds, the factory lines in the chain run at the same load, and an import in it
 is drawn on at that load too (a plain contract still lands its whole amount; the rest stays in
