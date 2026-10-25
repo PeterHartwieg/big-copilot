@@ -223,14 +223,21 @@ need}`: the meeting factory's index, the sites whose routes bring the product th
 the lines there, its own import and the producers behind those routes can bring it a day (a
 max flow, `_DemandSizing._carried()`: each producer and route target at the part of its flow
 that goes there), and what is drawn from there with the margin; a line no route shares with
-has no `chain`. The splits are one solve per product (`_DemandSizing._splits()`): the unique
-flow over the chain with the least sum of load squared over capacity, every route and every
+has no `chain`. The splits are one solve per product (`_DemandSizing._splits()`): the flow
+over the chain with the least sum of load squared over capacity, every route and every
 site's inbound at its target less the margin (`_least_load_flow()`, exact, None where it does
-not settle, and the old figures stand), so they depend on neither site names nor order.
+not settle, and the old figures stand). The producers' outputs are unique, so they depend on
+neither site names nor order; the routes come from a tie-break solved again with the outputs
+pinned (skipped past `ROUTE_POLISH_SITES` sites, and the first answer's routes stand where it
+does not settle). What a site past the chain draws from it is held down as `demand()` holds it,
+and `_splits()` solves again on those draws until they agree (`CHAIN_DRAW_PASSES`).
 `demand()` shares what reaches a site in the chain between its senders as the solve routes it
-(`routed_split()`), so each line's share of its site's draw is the solve's output. The
-`soldDay`s of the lines of one chain are rounded together, largest remainder first, unless
-the last unit falls between equal shares. `supply.factories.sites[]` counts `running` machines (a recipe and
+(`routed_split()`), so each line's share of its site's draw is the solve's output, and the
+Demand-mode walk asks each route into such a site the same part (`walk_split()`, the
+`routed` argument of `_supply_walk()`), its own supply bringing the rest. The `soldDay`s of
+the lines of one chain are rounded together, largest remainder first (`_rounded_together()`),
+unless the last unit falls between fractions within 1e-4 of each other; they add up to the
+chain's manufactured total, not the shops' sales where an import in the chain brings part. `supply.factories.sites[]` counts `running` machines (a recipe and
 somebody posted) beside the placed ones (`machines`).
 
 Shop and office demand plans are read from their own reports, with no measurement to

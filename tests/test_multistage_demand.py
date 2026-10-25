@@ -353,6 +353,22 @@ class ForkTests(unittest.TestCase):
                 self.assertEqual(line(c, addr)["needHours"]["dem"], 23)
                 self.assertEqual(c.fact(addr, WATER)["dem"]["use"], 200)
 
+    def test_uneven_bars_each_get_their_need(self):
+        # The split has Central send East the most, or none to a factory
+        # whose own line covers its bar. The walk asks each route what the
+        # split routes it, its line bringing the rest; before, it asked
+        # Central for each factory's whole need by the targets, so West
+        # piled up what East's bar went without: 958 of 1,035 at 600 /
+        # 900, 721 of 805 at 700 / 250, 931 of 1,035 at 900 / 300.
+        for sold_a, sold_b in ((600, 900), (700, 250), (900, 300), (1000, 300)):
+            with self.subTest(sold=(sold_a, sold_b)):
+                c = fork(sold_a, sold_b)
+                walk = dem_walk(c)
+                self.assertEqual([level(c, a) for a in (F1, F2, F3)], ["ok"] * 3)
+                self.assertEqual(sum(sold(c, F1, F2, F3)), sold_a + sold_b)
+                for shop, sold_day in ((SHOP_A, sold_a), (SHOP_B, sold_b)):
+                    self.assertLessEqual(short_of_its_need(walk, shop, sold_day), 1e-6)
+
 
 def diamond(sold_day):
     """Brewery 1 tops Brewery 2 up both through a depot and straight."""
@@ -1138,6 +1154,172 @@ class FallbackTests(unittest.TestCase):
         c = two_breweries(1000)
         self.assertEqual(sold(c, F1, F2), (500, 500))
         self.assertEqual(line(c, F2)["chain"]["makes"], 1440)
+
+
+def shared_bar(sold_day, roles=(F1, F2, F3), outside_target=3000):
+    """Astra's round-4 shape: Brewery 1 tops up Brewery 2 (at most 400 a
+    day), and Brewery 2 shares a bar with Brewery 3, which is no part of
+    the chain; one machine each, 720 a day. `roles` are the addresses of
+    Breweries 1, 2 and 3."""
+    one, two, three = roles
+    c = Company()
+    breweries(c, *roles)
+    c.shop(SHOP_A, "Bar")
+    c.hold(SHOP_A, BEER, 200, sold_day)
+    c.plan(one, two, BEER, 400)
+    c.plan(two, SHOP_A, BEER, 3000)
+    c.plan(three, SHOP_A, BEER, outside_target)
+    return c
+
+
+def sizing_of(c, recipes=RECIPES):
+    """The run's _DemandSizing, as the lines were sized on it."""
+    made, real = [], ba_dashboard._DemandSizing
+
+    class Spy(real):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            made.append(self)
+    ba_dashboard._DemandSizing = Spy
+    try:
+        run_with(c, recipes)
+    finally:
+        ba_dashboard._DemandSizing = real
+    return made[-1]
+
+
+class SharedCustomerTests(unittest.TestCase):
+    """A shop the chain tops up beside a sender of its own outside it: where
+    that sender runs out of room, the shop draws the rest from the chain,
+    and the chain is sized on that, never on the plans' shares fixed before
+    the hold-down."""
+
+    def test_the_chain_takes_what_the_other_sender_has_no_room_for(self):
+        # Before, the chain was sized on half the bar (750 at 1,500) while
+        # the hold-down asked it for 874: the lines read 348 / 468 / 626,
+        # 1,442 of 1,500 sold, every one covered, and the bar got 1,659 of
+        # the 1,725 it needs.
+        for sold_day, figures, needs in ((1400, (348, 426, 626), (400, 490, 720)),
+                                         (1500, (348, 526, 626), (400, 605, 720)),
+                                         (1600, (348, 626, 626), (400, 720, 720))):
+            with self.subTest(sold=sold_day):
+                c = shared_bar(sold_day)
+                walk = dem_walk(c)
+                self.assertEqual(sold(c, F1, F2, F3), figures)
+                self.assertEqual(sum(figures), sold_day)
+                self.assertEqual(tuple(line(c, a)["needDay"] for a in (F1, F2, F3)), needs)
+                self.assertEqual([level(c, a) for a in (F1, F2, F3)], ["ok"] * 3)
+                self.assertLessEqual(short_of_its_need(walk, SHOP_A, sold_day), 1e-6)
+
+    def test_past_what_they_can_bring_the_bar_reads_short_on_both_senders(self):
+        # 1,700 a day with the margin is 1,955; Brewery 1's route brings
+        # 400 and the two lines 720 each, 1,840 in all.
+        c = shared_bar(1700)
+        walk = dem_walk(c)
+        self.assertEqual(sold(c, F1, F2, F3), (348, 676, 676))
+        self.assertEqual([level(c, a) for a in (F1, F2, F3)], ["ok", "warn", "warn"])
+        node = walk[(site_key(SHOP_A), BEER)]
+        self.assertAlmostEqual(node["own"] + node["credit"], 1840, delta=1e-3)
+
+    def test_the_shared_bar_reads_the_same_whatever_the_addresses(self):
+        seen = set()
+        for roles in itertools.permutations((("a", 1), ("b", 1), ("c", 1))):
+            c = shared_bar(1500, roles)
+            walk = dem_walk(c)
+            node = walk[(site_key(SHOP_A), BEER)]
+            # The walk settles to about a part in 10^6.
+            seen.add((tuple((line(c, a)["soldDay"], line(c, a)["needDay"], level(c, a)) for a in roles),
+                      round(node["own"] + node["credit"], 1)))
+        self.assertEqual(seen, {(((348, 400, "ok"), (526, 605, "ok"), (626, 720, "ok")), 1725.0)})
+
+
+class GuardTests(unittest.TestCase):
+    """Rules no other shape reaches the edge of."""
+
+    def test_a_route_into_a_site_with_lines_keeps_its_target_in_every_mode(self):
+        # Brewery 3 has room at the bar, so the hold-down asks Brewery 2 for
+        # less than the plans' shares (974, not 1,050). Read before any
+        # holding down, as levels() reads it, Brewery 2's routed part would
+        # be 375 a day, past the 400 target less the margin.
+        c = shared_bar(1400, outside_target=1000)
+        sizing = sizing_of(c)
+        one, two = site_key(F1), site_key(F2)
+        self.assertAlmostEqual(sizing.demand(two, BEER, held_down=False)[0], 1050)
+        unheld = sizing.demand(two, BEER, held_down=False)[0] * sizing.routed_share(two, BEER)
+        self.assertGreater(unheld, 400 / (1 + SUPPLY_MARGIN) + 20)
+        for held_down in (True, False):
+            with self.subTest(held_down=held_down):
+                self.assertAlmostEqual(sizing.demand(one, BEER, held_down=held_down)[0], 400 / (1 + SUPPLY_MARGIN))
+
+    def test_the_split_follows_no_last_place_of_the_solve(self):
+        # The solve's outputs carry noise in their last places that follows
+        # the order the sites sort in; rounded to a billionth, it moves no
+        # share, even on a chain selling 2.7 a day.
+        real = ba_dashboard._least_load_flow
+        shares = set()
+        for sign in (1, -1):
+            def noisy(*args):
+                made, routed = real(*args)
+                return [f + sign * 3e-10 * (-1) ** i for i, f in enumerate(made)], routed
+            ba_dashboard._least_load_flow = noisy
+            try:
+                c = Company()
+                breweries(c, F1, F2)
+                c.shop(SHOP_A, "Bar")
+                c.hold(SHOP_A, BEER, 200, 2.7)
+                c.plan(F1, F2, BEER, 2000)
+                c.plan(F2, SHOP_A, BEER, 2000)
+                shares.add(sizing_of(c).made_share(site_key(F2), BEER))
+            finally:
+                ba_dashboard._least_load_flow = real
+        self.assertEqual(shares, {0.5})
+
+    def test_shares_a_ten_thousandth_apart_keep_their_own_rounding(self):
+        together = ba_dashboard._rounded_together
+        self.assertIsNone(together([466.66667, 466.66666, 466.66665]))
+        self.assertEqual(together([466.6668, 466.6668, 466.6664]), [467, 467, 466])
+        self.assertEqual(together([347.8, 526.1, 626.1]), [348, 526, 626])
+        self.assertEqual(together([0.54, 2.16]), [1, 2])
+
+
+def named_fork(west, east):
+    """fork(700, 700) with Breweries 2 and 3 named `west` and `east`."""
+    c = fork(700, 700)
+    for site in c.sites:
+        site["name"] = {F2: west, F3: east}.get(site["addr"], site["name"])
+    return c
+
+
+class TipTieTests(unittest.TestCase):
+    """Where two links of a chain have the same room, or a link has several
+    senders, the tip goes by the business names, never the addresses."""
+
+    def test_two_links_with_the_same_room_name_the_first_by_name(self):
+        for west, east, named in (("Zeta Brewery", "Alpha Brewery", F3),
+                                  ("Alpha Brewery", "Zeta Brewery", F2)):
+            with self.subTest(west=west):
+                c = run_with(named_fork(west, east), RECIPES)
+                self.assertEqual(line(c, F1)["chain"]["at"], c.index(named))
+
+    def test_the_senders_are_listed_by_name(self):
+        for first, second in (("Alpha Brewery", "Zeta Brewery"), ("Zeta Brewery", "Alpha Brewery")):
+            with self.subTest(first=first):
+                c = Company()
+                c.factory(F1, first)
+                c.factory(F2, second)
+                c.factory(F3, "Meeting Brewery")
+                for f in (F1, F2, F3):
+                    c.hold(f, WATER, 500)
+                    c.hold(f, BEER, 300)
+                c.shop(SHOP_A, "Beer Bar")
+                c.hold(SHOP_A, BEER, 200, 1500)
+                c.plan(F1, F3, BEER, 2000)
+                c.plan(F2, F3, BEER, 2000)
+                c.plan(F3, SHOP_A, BEER, 3000)
+                run_with(c, RECIPES)
+                by_name = sorted((F1, F2), key=lambda a: first if a == F1 else second)
+                self.assertEqual(line(c, F3)["chain"]["from"], [c.index(a) for a in by_name])
+
 
 if __name__ == "__main__":
     unittest.main()

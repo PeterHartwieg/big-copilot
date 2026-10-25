@@ -2267,9 +2267,12 @@ it, and every import and wholesale delivery in the chain wherever it comes in. A
 at most its top-up target a day less the margin, through a depot as well as straight, and the
 routes into one site together carry at most the highest of their targets. Within those limits
 the board picks the split that loads the producers most evenly: the least sum of each one's
-load squared over its capacity. There is exactly one such split, so it never depends on the
-sites' names or the order they are read in, and a factory that reaches the meeting factory by
-two paths counts once.
+load squared over its capacity. What each producer makes in that split is unique, so it never
+depends on the sites' names or the order they are read in, and a factory that reaches the
+meeting factory by two paths counts once. Where several routings give those same outputs, a
+tie-break weighted by the plans' targets picks the routes; on a chain of more than 30 sites, or
+where that tie-break does not settle, the routes can differ in their last places with the
+order, the outputs never.
 
 Where nothing binds, the factory lines in the chain run at the same load, and an import in it
 is drawn on at that load too (a plain contract still lands its whole amount; the rest stays in
@@ -2289,17 +2292,34 @@ the routes' target brings nothing, and one above it the difference.
 Each line is judged on the split's figure: what reaches a site in the chain is shared between
 the routes into it and its own import as the split routes it, and a route still brings no more
 than its target where the site has a supply of its own. Past the chain (a depot two meeting
-factories top up, say), the routes into a site share it by their targets, as before, a sender
-with no room held down and the rest going to the others. The lines of one chain round their
-sold days together so they add up to what the shops past them sell, except where the last unit
-would fall between equal shares: three equal shares of 1,400 each read 467. Two chains of the
-same product that never meet round apart.
+factories top up, or a bar a factory of the chain shares with one outside it), the routes into a
+site share it by their targets, as before, a sender with no room held down and the rest going
+to the others. What the chain is asked there is part of the split: where the other sender runs
+out of room, the chain is asked for the rest, and the split is worked out again on that until
+the two agree. Brewery 1 topping up Brewery 2 (at most 400 a day), which shares a bar selling
+1,500 with Brewery 3, reads 348 / 526 / 626: Brewery 3 has room for 626, so the chain makes
+the other 874.
+
+The chain's walk in Demand sizing follows the split too. A site of the chain asks each route
+into it for what the split routes there and its own lines and import bring the rest, since a
+top-up route only replaces what the site's stock lost while its lines run steadily. A factory
+whose own line covers its bar therefore takes nothing from a feeder with a high target into it,
+and the feeder's beer goes where the split sends it.
+
+The lines of one chain round their sold days together so they add up to the chain's own total,
+the part of the shops' sales the chain's lines make (an import or wholesale delivery in the
+chain brings the rest), except where the last unit would fall between shares within a
+ten-thousandth of each other: three equal shares of 1,400 each read 467. Two chains of the same
+product that never meet round apart.
 
 A short line's tip names the link: *it shares the demand with the chain at Factory 2: made
 there and brought in, 1,440 a day against 1,656 needed there*. The figure is the most the
 chain can bring there a day: the lines there and its own import, and each producer and route
 behind it at the part of its output the split sends there, within the routes' targets. A
-feeder that tops up two meeting factories equally near names the one with the least room. Two factories behind
+feeder that tops up two meeting factories equally near names the one with the least room, and
+where both have the same, the one whose name sorts first; the sites sending are listed by name.
+Only two links with the same name and the same figures fall back on the address, and their tips
+read the same. Two factories behind
 one depot each count only their part of it. A factory that only passes the product on, making
 none of it, splits nothing, and the factory behind it is judged on all of it. Where a capacity
 cannot be read (a recipe the board cannot name), or the product runs through a recipe loop (a
