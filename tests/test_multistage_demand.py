@@ -1321,5 +1321,323 @@ class TipTieTests(unittest.TestCase):
                 self.assertEqual(line(c, F3)["chain"]["from"], [c.index(a) for a in by_name])
 
 
+    def test_a_name_in_lower_case_sorts_as_a_player_reads_it(self):
+        for west, east, named in (("alpha Brewery", "Zeta Brewery", F2),
+                                  ("Zeta Brewery", "alpha Brewery", F3)):
+            with self.subTest(west=west):
+                c = run_with(named_fork(west, east), RECIPES)
+                self.assertEqual(line(c, F1)["chain"]["at"], c.index(named))
+
+
+def quietly(c, recipes=RECIPES):
+    """dem_walk(c), and what stderr was told on the way."""
+    ba_dashboard._SAID_ONCE.clear()
+    err = io.StringIO()
+    with contextlib.redirect_stderr(err):
+        walk = dem_walk(c, recipes)
+    return walk, err.getvalue()
+
+
+def brought(walk, shop, item=BEER):
+    """What the Demand walk brings a shop a day, unrounded, and its need
+    with the margin."""
+    node = walk[(site_key(shop), item)]
+    return node["own"] + node["credit"], node["need"]
+
+
+def alpha_beta(alpha, beta):
+    """Grok's round-5 repro: Alpha tops up Beta (3,000) and a bar (1,000),
+    Beta tops up the same bar (3,000), and the bar sells 1,500; one machine
+    each, 720 a day."""
+    c = Company()
+    c.factory(alpha, "Alpha")
+    c.factory(beta, "Beta")
+    for a in (alpha, beta):
+        c.hold(a, WATER, 500)
+        c.hold(a, BEER, 300)
+    c.shop(SHOP_A, "Bar")
+    c.hold(SHOP_A, BEER, 200, 1500)
+    c.plan(alpha, beta, BEER, 3000)
+    c.plan(alpha, SHOP_A, BEER, 1000)
+    c.plan(beta, SHOP_A, BEER, 3000)
+    return c
+
+
+def two_bars(roles=(F1, F2, F3)):
+    """Grok's round-5 repro, rebuilt: five breweries, three of them in use
+    (`roles`, Breweries 1 to 3), and two bars selling 1,500 and 1,200."""
+    one, two, three = roles
+    c = Company()
+    for i, a in enumerate(roles + tuple(a for a in (F1, F2, F3, F4, F5) if a not in roles)):
+        c.factory(a, f"Brewery {i + 1}")
+        c.hold(a, WATER, 900)
+        c.hold(a, BEER, 300)
+    for shop, sold_day in ((SHOP_A, 1500), (SHOP_B, 1200)):
+        c.shop(shop, shop[0])
+        c.hold(shop, BEER, 200, sold_day)
+    for src, dest, target in ((one, SHOP_A, 1000), (one, SHOP_B, 6000), (one, two, 3000), (one, three, 300),
+                              (two, SHOP_A, 1000), (two, SHOP_B, 6000), (two, three, 1000),
+                              (three, SHOP_A, 6000), (three, SHOP_B, 3000)):
+        c.plan(src, dest, BEER, target)
+    return c
+
+
+def shared_two_bars(roles=(F1, F2, F3)):
+    """Astra's round-5 repro: Brewery 1 tops up Brewery 2 (400), Brewery 2
+    tops up Brewery 3 (2,000), Brewery 3 tops up bar A (1,400 a day), and
+    all three top up bar B (750 a day)."""
+    one, two, three = roles
+    c = Company()
+    breweries(c, *roles)
+    for shop, sold_day in ((SHOP_A, 1400), (SHOP_B, 750)):
+        c.shop(shop, shop[0])
+        c.hold(shop, BEER, 200, sold_day)
+    for src, dest, target in ((one, two, 400), (two, three, 2000), (one, SHOP_B, 6000), (two, SHOP_B, 1000),
+                              (three, SHOP_B, 1000), (three, SHOP_A, 3000)):
+        c.plan(src, dest, BEER, target)
+    return c
+
+
+def depot_past_the_chain(roles=(F1, F2, F3)):
+    """Astra's round-5 repro: Brewery 1 tops up Brewery 2 (2,000) and a depot
+    (4,000), the depot and Breweries 2 and 3 top up bar A (1,400 a day),
+    and Breweries 1 and 3 bar B (450 a day)."""
+    one, two, three = roles
+    c = Company()
+    breweries(c, *roles)
+    c.site(DEPOT, "Depot")
+    c.hold(DEPOT, BEER, 300)
+    for shop, sold_day in ((SHOP_A, 1400), (SHOP_B, 450)):
+        c.shop(shop, shop[0])
+        c.hold(shop, BEER, 200, sold_day)
+    for src, dest, target in ((one, two, 2000), (two, SHOP_A, 6000), (three, SHOP_A, 6000), (one, SHOP_B, 3000),
+                              (three, SHOP_B, 6000), (one, DEPOT, 4000), (DEPOT, SHOP_A, 1000)):
+        c.plan(src, dest, BEER, target)
+    return c
+
+
+def second_chain_at_a_depots_shop():
+    """Opus's round-5 repro A: Brewery 1 tops up Brewery 2 (300), Brewery 2
+    a depot (3,000), and the depot Shop A (sells 1,350) and Shop B (900); a
+    second chain, Brewery 3 topping up Brewery 4 (2,000), also tops up Shop
+    A (1,000)."""
+    c = Company()
+    breweries(c, F1, F2, F3, F4)
+    c.site(DEPOT, "Depot")
+    c.hold(DEPOT, BEER, 300)
+    c.shop(SHOP_A, "A")
+    c.hold(SHOP_A, BEER, 200, 1350)
+    c.shop(SHOP_B, "B")
+    c.hold(SHOP_B, BEER, 200, 900)
+    for src, dest, target in ((F1, F2, 300), (F2, DEPOT, 3000), (DEPOT, SHOP_A, 4000), (DEPOT, SHOP_B, 1000),
+                              (F3, F4, 2000), (F4, SHOP_A, 1000)):
+        c.plan(src, dest, BEER, target)
+    return c
+
+
+def depot_and_shop(depot=("dee_road", 12)):
+    """Opus's round-5 repro C: Brewery 1 (two machines) tops up Brewery 2
+    (2,000), Brewery 2 a depot and Shop B, Brewery 3 the depot, and the depot
+    Shop A (1,600 a day) and Shop B (800)."""
+    c = Company()
+    c.factory(F1, "Brewery 1", machines=2)
+    c.factory(F2, "Brewery 2")
+    c.factory(F3, "Brewery 3")
+    for a in (F1, F2, F3):
+        c.hold(a, WATER, 900)
+        c.hold(a, BEER, 300)
+    c.site(depot, "Depot")
+    c.hold(depot, BEER, 300)
+    for shop, sold_day in ((SHOP_A, 1600), (SHOP_B, 800)):
+        c.shop(shop, shop[0])
+        c.hold(shop, BEER, 200, sold_day)
+    for src, dest, target in ((F1, F2, 2000), (F2, depot, 3000), (depot, SHOP_A, 4000), (F3, depot, 3000),
+                              (depot, SHOP_B, 3000), (F2, SHOP_B, 3000)):
+        c.plan(src, dest, BEER, target)
+    return c
+
+
+def drifting_pair():
+    """Two chains at a shared shop whose draws drift by the same step each
+    pass until a share binds (127 plain passes): Brewery 1 tops up Brewery 2
+    (600), Brewery 2 tops up Shop A (1,900 a day) and Shop B (1,250),
+    Brewery 3 tops up Brewery 4 (2,000) and Shop B (1,000), and Brewery 4
+    tops up Shop B (3,000)."""
+    c = Company()
+    breweries(c, F1, F2, F3, F4)
+    for shop, sold_day in ((SHOP_A, 1900), (SHOP_B, 1250)):
+        c.shop(shop, shop[0])
+        c.hold(shop, BEER, 200, sold_day)
+    for src, dest, target in ((F1, F2, 600), (F2, SHOP_A, 3000), (F2, SHOP_B, 3000), (F3, SHOP_B, 1000),
+                              (F3, F4, 2000), (F4, SHOP_B, 3000)):
+        c.plan(src, dest, BEER, target)
+    return c
+
+
+class FixedPointTests(unittest.TestCase):
+    """The chain is solved again on its own hold-down's draws until the
+    draws it asks are the ones it was solved on, the lines read the solve's
+    outputs, and nothing moved since the last pass: never just because the
+    producers' outputs held, and each pass reads the sites past the chain
+    on its own split."""
+
+    def test_alpha_and_beta_share_the_bar_evenly_whatever_the_addresses(self):
+        # Before, the outputs held at 750 / 750 while the draws still moved
+        # (251 against 1,249 at the stop, 62 against 1,438 settled), and the
+        # lines read 713 warn / 787 critical.
+        seen = set()
+        for alpha, beta in itertools.permutations((F1, F2, F3, F4), 2):
+            c = alpha_beta(alpha, beta)
+            walk, err = quietly(c)
+            self.assertEqual(err, "")
+            got, wanted = brought(walk, SHOP_A)
+            seen.add((tuple((line(c, a)["soldDay"], line(c, a)["needDay"], level(c, a)) for a in (alpha, beta)),
+                      round(got, 3), round(wanted, 3)))
+        # 1,500 a day is past what two lines make (1,440), so both are
+        # critical and the bar gets all they make, short of its 1,725.
+        self.assertEqual(seen, {(((750, 862, "critical"), (750, 862, "critical")), 1440.0, 1725.0)})
+
+    def test_three_breweries_at_two_bars_load_the_same(self):
+        # Before: 880 / 892 / 928.
+        for roles in itertools.permutations((F1, F2, F3)):
+            with self.subTest(roles=roles):
+                c = two_bars(roles)
+                walk, err = quietly(c)
+                self.assertEqual(err, "")
+                self.assertEqual(sold(c, *roles), (900, 900, 900))
+                self.assertEqual([level(c, a) for a in roles], ["critical"] * 3)
+                (a_got, a_need), (b_got, b_need) = brought(walk, SHOP_A), brought(walk, SHOP_B)
+                self.assertAlmostEqual(a_got + b_got, 3 * 720, delta=1e-3)
+                self.assertLess(a_got, a_need)
+                self.assertLess(b_got, b_need)
+
+    def test_two_bars_short_only_by_the_margin_warn(self):
+        # Before, the stop took the outputs holding (716.7 each) while the
+        # draws moved: 725 / 710 / 715 with Brewery 1 critical, and bar B
+        # got 745.6 of the 750 it sells.
+        for roles in itertools.permutations((F1, F2, F3)):
+            with self.subTest(roles=roles):
+                c = shared_two_bars(roles)
+                walk, err = quietly(c)
+                self.assertEqual(err, "")
+                self.assertEqual(sold(c, *roles), (719, 715, 715))
+                self.assertEqual(tuple(line(c, a)["needDay"] for a in roles), (827, 823, 823))
+                self.assertEqual([level(c, a) for a in roles], ["warn"] * 3)
+                (a_got, a_need), (b_got, b_need) = brought(walk, SHOP_A), brought(walk, SHOP_B)
+                self.assertAlmostEqual(b_got, 751.17, delta=0.01)
+                self.assertAlmostEqual(a_got + b_got, 3 * 720, delta=1e-3)
+                self.assertGreaterEqual(a_got, 1400)
+                self.assertGreaterEqual(b_got, 750)
+                self.assertLess(a_got, a_need)
+                self.assertLess(b_got, b_need)
+
+    def test_a_depot_past_the_chain_is_read_on_each_passs_split(self):
+        # Before, the depot's draw was read on the first pass's split for
+        # good: 605 / 619, and the chain's lines made 1,223.9 split by stale
+        # ratios.
+        for roles in itertools.permutations((F1, F2, F3)):
+            with self.subTest(roles=roles):
+                c = depot_past_the_chain(roles)
+                walk, err = quietly(c)
+                self.assertEqual(err, "")
+                self.assertEqual(sold(c, *roles), (612, 612, 626))
+                self.assertEqual(tuple(line(c, a)["needDay"] for a in roles), (704, 704, 720))
+                self.assertEqual([level(c, a) for a in roles], ["ok"] * 3)
+                for shop, sold_day in ((SHOP_A, 1400), (SHOP_B, 450)):
+                    self.assertLessEqual(short_of_its_need(walk, shop, sold_day), 1e-6)
+        sizing = sizing_of(depot_past_the_chain())
+        loads = [sizing.demand(site_key(a), BEER)[0] * sizing.made_share(site_key(a), BEER) for a in (F1, F2)]
+        self.assertAlmostEqual(loads[0], loads[1], delta=1e-6)
+        self.assertAlmostEqual(sum(loads), 1223.913043, delta=1e-5)
+
+    def test_a_feeder_is_asked_what_its_route_brings(self):
+        # Before, Brewery 1 was asked 186 though its route brings 261 (300
+        # less the margin), Brewery 2 read critical, and Shop B got 859.3.
+        c = second_chain_at_a_depots_shop()
+        walk, err = quietly(c)
+        self.assertEqual(err, "")
+        self.assertEqual(sold(c, F1, F2, F3, F4), (261, 717, 636, 636))
+        self.assertEqual(line(c, F1)["needDay"], 300)
+        self.assertEqual([level(c, a) for a in (F1, F2, F3, F4)], ["ok", "warn", "warn", "warn"])
+        (a_got, a_need), (b_got, b_need) = brought(walk, SHOP_A), brought(walk, SHOP_B)
+        self.assertAlmostEqual(a_got, 1081.6, delta=0.01)
+        self.assertAlmostEqual(b_got, 938.4, delta=0.01)
+        self.assertGreaterEqual(b_got, 900)
+        self.assertLess(b_got, b_need)
+        self.assertLess(a_got, a_need)
+
+    def test_the_answer_follows_no_parity_of_the_pass_cap(self):
+        # Before, the draw swung between two values for all 50 passes, and
+        # the board showed whichever the cap's parity left: at 50, a false
+        # warning on Brewery 3 and both shops short.
+        real = ba_dashboard.CHAIN_DRAW_PASSES
+        for shape, passes in ((depot_and_shop, (20, 21)), (drifting_pair, (40, 41))):
+            seen = set()
+            for cap in passes:
+                ba_dashboard.CHAIN_DRAW_PASSES = cap
+                try:
+                    c = shape()
+                    walk, err = quietly(c)
+                finally:
+                    ba_dashboard.CHAIN_DRAW_PASSES = real
+                with self.subTest(shape=shape.__name__, cap=cap):
+                    self.assertEqual(err, "")
+                addrs = [a for a in (F1, F2, F3, F4) if any(s["addr"] == a for s in c.sites)]
+                seen.add((tuple((line(c, a)["soldDay"], line(c, a)["needDay"], level(c, a)) for a in addrs),
+                          tuple(round(brought(walk, s)[0], 3) for s in (SHOP_A, SHOP_B))))
+            with self.subTest(shape=shape.__name__):
+                self.assertEqual(len(seen), 1)
+        c = depot_and_shop()
+        walk, _err = quietly(c)
+        self.assertEqual(sold(c, F1, F2, F3), (1183, 591, 626))
+        self.assertEqual([level(c, a) for a in (F1, F2, F3)], ["ok"] * 3)
+        for shop, sold_day in ((SHOP_A, 1600), (SHOP_B, 800)):
+            self.assertLessEqual(short_of_its_need(walk, shop, sold_day), 1e-6)
+
+    def test_stepping_ahead_lands_where_plain_passes_settle(self):
+        # The drifting pair takes 127 plain passes; stepping ahead takes 28
+        # and lands on the same split.
+        def figures(c, walk):
+            return (tuple((line(c, a)["soldDay"], line(c, a)["needDay"], level(c, a))
+                          for a in (F1, F2, F3, F4)),
+                    tuple(round(brought(walk, s)[0], 3) for s in (SHOP_A, SHOP_B)))
+        c = drifting_pair()
+        walk, err = quietly(c)
+        self.assertEqual(err, "")
+        leapt = figures(c, walk)
+        real_leap, real_cap = ba_dashboard._leap, ba_dashboard.CHAIN_DRAW_PASSES
+        ba_dashboard._leap = lambda _trail, _order, drift: (None, drift)
+        ba_dashboard.CHAIN_DRAW_PASSES = 1000
+        try:
+            c = drifting_pair()
+            walk, err = quietly(c)
+        finally:
+            ba_dashboard._leap, ba_dashboard.CHAIN_DRAW_PASSES = real_leap, real_cap
+        self.assertEqual(err, "")
+        self.assertEqual(figures(c, walk), leapt)
+        self.assertEqual(leapt[0], ((522, 600, "ok"), (1378, 1585, "critical"), (625, 719, "ok"), (625, 719, "ok")))
+        node = walk[(site_key(SHOP_B), BEER)]
+        self.assertLess(node["own"] + node["credit"], node["need"])
+
+    def test_leap_steps_ahead_only_where_the_steps_line_up(self):
+        order = ["a", "b"]
+        point = lambda a, b: {"a": a, "b": b}
+        # Closing in by half a pass: straight to the fixed point.
+        out, drift = ba_dashboard._leap([point(0, 20), point(8, 12), point(12, 8)], order, (1.0, None))
+        self.assertEqual(out, point(16, 4))
+        self.assertEqual(drift, (1.0, None))
+        # Steps that do not line up, or grow: no leap.
+        self.assertIsNone(ba_dashboard._leap([point(0, 0), point(8, 0), point(8, 4)], order, (1.0, None))[0])
+        self.assertIsNone(ba_dashboard._leap([point(0, 0), point(1, 0), point(4, 0)], order, (1.0, None))[0])
+        # A drift goes `stride` steps on and twice as far the next time, a
+        # quarter as far once it turns back, never under nothing.
+        out, drift = ba_dashboard._leap([point(10, 0), point(11, 0), point(12, 0)], order, (4.0, None))
+        self.assertEqual((out, drift[0]), (point(16, 0), 8.0))
+        out, drift = ba_dashboard._leap([point(16, 0), point(15, 0), point(14, 0)], order, drift)
+        self.assertEqual((out, drift[0]), (point(12, 0), 4.0))
+        out, _drift = ba_dashboard._leap([point(3, 0), point(2, 0), point(1, 0)], order, (8.0, None))
+        self.assertEqual(out, point(0, 0))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -229,8 +229,16 @@ site's inbound at its target less the margin (`_least_load_flow()`, exact, None 
 not settle, and the old figures stand). The producers' outputs are unique, so they depend on
 neither site names nor order; the routes come from a tie-break solved again with the outputs
 pinned (skipped past `ROUTE_POLISH_SITES` sites, and the first answer's routes stand where it
-does not settle). What a site past the chain draws from it is held down as `demand()` holds it,
-and `_splits()` solves again on those draws until they agree (`CHAIN_DRAW_PASSES`).
+does not settle), so past that the route-derived `chain.makes` and `chain.need` can move by a
+unit with the order. What a site past the chain draws from it is held down as `demand()` holds
+it, and `_splits()` solves again on those draws until they agree: the draws a pass asks equal
+the ones it solved on, the lines' loads read on its split (`demand()` times the share) equal
+the solve's outputs, and the draws, routes and loads match the pass before. Each pass drops the
+item's `demand()` memos (`_forget()`), so a site past the chain is read on that pass's split.
+After `LEAP_AFTER` plain passes, `_leap()` steps the draws ahead where three in a row line up
+(Aitken's extrapolation where the steps shrink, a doubling stride where they hold, the
+hold-down's room growing until a share binds); the stop rule stays the fixed point's. At
+`CHAIN_DRAW_PASSES` the last split stands and stderr is told.
 `demand()` shares what reaches a site in the chain between its senders as the solve routes it
 (`routed_split()`), so each line's share of its site's draw is the solve's output, and the
 Demand-mode walk asks each route into such a site the same part (`walk_split()`, the

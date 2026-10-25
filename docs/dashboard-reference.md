@@ -2272,7 +2272,9 @@ depends on the sites' names or the order they are read in, and a factory that re
 meeting factory by two paths counts once. Where several routings give those same outputs, a
 tie-break weighted by the plans' targets picks the routes; on a chain of more than 30 sites, or
 where that tie-break does not settle, the routes can differ in their last places with the
-order, the outputs never.
+order, the outputs never. A line's load and level follow the outputs; a chain's tip (what the
+link brings and what is drawn from it) is read along the routes, so on such a chain it can
+move by a unit with the order.
 
 Where nothing binds, the factory lines in the chain run at the same load, and an import in it
 is drawn on at that load too (a plain contract still lands its whole amount; the rest stays in
@@ -2296,9 +2298,10 @@ factories top up, or a bar a factory of the chain shares with one outside it), t
 site share it by their targets, as before, a sender with no room held down and the rest going
 to the others. What the chain is asked there is part of the split: where the other sender runs
 out of room, the chain is asked for the rest, and the split is worked out again on that until
-the two agree. Brewery 1 topping up Brewery 2 (at most 400 a day), which shares a bar selling
-1,500 with Brewery 3, reads 348 / 526 / 626: Brewery 3 has room for 626, so the chain makes
-the other 874.
+the two agree: what the split asks of each site is what it was worked out on, each line reads
+the split's own figure, and nothing moved since the time before. Brewery 1 topping up
+Brewery 2 (at most 400 a day), which shares a bar selling 1,500 with Brewery 3, reads 348 /
+526 / 626: Brewery 3 has room for 626, so the chain makes the other 874.
 
 The chain's walk in Demand sizing follows the split too. A site of the chain asks each route
 into it for what the split routes there and its own lines and import bring the rest, since a

@@ -6255,12 +6255,65 @@ def _solve_linear(rows: list, rhs: list) -> list:
 
 
 LEAST_LOAD_STEPS = 200  # the most Newton steps _least_load_flow() takes
-CHAIN_DRAW_PASSES = 50  # the most times _splits() solves a chain on its own hold-down's draws
+# The most times _splits() solves a chain on its own hold-down's draws. Plain
+# passes close in linearly, by 0.8 to 0.98 a pass in the slow shapes, or drift
+# by the same step each pass until a share binds, which took up to 374 passes;
+# _leap() steps ahead in both, and 12,000 fuzzed shapes settled in at most 47.
+CHAIN_DRAW_PASSES = 50
+LEAP_AFTER = 8  # the passes _splits() runs plainly before _leap() may step ahead
+LEAP_RATIO = 0.99  # the slowest closing-in _leap() extrapolates; steps within 1% of the last drift
 ROUTE_POLISH_SITES = 30  # the most sites _least_load_flow() solves the routes' tie-break again for
 
 # What extraction has told stderr already, so a watch server rebuilding every
 # autosave says each once.
 _SAID_ONCE: set = set()
+
+
+def _agree(new, old, rel: float = 1e-7) -> bool:
+    """Whether two passes' figures (dicts with the same keys, or lists in
+    the same order) agree to `rel` of each figure, or of one unit where the
+    figure is under one."""
+    pairs = ((new[k], old[k]) for k in old) if isinstance(old, dict) else zip(new, old)
+    return all(abs(a - b) <= rel * max(1.0, abs(b)) for a, b in pairs)
+
+
+def _leap(trail: list, order: list, drift: tuple) -> tuple:
+    """Where three draws in a row (each the last's ask) step the same way,
+    a point further along: (draws or None, the drift to carry on).
+
+    Steps that shrink by the same ratio each pass close in on their fixed
+    point, and the draws go straight there: the steps still to come, summed
+    (Aitken's extrapolation, the whole vector at once). Steps that stay the
+    same are a drift, the hold-down's room growing pass by pass until a
+    share binds: the draws go `stride` steps on, twice as far each leap
+    while the drift keeps its way, and a quarter as far once it turns back,
+    having passed the point. `drift` is (stride, the last drift's step).
+    Never to a point asking a site for less than nothing."""
+    stride, heading = drift
+    x0, x1, x2 = trail
+    a = [x1[s] - x0[s] for s in order]
+    b = [x2[s] - x1[s] for s in order]
+    aa, bb = sum(v * v for v in a), sum(v * v for v in b)
+    if aa <= 0 or bb <= 0:
+        return None, drift
+    r = sum(u * v for u, v in zip(a, b)) / aa
+    if sum((v - r * u) ** 2 for u, v in zip(a, b)) > 1e-4 * bb:
+        return None, drift
+    if 0 < r < LEAP_RATIO:
+        ahead, drift = r / (1 - r), (1.0, None)
+    elif abs(r - 1) <= 1 - LEAP_RATIO:
+        if heading is not None and sum(u * v for u, v in zip(b, heading)) < 0:
+            stride = max(1.0, stride / 4)
+        ahead, drift = stride, (stride * 2, b)
+    else:
+        return None, drift
+    # No further than leaves every draw at nothing or more.
+    for s, v in zip(order, b):
+        if v < 0:
+            ahead = min(ahead, -x2[s] / v)
+    if ahead <= 0:
+        return None, drift
+    return {s: max(0.0, x2[s] + ahead * v) for s, v in zip(order, b)}, drift
 
 
 def _said_once(text: str) -> None:
@@ -8033,8 +8086,12 @@ class _DemandSizing:
         than the highest of their targets together (the walk's has()).
         What a site past the chain draws from it is what demand() asks of
         it there, held down as demand() holds it: solved again on those
-        draws until they agree (CHAIN_DRAW_PASSES), since where another
-        sender to that site has no room, the chain is asked for the rest.
+        draws until they agree, since where another sender to that site has
+        no room, the chain is asked for the rest. They agree where the draws
+        a pass asks are the ones it was solved on, the lines' loads read on
+        its split are the solve's outputs, and the draws, the routes and the
+        loads are the last pass's; _leap() steps ahead where the passes
+        close in slowly, and at CHAIN_DRAW_PASSES the last split stands.
         The producers' outputs at that optimum are unique, so no share
         depends on the sites' names or the order they are read in, and a
         sender's capacity counts once however many paths it reaches a site
@@ -8176,8 +8233,11 @@ class _DemandSizing:
         # out of room the chain is asked for the rest. The draws start at the
         # plans' shares and are solved again on what the split's own hold-
         # down asks, until the two agree: the chain is sized on what it is
-        # actually asked, never on a figure fixed before the hold-down.
-        outputs, still = None, 0
+        # actually asked, never on a figure fixed before the hold-down. The
+        # outputs alone can hold while the draws still move between sites at
+        # the same load, and the shares follow the draws, so the outputs
+        # holding settles nothing.
+        last, trail, drift = None, [], (1.0, None)
         for _pass in range(CHAIN_DRAW_PASSES):
             self._forget(item, flag)
             solved = _least_load_flow(draws, [(site, c) for site, c, _line in producers], routes, most)
@@ -8196,16 +8256,27 @@ class _DemandSizing:
             asked = {site: use(site) + sum(self._sent(site, dest, item, frozenset({site}), eats, True, "dem")[0]
                                            for dest in _in_order(sends.get(site, {})) if dest not in chain)
                      for site in order}
-            if all(abs(asked[site] - draws[site]) <= 1e-7 * max(1.0, draws[site]) for site in order):
+            # The lines' loads as the board reads them (demand() on this
+            # split), which must be the solve's own outputs.
+            loads = {site: self.demand(site, item, eats=eats)[0] * shares[site]
+                     for site, _c, line in producers if line and shares.get(site) is not None}
+            made_here = {site: f for (site, _c, line), f in zip(producers, solved[0]) if line}
+            now = (asked, solved[1], loads)
+            # Settled where what the split asks is the draw it was solved on,
+            # the lines read the solve's outputs, and nothing (the draws, the
+            # routes, the loads) moved since the last pass. On the first pass
+            # the draws it was solved on stand for the last pass: solving
+            # those again gives the same split.
+            if (_agree(asked, draws) and _agree(made_here, loads)
+                    and (last is None or all(_agree(n, l) for n, l in zip(now, last)))):
                 break
-            # Where the draw only moves between sites at the same load, the
-            # routes slide while every output stays: the lines' figures are
-            # settled once the outputs hold two passes running.
-            still = still + 1 if outputs is not None and all(
-                abs(a - b) <= 1e-9 * max(1.0, b) for a, b in zip(solved[0], outputs)) else 0
-            if still >= 2:
-                break
-            outputs, draws = solved[0], asked
+            # Where the passes close in slowly or drift, the draws step ahead
+            # (_leap()), after a few plain passes: most chains settle in
+            # those, on the split plain passes find.
+            last, trail = now, trail + [draws]
+            leapt, drift = (_leap(trail[-2:] + [asked], order, drift)
+                            if len(trail) >= 2 and _pass + 1 >= LEAP_AFTER else (None, drift))
+            draws, trail = (asked, trail) if leapt is None else (leapt, [])
         else:
             _said_once(f"the draw on a chain of {len(order)} sites making {item} did not settle "
                        f"in {CHAIN_DRAW_PASSES} passes: the last split stands")
@@ -8218,8 +8289,10 @@ class _DemandSizing:
 
     def _forget(self, item: str, flag: bool) -> None:
         """Drop what a pass of _splits() noted for `item` (its routes, chain
-        groups and links), before the next is noted."""
-        for memo in (self.routed_at, self.sent_at, self.group_at, self.chain_at):
+        groups and links) and the demand() figures read on its split, before
+        the next is noted: a site past the chain read on an earlier pass's
+        split would keep that split's hold-down."""
+        for memo in (self.routed_at, self.sent_at, self.group_at, self.chain_at, self.drawn):
             for key in [k for k in memo if k[1] == item and k[2] == flag]:
                 del memo[key]
 
@@ -8238,11 +8311,12 @@ class _DemandSizing:
         `shares`, its senders' parts in `routed_at`, its chain in
         `group_at`, its link in `chain_at`."""
         made, makes = self.graph["made"], self.graph["makes"]
-        # The outputs rounded to a billionth of a unit, so that the last
-        # places the solve's arithmetic leaves, which follow the order the
-        # sites sort in and so their names, never move a share (_line_use()
-        # reads the lines' figures to a millionth).
-        output, flow = [round(f, 9) for f in solved[0]], solved[1]
+        # The outputs and the routes rounded to a billionth of a unit, so
+        # that the last places the solve's arithmetic leaves, which follow
+        # the order the sites sort in and so their names, never move a share
+        # or a route's part (_line_use() reads the lines' figures to a
+        # millionth).
+        output, flow = [round(f, 9) for f in solved[0]], [round(f, 9) for f in solved[1]]
         lines_make = {site: f for (site, _c, line), f in zip(producers, output) if line}
         handed = dict(draws)  # what each site hands on and uses: its throughput
         inflow, imported = collections.defaultdict(float), collections.defaultdict(float)
@@ -11358,8 +11432,10 @@ def _factories(
 
     def named_by(site):
         """A site's order where a chain's tip ties (#521): its business
-        name, then its key."""
-        return ((businesses[index[site]].get("name") or "") if site in index else "", site)
+        name as a player reads a list (case aside, then case), then its
+        key."""
+        name = (businesses[index[site]].get("name") or "") if site in index else ""
+        return name.casefold(), name, site
 
     dem_out = collections.defaultdict(float)  # (factory, product) -> a day's make in Demand sizing
     for key, counter in machines.items():
