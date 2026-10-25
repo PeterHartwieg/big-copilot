@@ -3396,6 +3396,8 @@
  "sb.in.lower": "{n:,} würden reichen",
  "sb.in.route": "Route prüfen",
  "sb.line.atRoster": "{n:,} zu diesen Stunden",
+ "sb.line.chain.at": "Die Linie teilt den Bedarf mit der Kette bei {at}: dort hergestellt und angeliefert {makes:,} pro Tag bei einem Bedarf von {need:,} dort",
+ "sb.line.chain.here": "Die Linie teilt den Bedarf mit dem, was {from} hierher schickt: hier hergestellt und angeliefert {makes:,} pro Tag bei einem Bedarf von {need:,}",
  "sb.line.choose": "Wähl das im Spiel gezeigte Rezept; seine Eingänge fehlen in den Summen",
  "sb.line.fewer": "braucht {lower} seiner {now} Stunden: weniger würden reichen",
  "sb.line.fewer.tip": "Ein Vorschlag, keine Änderung: die Linie würde ihren Bedarf auch mit weniger Stunden decken",

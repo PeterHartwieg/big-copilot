@@ -3706,6 +3706,8 @@
  "sb.in.lower": "bastaría con {n:,}",
  "sb.in.route": "revisa la ruta",
  "sb.line.atRoster": "{n:,} en estas horas",
+ "sb.line.chain.at": "La línea comparte la demanda con la cadena de {at}: entre lo producido allí y lo que llega, {makes:,} al día; allí se necesitan {need:,}",
+ "sb.line.chain.here": "La línea comparte la demanda con lo que {from} envía aquí: entre lo producido aquí y lo que llega, {makes:,} al día; se necesitan {need:,}",
  "sb.line.choose": "Elige la receta que aparece en el juego; sus ingredientes faltan en los totales",
  "sb.line.fewer": "necesita {lower} de sus {now} horas; bastan menos",
  "sb.line.fewer.tip": "Es una sugerencia: con menos horas, la línea aún cubriría lo necesario.",

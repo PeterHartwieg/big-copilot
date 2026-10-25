@@ -6256,6 +6256,18 @@ def _solve_linear(rows: list, rhs: list) -> list:
 
 LEAST_LOAD_STEPS = 200  # the most Newton steps _least_load_flow() takes
 
+# What extraction has told stderr already, so a watch server rebuilding every
+# autosave says each once.
+_SAID_ONCE: set = set()
+
+
+def _said_once(text: str) -> None:
+    """Tell stderr `text` the first time it comes up (in the browser,
+    Pyodide's console)."""
+    if text not in _SAID_ONCE:
+        _SAID_ONCE.add(text)
+        print(text, file=sys.stderr, flush=True)
+
 
 def _least_load_flow(draws: dict, producers: list, routes: list, reach: dict) -> tuple | None:
     """The flow through a chain that loads its producers least: the one
@@ -6273,10 +6285,13 @@ def _least_load_flow(draws: dict, producers: list, routes: list, reach: dict) ->
     It is found exactly, by Newton's method on the dual (each site's price;
     a flow follows the price difference along it, clamped to its bounds)
     with an exact line search, then solved outright on the bounds that
-    finds (_polished()). None where Newton's method does not balance every
-    site to a part in 10^8 of the draw within LEAST_LOAD_STEPS steps, so
-    no unsettled answer is published. Returns ([each producer's output],
-    [each route's flow]), in the inputs' order."""
+    finds (_polished()), and the routes' tie-break solved once more with
+    each producer held at its output, at its own scale, where that
+    settles and balances (else the first answer's routes stand). None
+    where Newton's method does not balance every site to a part in 10^8
+    of the draw within LEAST_LOAD_STEPS steps, or the first polish does
+    not settle, so no unsettled answer is published. Returns ([each
+    producer's output], [each route's flow]), in the inputs' order."""
     total = sum(draws.values())
     if total <= 0 or not producers:
         return ([0.0] * len(producers), [0.0] * len(routes)) if total <= 0 else None
@@ -6386,7 +6401,18 @@ def _least_load_flow(draws: dict, producers: list, routes: list, reach: dict) ->
         price = [p + t_best * s for p, s in zip(price, step)]
     else:
         return None
-    x = _polished(edges, need, count, point(price), routes_at) or x
+    x = _polished(edges, need, count, point(price), routes_at)
+    if x is None:
+        return None
+    # The routes' tie-break, ten million times weaker than the loads there,
+    # leaves its own part of that answer to the arithmetic's last places;
+    # solved again with each producer held at its output, it is decided at
+    # its own scale (the outputs are the optimum's whatever the routes).
+    made_at = {e: x[e] for e, tag in enumerate(owner) if tag and tag[0] == "made"}
+    on_bounds = [-1.0 if f <= 0.0 else e[4] + 1.0 if f >= e[4] else f for f, e in zip(x, edges)]
+    routed = _polished(edges, need, count, on_bounds, set(), made_at)
+    if routed is not None and max(abs(g) for g in balance(routed)) <= 1e-9:
+        x = routed
     made, routed = [0.0] * len(producers), [0.0] * len(routes)
     for tag, f in zip(owner, x):
         if tag and tag[0] == "made":
@@ -6396,19 +6422,35 @@ def _least_load_flow(draws: dict, producers: list, routes: list, reach: dict) ->
     return made, routed
 
 
-def _polished(edges: list, need: list, count: int, z: list, weak: set) -> list | None:
+POLISH_ROUNDS = 50  # the most bound changes _polished() makes
+
+
+def _polished(edges: list, need: list, count: int, z: list, weak: set, pinned: dict | None = None) -> list | None:
     """The same flow solved exactly on the bounds the Newton steps found
     (each edge at 0, at its cap, or between), with the routes' tie-break
     10^7 times weaker, so it shifts no load: the KKT system solved outright,
     an edge moved between its bound and free while one breaks its bound or
-    the prices say it should move. None where that does not settle."""
-    fixed = {}
+    the prices say it should move. None where that does not settle.
+
+    `pinned` {edge: flow} holds those edges where they are, so the rest is
+    solved on its own terms: what the producers' outputs, pinned, leave the
+    routes' tie-break to decide, at its own scale. With nothing joining the
+    sites to the source left free, a site's price is fixed only up to a
+    constant, so each site's balance gives way by a part in 10^9 of the
+    flow its price would move, which pins it; refining the answer against
+    the balance proper then takes that give back out."""
+    fixed = dict(pinned or {})
     for e, ((_a, _b, _c, _cost, up), v) in enumerate(zip(edges, z)):
+        if e in fixed:
+            continue
         if v < 0:
             fixed[e] = 0.0
         elif v > up:
             fixed[e] = up
-    for _round in range(50):
+    give = 0.0
+    if pinned:
+        give = 1e-9 / max((2 * edges[e][2] for e in range(len(edges)) if e not in pinned), default=1.0)
+    for _round in range(POLISH_ROUNDS):
         free = [e for e in range(len(edges)) if e not in fixed]
         at = {e: i for i, e in enumerate(free)}
         size = len(free) + count
@@ -6434,7 +6476,15 @@ def _polished(edges: list, need: list, count: int, z: list, weak: set) -> list |
             rhs[len(free) + b] -= f
             if a >= 0:
                 rhs[len(free) + a] += f
-        out = _solve_linear(rows, rhs)
+        for n in range(count):
+            rows[len(free) + n][len(free) + n] -= give
+        out = _solve_linear([row[:] for row in rows], rhs)
+        if give:
+            for _refine in range(3):
+                left = [r - sum(c * v for c, v in zip(row, out)) for row, r in zip(rows, rhs)]
+                for n in range(count):
+                    left[len(free) + n] -= give * out[len(free) + n]
+                out = [v + d for v, d in zip(out, _solve_linear([row[:] for row in rows], left))]
         price = out[len(free):]
         worst, move = 1e-9, None
         for e in free:
@@ -6444,9 +6494,13 @@ def _polished(edges: list, need: list, count: int, z: list, weak: set) -> list |
             if f - up > worst:
                 worst, move = f - up, (e, up)
         for e, f in fixed.items():
+            if pinned and e in pinned:
+                continue
             a, b, curve, cost, _up = edges[e]
             curve *= 1e-7 if e in weak else 1.0
             gain = price[b] - (price[a] if a >= 0 else 0.0) - cost - 2 * curve * f
+            if pinned:
+                gain /= 2 * curve  # in flow, as the bounds are: the tie-break's prices are small
             if (gain if f == 0.0 else -gain) > worst:
                 worst, move = abs(gain), (e, None)
         if move is None:
@@ -7670,7 +7724,7 @@ class _DemandSizing:
         self.imports, self.wholesale, self.drops = imports, wholesale, drops
         self.sold_dem, self.sold_measured, self.ramping, self.sold_sales = ends
         self.drawn, self.levels_at, self.split_at, self.chain_at = {}, {}, {}, {}
-        self.group_at = {}
+        self.group_at, self.routed_at = {}, {}
         self.graph = {}
         self.set_made(lambda _site, _item: False)
 
@@ -7734,20 +7788,26 @@ class _DemandSizing:
         self.split_at.clear()
         self.chain_at.clear()
         self.group_at.clear()
+        self.routed_at.clear()
 
-    def own(self, site: str, item: str) -> float:
-        """What a site's own import and wholesale delivery bring it a day, less
-        the margin: what brings the part of its draw the senders topping it
-        up have no room for, as in the chain's walk (the routes come first)."""
+    def brought(self, site: str, item: str) -> float:
+        """What a site's own import and wholesale delivery bring it a day. A
+        Smart Delivery level at or under the routes' target brings nothing
+        (the walk's own(): _import_drop() against the stock the routes into
+        the site keep there); with no route in, the contract's whole week."""
         n = (site, item)
-        # A Smart Delivery level at or under the routes' target brings
-        # nothing (the walk's own(): _import_drop() against that stock).
         able = self.graph["share"].get(n) or {}
         reach = max((a for source, legs in self.graph["edges"].items() if source in able
                      for d, i, a in legs if d == site and i == item), default=0)
-        brought = ((_import_drop(reach, self.drops[n]) / 7 if self.drops.get(n) else 0.0)
-                   + (self.wholesale[n]["weekly"] / 7 if n in self.wholesale else 0.0))
-        return brought / (1 + SUPPLY_MARGIN)
+        return ((_import_drop(reach, self.drops[n]) / 7 if self.drops.get(n) else 0.0)
+                + (self.wholesale[n]["weekly"] / 7 if n in self.wholesale else 0.0))
+
+    def own(self, site: str, item: str) -> float:
+        """What a site's own import and wholesale delivery bring it a day, less
+        the margin (brought()): what brings the part of its draw the senders
+        topping it up have no room for, as in the chain's walk (the routes
+        come first)."""
+        return self.brought(site, item) / (1 + SUPPLY_MARGIN)
 
     def has_own(self, site: str, item: str) -> bool:
         """Whether a site has a supply of its own, whatever it brings now (a
@@ -7932,15 +7992,19 @@ class _DemandSizing:
         producers that cannot be relieved are short together.
 
         A site's share is its lines' part of what the split has it hand on
-        and use. demand() then shares out what the routes bring by the
-        plans' shares, holding a sender down where it has no room (levels()),
-        so where several routes reach one site from producers loaded
-        differently, the loads it reports can differ from the split's while
-        the lines' parts stay the split's.
+        and use, and demand() shares what reaches a site of the chain
+        between its senders and its own import as the split routes it
+        (`routed_at`, routed_split()), so a line's share of its site's draw
+        is the split's output. An import counts at what it brings with the
+        routes' stock in the site (brought()): a Smart Delivery level at or
+        under their target brings nothing. The lines of each chain apart
+        (the sites the routes join) are noted in `group_at`, for the sold
+        days' rounding.
 
         A split whose lines or any producer behind it the board cannot read
         (an unnamed recipe), or whose routes lead back to a site that brings
-        nothing, is None; so is every split where the solve does not settle.
+        nothing, is None; so is every split where the solve does not settle,
+        which stderr is told once.
         The chain each split shares (merges()) is noted in `chain_at`: its
         senders, and the most its lines, its own import and the producers
         behind it can bring it a day (_carried())."""
@@ -7979,9 +8043,7 @@ class _DemandSizing:
             return use_at[site]
 
         def brought(site):
-            n = (site, item)
-            return ((self.imports[n]["weekly"] / 7 if n in self.imports else 0.0)
-                    + (self.wholesale[n]["weekly"] / 7 if n in self.wholesale else 0.0))
+            return self.brought(site, item)
 
         def behind(site, seen=frozenset()):
             """The sites up the plans from `site`, or None where one cannot
@@ -8039,22 +8101,49 @@ class _DemandSizing:
                 if site in senders and len(senders[site]) > 1 and reach[site]}
         solved = _least_load_flow(draws, [(site, c) for site, c, _line in producers], routes, most)
         if solved is None:
+            _said_once(f"could not split {item} between the factories of a chain of {len(order)} sites: "
+                       "the solve did not settle, so each line is asked for all it sends, as before")
             return None
-        output, flow = solved
+        # The outputs rounded to a billionth of a unit, so that the last
+        # places the solve's arithmetic leaves, which follow the order the
+        # sites sort in and so their names, never move a share (_line_use()
+        # reads the lines' figures to a millionth).
+        output, flow = [round(f, 9) for f in solved[0]], solved[1]
         lines_make = {site: f for (site, _c, line), f in zip(producers, output) if line}
         handed = dict(draws)  # what each site hands on and uses: its throughput
-        for (up, _site, _most, _w), f in zip(routes, flow):
+        inflow, imported = collections.defaultdict(float), collections.defaultdict(float)
+        for (up, there, _most, _w), f in zip(routes, flow):
             handed[up] += f
+            inflow[there] += f
+        for (site, _c, line), f in zip(producers, output):
+            if not line:
+                imported[site] += f
+        # Each chain apart (the sites the routes join), for the sold days'
+        # rounding (_factories()): two chains that never meet keep their own.
+        part_of = {site: {site} for site in order}
+        for site in order:
+            for up in senders.get(site, ()):
+                if up in part_of and part_of[up] is not part_of[site]:
+                    joined = part_of[up] | part_of[site]
+                    for member in joined:
+                        part_of[member] = joined
         for site in order:
             if shares.get(site) is not None or (site not in senders and made(site, item) and brought(site) > 0):
                 shares[site] = round(lines_make[site] / handed[site], 12) if handed[site] > 1e-9 else 1.0
             if made(site, item):
-                self.group_at[(site, item, eats is not None)] = frozenset(order)
+                self.group_at[(site, item, eats is not None)] = frozenset(part_of[site])
+            # What reaches the site past its own lines, shared between its
+            # senders and its own import as the solve routes it (demand()).
+            whole = inflow[site] + imported[site]
+            if site in senders and whole > 1e-9:
+                self.routed_at[(site, item, eats is not None)] = {
+                    up: f / whole for (up, there, _most, _w), f in zip(routes, flow) if there == site}
         for site in order:
             if site in senders and made(site, item):
                 self.chain_at[(site, item, eats is not None)] = (
                     _in_order(senders[site]),
-                    makes(site, item) + self._carried(site, senders, producers, routes, flow, handed, target, reach))
+                    round(makes(site, item)
+                          + self._carried(site, senders, producers, routes, flow, handed, target, reach), 6))
         self.split_at[memo] = shares
         return shares
 
@@ -8098,24 +8187,38 @@ class _DemandSizing:
         return own + _max_flow(caps, start, site)
 
     def merges(self, site: str, item: str, eats=None) -> list:
-        """The sites at or down the plans from `site` where its `item` meets
-        a line making it there too, nearest first: [(merge site, [the sites
-        whose routes bring it there], what the lines there and those routes
-        bring a day together)]. Where a line falls short, the first is the
-        link of the chain it shares with others (#521)."""
-        out, seen, queue = [], set(), [site]
-        while queue:
-            here = queue.pop(0)
-            if here in seen:
-                continue
-            seen.add(here)
-            share = self.made_share(here, item, eats)
-            if share is not None and 0 < share < 1 and (here, item, eats is not None) in self.chain_at:
-                out.append((here, *self.chain_at[(here, item, eats is not None)]))
-            for dest in _in_order({d for d, i, _a in self.graph["edges"].get(here, []) if i == item}):
-                if dest != here and (self.graph["share"].get((dest, item)) or {}).get(here):
-                    queue.append(dest)
-        return out
+        """The nearest sites at or down the plans from `site` where its
+        `item` meets a line making it there too, the fewest hops away:
+        [(merge site, [the sites whose routes bring it there], what the
+        lines there and those routes bring a day together)]. Where a line
+        falls short, one of them is the link of the chain it shares with
+        others (#521)."""
+        seen, ring = {site}, [site]
+        while ring:
+            out = []
+            for here in ring:
+                share = self.made_share(here, item, eats)
+                if share is not None and 0 < share < 1 and (here, item, eats is not None) in self.chain_at:
+                    out.append((here, *self.chain_at[(here, item, eats is not None)]))
+            if out:
+                return out
+            ahead = set()
+            for here in ring:
+                ahead |= {d for d, i, _a in self.graph["edges"].get(here, [])
+                          if i == item and d != here and d not in seen
+                          and (self.graph["share"].get((d, item)) or {}).get(here)}
+            seen |= ahead
+            ring = _in_order(ahead)
+        return []
+
+    def routed_split(self, site: str, item: str, eats=None) -> dict | None:
+        """{sender: its part of what reaches `site` past its own lines}, as
+        the chain's solve routes it (_splits()), the rest being the site's
+        own import's; None where no solve covers the site."""
+        if item in self.graph["looped"]:
+            return None
+        self._splits(item, eats)
+        return self.routed_at.get((site, item, eats is not None))
 
     def routed_share(self, site: str, item: str, eats=None) -> float:
         """The share of what the ends draw from `site` that the routes into
@@ -8161,7 +8264,20 @@ class _DemandSizing:
             # site's own lines make it too, the routes bring only their share
             # of it (made_share()).
             residual = more * self.routed_share(dest_key, item, eats)
-            if held_down:
+            solved = self.routed_split(dest_key, item, eats)
+            if solved is not None:
+                # A site of a solved chain (_splits()): its senders bring what
+                # the solve routes them, so each line's share of its site's
+                # draw is the solve's. A round still brings no more than its
+                # target where the site has a supply of its own.
+                part = residual * solved.get(key, 0.0)
+                if self.has_own(dest_key, item):
+                    target = max((a for d, i, a in self.graph["edges"].get(key, [])
+                                  if d == dest_key and i == item), default=0)
+                    if target:
+                        part = min(part, target / (1 + SUPPLY_MARGIN))
+                total += part
+            elif held_down:
                 # A sender asked for more than it can make or bring in across
                 # all the sites it tops up is held to its level here
                 # (levels()), and the rest goes to the other senders with
@@ -10736,7 +10852,11 @@ def _line_use(machines: int, rate: float, makes: float, sold: float | None,
     if sold is None or use is None:
         return {"soldDay": None, "needDay": None, "production": None}
     need = use * (1 + SUPPLY_MARGIN)
-    out = {"soldDay": round(sold), "needDay": round(need), "production": {"status": "covered", "level": "ok"}}
+    # Read to a millionth first, as the verdict below is: the last places of
+    # a chain's split follow the order the sites' names sort in (_splits()),
+    # and must not tip a figure on a half.
+    out = {"soldDay": round(round(sold, 6)), "needDay": round(round(need, 6)),
+           "production": {"status": "covered", "level": "ok"}}
     each = rate * 24
     if each and round(need, 6) > round(makes, 6):
         total = max(machines + 1, math.ceil(round(need / each, 6)))
@@ -11139,20 +11259,26 @@ def _factories(
                 split = here * makes / capacity[slug] if capacity[slug] else 0.0
                 sold = demand(key, slug, eats=dem_eats, shelves="measured")[0] * split
                 use = demand(key, slug, eats=dem_eats, shelves="sales")[0] * split
+                group = chain_group(key, slug, dem_eats) if chain_group else None
                 if wanted > 0 and capacity[slug]:
                     dem_makes = min(makes, wanted * makes / capacity[slug])
                     dem_basis = "sales"
-            group = chain_group(key, slug, dem_eats) if chain_group and sold is not None else None
+            else:
+                group = None
             # Where the product meets another site's of it on the way to the
             # shops (#521), the link this line shares: the merge site, the
             # sites whose routes bring it there, what they and the lines
             # there make a day together, and what is drawn from it with the
-            # margin, on the same reading as `needDay`.
+            # margin, on the same reading as `needDay`. Of the nearest
+            # links, the one with the least room, so a tie between two
+            # never goes by the sites' names unless their figures tie too.
             chain = None
-            for at, via, brings in (merges(key, slug, dem_eats) if merges and demand else ())[:1]:
+            for at, via, brings in (merges(key, slug, dem_eats) if merges and demand else ()):
                 drawn = demand(at, slug, eats=dem_eats, shelves="sales")[0]
-                chain = {"at": index[at], "from": [index[v] for v in via if v in index],
-                         "makes": round(brings), "need": round(drawn * (1 + SUPPLY_MARGIN))}
+                link = {"at": index[at], "from": [index[v] for v in via if v in index],
+                        "makes": round(brings), "need": round(drawn * (1 + SUPPLY_MARGIN))}
+                if chain is None or link["need"] - link["makes"] > chain["need"] - chain["makes"]:
+                    chain = link
             # What the line makes run the hours Demand sizes it to (its share
             # plus the margin, _line_hours()): what the chain's Demand walk
             # takes it to send, so the walk and the sizing agree on who
@@ -11373,7 +11499,7 @@ def _factories(
         extra = round(sum(exact for _entry, exact in members)) - sum(floors)
         left = [exact - floor for (_entry, exact), floor in zip(members, floors)]
         ranked = sorted(range(len(members)), key=lambda i: -left[i])
-        if 0 < extra < len(members) and abs(left[ranked[extra - 1]] - left[ranked[extra]]) < 1e-6:
+        if 0 < extra < len(members) and abs(left[ranked[extra - 1]] - left[ranked[extra]]) < 1e-4:
             continue
         for rank, i in enumerate(ranked):
             members[i][0]["soldDay"] = floors[i] + (1 if rank < extra else 0)

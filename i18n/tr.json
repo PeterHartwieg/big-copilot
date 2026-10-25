@@ -3395,6 +3395,8 @@
  "sb.in.lower": "{n:,} yeterli olurdu",
  "sb.in.route": "rotayı kontrol et",
  "sb.line.atRoster": "bu saatlerde {n:,}",
+ "sb.line.chain.at": "Hat, talebi {at} konumundaki zincirle paylaşıyor: orada üretilen ve gelen günde {makes:,}; oradaki ihtiyaç {need:,}",
+ "sb.line.chain.here": "Hat, talebi {from} kaynağının buraya gönderdikleriyle paylaşıyor: burada üretilen ve gelen günde {makes:,}; ihtiyaç {need:,}",
  "sb.line.choose": "Oyunda gösterilen tarifi seçin; girdileri toplamlardan eksik",
  "sb.line.fewer": "{now} saatinin {lower} kadarına ihtiyaç duyuyor: daha azı yeterli olurdu",
  "sb.line.fewer.tip": "Bir öneri, bir değişiklik değil: hat, daha az saatte de ihtiyacını karşılardı",

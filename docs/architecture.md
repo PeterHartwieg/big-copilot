@@ -226,9 +226,11 @@ that goes there), and what is drawn from there with the margin; a line no route 
 has no `chain`. The splits are one solve per product (`_DemandSizing._splits()`): the unique
 flow over the chain with the least sum of load squared over capacity, every route and every
 site's inbound at its target less the margin (`_least_load_flow()`, exact, None where it does
-not settle), so they depend on neither site names nor order. The `soldDay`s of lines sharing
-a split are rounded together, largest remainder first, unless the last unit falls between
-equal shares. `supply.factories.sites[]` counts `running` machines (a recipe and
+not settle, and the old figures stand), so they depend on neither site names nor order.
+`demand()` shares what reaches a site in the chain between its senders as the solve routes it
+(`routed_split()`), so each line's share of its site's draw is the solve's output. The
+`soldDay`s of the lines of one chain are rounded together, largest remainder first, unless
+the last unit falls between equal shares. `supply.factories.sites[]` counts `running` machines (a recipe and
 somebody posted) beside the placed ones (`machines`).
 
 Shop and office demand plans are read from their own reports, with no measurement to

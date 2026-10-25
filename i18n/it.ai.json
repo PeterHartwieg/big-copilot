@@ -3799,6 +3799,8 @@
  "sb.in.lower": "gpt-6.1-sol",
  "sb.in.route": "gpt-6.1-sol",
  "sb.line.atRoster": "gpt-6.1-sol",
+ "sb.line.chain.at": "claude-opus-5-5",
+ "sb.line.chain.here": "claude-opus-5-5",
  "sb.line.choose": "gpt-6.1-sol",
  "sb.line.fewer": "gpt-6.1-sol",
  "sb.line.fewer.tip": "gpt-6.1-sol",

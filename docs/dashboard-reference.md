@@ -2271,28 +2271,35 @@ load squared over its capacity. There is exactly one such split, so it never dep
 sites' names or the order they are read in, and a factory that reaches the meeting factory by
 two paths counts once.
 
-Where nothing binds, every producer in the chain runs at the same load. A chain that can make
-what its shops draw then keeps every line within its capacity, and one that cannot is short on
-all of them at once: critical where the chain makes less than the shops sell, a warning where
-only the margin is past it. Shops selling 10,000 a week behind two factories making 5,000 each
+Where nothing binds, the factory lines in the chain run at the same load, and an import in it
+is drawn on at that load too (a plain contract still lands its whole amount; the rest stays in
+stock). Where some split the targets allow keeps every line and import within what it makes
+or brings, with the margin, this split does; where none does, the lines it cannot relieve are
+short together: critical where the chain makes less than the shops sell, a warning where only the
+margin is past it. Shops selling 10,000 a week behind two factories making 5,000 each
 are short only by the margin, a warning on both. Where a target binds, the routes past it carry
 no more and the rest goes to the producers with room, so a tight depot on one path holds back
 only that path, and two factories behind one tight depot share its room. A feeder's own shops
 and its other routes count in its load. An import beside a factory's line in the chain is a
 producer of its own, so the line is judged only on what its machines make; a factory with an
-import and no chain is still judged on all its shops draw.
+import and no chain is still judged on all its shops draw. A Smart Delivery import counts at
+what it brings with the routes' stock in the site, as in the chain's walk: a level at or under
+the routes' target brings nothing, and one above it the difference.
 
-The lines' shares are the split's. What the routes into a site bring is then shared out by
-their targets, as before, a sender with no room held down and the rest going to the others,
-so where several routes reach one site from producers loaded differently, the loads shown can
-differ from the split's. The lines that share a split round their sold days together so they
-add up to what the shops past them sell, except where the last unit would fall between equal
-shares: three equal shares of 1,400 each read 467.
+Each line is judged on the split's figure: what reaches a site in the chain is shared between
+the routes into it and its own import as the split routes it, and a route still brings no more
+than its target where the site has a supply of its own. Past the chain (a depot two meeting
+factories top up, say), the routes into a site share it by their targets, as before, a sender
+with no room held down and the rest going to the others. The lines of one chain round their
+sold days together so they add up to what the shops past them sell, except where the last unit
+would fall between equal shares: three equal shares of 1,400 each read 467. Two chains of the
+same product that never meet round apart.
 
-A short line's tip names the link: *it shares the demand with the chain at Factory 2: together
-they make 1,440 a day against 1,656 needed there*. The make is the most the chain can bring
-there a day: the lines there and its own import, and each producer and route behind it at the
-part of its output the split sends there, within the routes' targets. Two factories behind
+A short line's tip names the link: *it shares the demand with the chain at Factory 2: made
+there and brought in, 1,440 a day against 1,656 needed there*. The figure is the most the
+chain can bring there a day: the lines there and its own import, and each producer and route
+behind it at the part of its output the split sends there, within the routes' targets. A
+feeder that tops up two meeting factories equally near names the one with the least room. Two factories behind
 one depot each count only their part of it. A factory that only passes the product on, making
 none of it, splits nothing, and the factory behind it is judged on all of it. Where a capacity
 cannot be read (a recipe the board cannot name), or the product runs through a recipe loop (a

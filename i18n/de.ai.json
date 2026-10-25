@@ -1676,6 +1676,8 @@
  "sb.imp.says.margin.shops": "claude-opus-5-5",
  "sb.imp.says.theMargin.shops": "claude-opus-5-5",
  "sb.line.atRoster": "gpt-6-sol",
+ "sb.line.chain.at": "claude-opus-5-5",
+ "sb.line.chain.here": "claude-opus-5-5",
  "sb.line.inputs.tip": "codex",
  "sb.line.machines.tip_one": "codex",
  "sb.line.machines.tip_other": "codex",

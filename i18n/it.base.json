@@ -3799,6 +3799,8 @@
  "sb.in.lower": "{n:,} would do",
  "sb.in.route": "check the route",
  "sb.line.atRoster": "{n:,} at these hours",
+ "sb.line.chain.at": "It shares the demand with the chain at {at}: made there and brought in, {makes:,} a day against {need:,} needed there",
+ "sb.line.chain.here": "It shares the demand with what {from} sends here: made here and brought in, {makes:,} a day against {need:,} needed",
  "sb.line.choose": "Choose the recipe shown in-game; its inputs are missing from the totals",
  "sb.line.fewer": "needs {lower} of its {now} hours: fewer would do",
  "sb.line.fewer.tip": "A suggestion, not a change: the line would still meet its need on fewer hours",

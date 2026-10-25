@@ -8,12 +8,17 @@ and the shops sell 1,000 a day. The two make it between them, each judged on
 its share, never on all 1,000 each. The shares load every producer the same
 where nothing binds, whatever the sites' names or the order they are read
 in, so the lines are short together when the chain is. A binding route
-target throttles only the paths through it, and the split between several
-routes into one site can leave the loads uneven. Expected splits come with
-the chain's walk where they matter, so a recorded but infeasible answer
-cannot pass.
+target throttles only the paths through it, and what reaches a site of the
+chain is shared between its senders as the split routes it. Expected splits
+come with the chain's walk where they matter, what each shop receives held
+to its need with the margin, so a recorded but infeasible answer cannot
+pass.
 """
+import contextlib
+import io
 import itertools
+import math
+import random
 import unittest
 
 import ba_dashboard
@@ -25,6 +30,8 @@ F1 = ("upper_road", 7)
 F2 = ("lower_road", 8)
 F3 = ("third_road", 9)
 DEPOT = ("depot_lane", 3)
+F4 = ("fourth_road", 10)
+F5 = ("fifth_road", 11)
 MALT_RID, MALT = next((r, i) for r, i in sorted(RECIPE_ITEMS.items()) if i != BEER)
 MALT_RECIPES = {
     BEER: {"slug": BEER, "item": "Beer", "out": 30, "workstation": "bottledgoods",
@@ -66,6 +73,15 @@ def received(walk, addr, item=BEER):
     routes bring it."""
     node = walk[(site_key(addr), item)]
     return round(node["own"] + node["credit"])
+
+
+def short_of_its_need(walk, shop, sold_day, item=BEER):
+    """The part of what a shop sells with the margin that the Demand walk
+    does not bring it, unrounded (`covered` alone only holds it to its
+    sales); the walk itself settles to about a part in 10^6."""
+    node = walk[(site_key(shop), item)]
+    wanted = sold_day * (1 + SUPPLY_MARGIN)
+    return (wanted - (node["own"] + node["credit"])) / wanted
 
 
 def breweries(c, *addrs, order=None):
@@ -366,23 +382,21 @@ class DiamondTests(unittest.TestCase):
     def test_an_uneven_diamond_adds_up_and_keeps_up(self):
         # Brewery 1 (720) feeds Brewery 2 (1,440) and Brewery 3 (720), and
         # Brewery 2 feeds Brewery 3, behind which a bar sells 2,000. The
-        # split (the solve's part) loads all three at 2,000 / 2,880, and
-        # routes nothing from Brewery 1 into Brewery 2: Brewery 3's line
-        # makes a quarter of its draw, 500, and Brewery 2's lines all of
-        # theirs. demand() (the hold-down's part) then shares Brewery 3's
-        # routed 1,500 by the targets, 750 each; Brewery 1 is held down to
-        # the 626 its 720 carries with the margin, and Brewery 2 takes the
-        # other 124 (levels()). So 626 / 874 / 500, and the 2,880 made
-        # covers the 2,300 needed on every line.
+        # split loads all three at 2,000 / 2,880 and routes nothing from
+        # Brewery 1 into Brewery 2: Brewery 1 sends its 500 to Brewery 3,
+        # Brewery 2 its 1,000, and Brewery 3 makes the other 500. Brewery
+        # 3's routed draw is shared as the split routes it, never by the
+        # targets (750 each, which held Brewery 1 to 626 before), so each
+        # line reads the split's own figure.
         for order in ((F1, F2, F3), (F3, F2, F1)):
             with self.subTest(order=order):
                 c = uneven_diamond(order)
                 walk = dem_walk(c)
-                self.assertEqual(sold(c, F1, F2, F3), (626, 874, 500))
-                self.assertEqual(sum(sold(c, F1, F2, F3)), 2000)
+                self.assertEqual(sold(c, F1, F2, F3), (500, 1000, 500))
                 for addr in (F1, F2, F3):
                     self.assertEqual(line(c, addr)["production"], {"status": "covered", "level": "ok"})
-                self.assertLessEqual(line(c, F3)["chain"]["makes"], 2880)
+                # 720 made there and 2,000 at most through the two routes.
+                self.assertEqual(line(c, F3)["chain"]["makes"], 2720)
                 self.assertEqual(received(walk, SHOP_A), need(2000))
 
 
@@ -680,14 +694,14 @@ class ImportTests(unittest.TestCase):
         self.assertEqual(line(c, F1)["chain"]["at"], c.index(F2))
 
     def test_an_import_at_the_meeting_factory(self):
-        # Brewery 2 imports 720 a day: the routes come first in demand(),
-        # so Brewery 1 is asked the 626 its line carries and the import
-        # brings the rest of the routed part.
+        # Brewery 2 imports 720 a day: the two lines and the import share
+        # the 1,800, 600 each, and what reaches Brewery 2 past its line is
+        # Brewery 1's and the import's half each, as the split routes it.
         c = two_breweries(1800)
         c.contract(F2, BEER, 5040)
         c.targets = self.shop_target(c)
         walk = dem_walk(c)
-        self.assertEqual(sold(c, F1, F2), (626, 600))
+        self.assertEqual(sold(c, F1, F2), (600, 600))
         self.assertEqual((level(c, F1), level(c, F2)), ("ok", "ok"))
         self.assertEqual(line(c, F2)["chain"]["makes"], 2160)
         self.assertEqual(received(walk, SHOP_A), need(1800))
@@ -696,7 +710,7 @@ class ImportTests(unittest.TestCase):
         c = two_breweries(1800)
         c.wholesale(F2, BEER, 5040)
         c.targets = self.shop_target(c)
-        self.assertEqual(sold(c := run_with(c, RECIPES), F1, F2), (626, 600))
+        self.assertEqual(sold(c := run_with(c, RECIPES), F1, F2), (600, 600))
         self.assertEqual((level(c, F1), level(c, F2)), ("ok", "ok"))
 
     def test_a_factory_alone_with_an_import_keeps_the_old_figure(self):
@@ -781,6 +795,349 @@ class RoundingTests(unittest.TestCase):
         c = run_with(fork(700, 700), RECIPES)
         self.assertEqual(sold(c, F1, F2, F3), (467, 467, 467))
 
+
+class SmartDeliveryTests(unittest.TestCase):
+    """A Smart Delivery import tops its site up to its level, counting the
+    stock the routes into the site keep there: a level at or under their
+    target brings nothing (_import_drop()), in the split as in the walk."""
+
+    def chain(self, where, amount, sold_day=1200, via_depot=True):
+        c = two_breweries(sold_day, via_depot=via_depot)
+        c.contract(where, BEER, amount, smart=True)
+        c.targets = [(a, b, p, 3000 if b == SHOP_A else t) for a, b, p, t in c.targets]
+        return c, dem_walk(c)
+
+    # Every route into the depot and Brewery 2 tops up to 2,000.
+    PLACES = ((DEPOT, True), (F2, True), (F2, False))
+
+    def test_a_level_at_or_under_the_routes_target_brings_nothing(self):
+        # Astra's repro (the depot at 1,400): before, the level counted as
+        # 200 a day in the split, Brewery 1 read 673 and a machine short,
+        # and the bar received 1,326 of its 1,380.
+        for where, via in self.PLACES:
+            for amount in (1400, 2000):
+                with self.subTest(where=where, via_depot=via, level=amount):
+                    c, walk = self.chain(where, amount)
+                    self.assertEqual(sold(c, F1, F2), (600, 600))
+                    for addr in (F1, F2):
+                        self.assertEqual(line(c, addr)["production"], {"status": "covered", "level": "ok"})
+                    self.assertEqual(line(c, F2)["chain"]["makes"], 1440)
+                    self.assertLessEqual(short_of_its_need(walk, SHOP_A, 1200), 1e-6)
+
+    def test_a_level_past_the_routes_target_brings_the_difference(self):
+        # 5,040 against the routes' 2,000 brings 3,040 a week, 434 a day:
+        # the two lines and it share the 1,200, 461 a line.
+        for where, via in self.PLACES:
+            with self.subTest(where=where, via_depot=via):
+                c, walk = self.chain(where, 5040)
+                self.assertEqual(sold(c, F1, F2), (461, 461))
+                self.assertEqual(line(c, F2)["chain"]["makes"], round(1440 + 3040 / 7))
+                self.assertLessEqual(short_of_its_need(walk, SHOP_A, 1200), 1e-6)
+
+    def test_a_chain_short_with_a_smart_import_is_short_on_both_lines(self):
+        # Opus's repro: 2,800 against 2,000 brings 114 a day, so 720 + 720
+        # + 114 against 1,725 needed. Before, Brewery 1 read critical,
+        # Brewery 2 fine and the tip 1,840.
+        c, walk = self.chain(DEPOT, 2800, sold_day=1500)
+        self.assertEqual(sold(c, F1, F2), (695, 695))
+        self.assertEqual((level(c, F1), level(c, F2)), ("warn", "warn"))
+        tip = line(c, F2)["chain"]
+        self.assertEqual((tip["makes"], tip["need"]), (round(1440 + 800 / 7), need(1500)))
+        self.assertLess(tip["makes"], tip["need"])
+
+
+def three_meeting(order=(F1, F2, F3)):
+    """Astra's round-3 repro: Brewery 1 tops Brewery 2 up to 400 and Brewery
+    3 to 3,000, and Brewery 2 tops Brewery 3 up to 2,000; Breweries 2 and 3
+    each top up a shop, selling 800 and 1,000. `order` names the addresses
+    of Breweries 1, 2 and 3."""
+    one, two, three = order
+    c = Company()
+    breweries(c, one, two, three)
+    for factory, shop, sold_day in ((two, SHOP_A, 800), (three, SHOP_B, 1000)):
+        c.shop(shop, shop[0])
+        c.hold(shop, BEER, 200, sold_day)
+        c.plan(factory, shop, BEER, 4000)
+    c.plan(one, two, BEER, 400)
+    c.plan(one, three, BEER, 3000)
+    c.plan(two, three, BEER, 2000)
+    return c
+
+
+def five_sites(sold_day, order=(F1, F2, F3, F4, F5)):
+    """Opus's p3: Brewery 1 (one machine) tops up Brewery 2 (two) and Brewery
+    5 (one); Brewery 2 tops up Brewery 3 (one) and Brewery 5; Breweries 3
+    and 5 top up Brewery 4 (three), which tops up a bar selling `sold_day`;
+    Brewery 3 also tops up a shop selling half that. `order` names the
+    addresses of Breweries 1 to 5."""
+    f1, f2, f3, f4, f5 = order
+    c = Company()
+    for addr, machines in zip(order, (1, 2, 1, 3, 1)):
+        c.factory(addr, addr[0], machines=machines)
+        c.hold(addr, WATER, 900)
+        c.hold(addr, BEER, 300)
+    c.shop(SHOP_A, "A")
+    c.hold(SHOP_A, BEER, 200, sold_day)
+    c.shop(SHOP_B, "B")
+    c.hold(SHOP_B, BEER, 200, sold_day // 2)
+    c.plan(f1, f2, BEER, 2000)
+    c.plan(f2, f3, BEER, 2000)
+    c.plan(f3, f4, BEER, 2000)
+    c.plan(f1, f5, BEER, 2000)
+    c.plan(f5, f4, BEER, 2000)
+    c.plan(f2, f5, BEER, 900)
+    c.plan(f4, SHOP_A, BEER, 4000)
+    c.plan(f3, SHOP_B, BEER, 3000)
+    return c
+
+
+class SolvedRoutesTests(unittest.TestCase):
+    """What reaches a site of the chain is shared between its senders as the
+    split routes it, not by their targets, so each line is judged on the
+    split's own figure and no sender is asked past its room."""
+
+    def test_a_meeting_factory_that_sends_on_reads_the_split(self):
+        # Before, Brewery 3's routed draw went 60 / 40 by the targets,
+        # Brewery 2 read 647 and a machine short, and the shops received
+        # 906.9 and 1,139.2 of 920 and 1,150.
+        for order in itertools.permutations((F1, F2, F3)):
+            with self.subTest(order=order):
+                c = three_meeting(order)
+                walk = dem_walk(c)
+                self.assertEqual(sold(c, *order), (600, 600, 600))
+                for addr in order:
+                    self.assertEqual(line(c, addr)["production"], {"status": "covered", "level": "ok"})
+                for shop, sold_day in ((SHOP_A, 800), (SHOP_B, 1000)):
+                    self.assertLessEqual(short_of_its_need(walk, shop, sold_day), 1e-6)
+                for addr in order:
+                    tip = line(c, addr).get("chain")
+                    if tip:
+                        self.assertGreaterEqual(tip["makes"], tip["need"])
+
+    def test_five_sites_with_two_senders_into_one_factory(self):
+        # The split loads every line at 4,500 / 5,760 (0.78) at 3,000 a
+        # day and 0.86 at 3,300, inside 720 with the margin. Before, Brewery
+        # 3 was asked half of Brewery 4's routed draw by the equal targets
+        # (629, 724 needed) and Breweries 2 and 3 read a machine short.
+        for sold_day, each in ((3000, 562), (3300, 619)):
+            with self.subTest(sold=sold_day):
+                c = five_sites(sold_day)
+                walk = dem_walk(c)
+                figures = sold(c, F1, F2, F3, F4, F5)
+                self.assertEqual((figures[0], figures[2], figures[4]), (each, each, each))
+                for addr in (F1, F2, F3, F4, F5):
+                    self.assertEqual(level(c, addr), "ok")
+                for shop, shop_sold in ((SHOP_A, sold_day), (SHOP_B, sold_day // 2)):
+                    self.assertLessEqual(short_of_its_need(walk, shop, shop_sold), 1e-6)
+
+    def test_the_shops_receive_their_need_with_the_margin(self):
+        # Where every line is covered, the walk on the lines as sized
+        # brings each shop its sales with the margin, not just its sales.
+        shapes = ((fork(900, 900), ((SHOP_A, 900), (SHOP_B, 900))),
+                  (shared_depot(600, 850), ((SHOP_A, 850), (SHOP_B, 850))),
+                  (target_into_a_meeting_factory(), ((SHOP_A, 1500),)),
+                  (grok_depot_on_one_path(), ((SHOP_A, 1000),)),
+                  (uneven_diamond(), ((SHOP_A, 2000),)),
+                  (diamond(1000), ((SHOP_A, 1000),)))
+        for i, (c, shops) in enumerate(shapes):
+            with self.subTest(shape=i):
+                walk = dem_walk(c)
+                for shop, sold_day in shops:
+                    self.assertLessEqual(short_of_its_need(walk, shop, sold_day), 1e-6)
+
+
+class AddressTests(unittest.TestCase):
+    """Not a figure shown, a chain's tip included, follows the sites'
+    names."""
+
+    def test_degenerate_routes_never_move_a_figure(self):
+        # Astra's repro: the split routes Brewery 1's output two ways at
+        # the same loads. Before, Brewery 2 read 674 or 675 needed by the
+        # addresses.
+        seen = set()
+        for role in itertools.permutations((("a", 1), ("b", 1), ("c", 1))):
+            one, two, three = role
+            c = Company()
+            breweries(c, *role)
+            for addr, shop, sold_day in ((two, SHOP_A, 626), (three, SHOP_B, 1107)):
+                c.shop(shop, shop[0])
+                c.hold(shop, BEER, 200, sold_day)
+                c.plan(addr, shop, BEER, 4000)
+            c.plan(one, two, BEER, 2000)
+            c.plan(one, three, BEER, 3000)
+            c.plan(two, three, BEER, 400)
+            run_with(c, RECIPES)
+            seen.add(tuple((line(c, a)["soldDay"], line(c, a)["needDay"], line(c, a)["needHours"]["dem"],
+                            (line(c, a).get("chain") or {}).get("makes")) for a in role))
+        self.assertEqual(len(seen), 1)
+
+    def test_five_sites_read_the_same_whatever_their_names(self):
+        # Opus's permutations: before, a sold or needed day moved by one in
+        # 23 of 120 address orders at 1,500 a day, and a tip's figure too.
+        addresses = [("aa_road", 21), ("mm_road", 22), ("zz_road", 23), ("bb_road", 24), ("qq_road", 25)]
+        orders = list(itertools.permutations(addresses))
+        for sold_day in (1500, 3000, 4000):
+            seen = set()
+            for order in random.Random(sold_day).sample(orders, 12):
+                c = run_with(five_sites(sold_day, order), RECIPES)
+                roles = {c.index(a): i for i, a in enumerate(order)}
+                tips = [line(c, a).get("chain") or {} for a in order]
+                seen.add(tuple((line(c, a)["soldDay"], line(c, a)["needDay"], level(c, a),
+                                tip.get("makes"), tip.get("need"), roles.get(tip.get("at")))
+                               for a, tip in zip(order, tips)))
+            with self.subTest(sold=sold_day):
+                self.assertEqual(len(seen), 1)
+
+    def test_a_feeder_between_two_meeting_factories_names_the_tighter(self):
+        # At 4,000 a day Brewery 1 tops up Breweries 2 and 5, one hop each:
+        # its tip names the link with the least room, whichever sorts first.
+        addresses = [("aa_road", 21), ("mm_road", 22), ("zz_road", 23), ("bb_road", 24), ("qq_road", 25)]
+        named = set()
+        for order in (tuple(addresses), tuple(reversed(addresses)), tuple(addresses[2:] + addresses[:2])):
+            c = run_with(five_sites(4000, order), RECIPES)
+            tip = line(c, order[0])["chain"]
+            at = next(i for i, a in enumerate(order) if c.index(a) == tip["at"])
+            options = [line(c, order[i])["chain"] for i in (1, 4)]
+            self.assertEqual(tip["need"] - tip["makes"], max(o["need"] - o["makes"] for o in options))
+            named.add(at)
+        self.assertEqual(len(named), 1)
+
+
+class ChainRoundingTests(unittest.TestCase):
+    def test_two_chains_that_never_meet_round_apart(self):
+        # Grok's repro: two chains each selling 2.7 a day, one machine
+        # into four and one into thirteen. Alone they read 1 / 2 and 0 / 3;
+        # rounded as one group, the second read 0 / 2.
+        a1, a2, b1, b2 = ("a_one", 31), ("a_two", 32), ("b_one", 33), ("b_two", 34)
+        shop_a, shop_b = ("a_shop", 35), ("b_shop", 36)
+
+        def build(chains):
+            c = Company()
+            for one, two, machines, shop in chains:
+                c.factory(one, one[0], machines=1)
+                c.factory(two, two[0], machines=machines)
+                for f in (one, two):
+                    c.hold(f, WATER, 500)
+                    c.hold(f, BEER, 300)
+                c.shop(shop, shop[0])
+                c.hold(shop, BEER, 200, 2.7)
+                c.plan(one, two, BEER, 2000)
+                c.plan(two, shop, BEER, 2000)
+            return run_with(c, RECIPES)
+        first, second = (a1, a2, 4, shop_a), (b1, b2, 13, shop_b)
+        alone = sold(build([first]), a1, a2), sold(build([second]), b1, b2)
+        together = build([first, second])
+        self.assertEqual(alone, ((1, 2), (0, 3)))
+        self.assertEqual((sold(together, a1, a2), sold(together, b1, b2)), alone)
+
+
+class SolverTests(unittest.TestCase):
+    """_least_load_flow() and _max_flow() on their own."""
+
+    def flow(self, draws, producers, routes, reach=None):
+        return ba_dashboard._least_load_flow(draws, producers, routes, reach or {})
+
+    def test_nothing_drawn_is_nothing_made(self):
+        self.assertEqual(self.flow({"a": 0.0}, [("a", 720)], []), ([0.0], []))
+        self.assertIsNone(self.flow({"a": 10.0}, [], []))
+
+    def test_a_single_producer_makes_all_of_it(self):
+        made, routed = self.flow({"a": 0.0, "b": 500.0}, [("a", 720)], [("a", "b", None, 1.0)])
+        self.assertAlmostEqual(made[0], 500, places=6)
+        self.assertAlmostEqual(routed[0], 500, places=6)
+
+    def test_producers_share_by_capacity(self):
+        made, _routed = self.flow({"a": 0.0, "b": 900.0}, [("a", 720), ("b", 1440)], [("a", "b", None, 1.0)])
+        self.assertAlmostEqual(made[0], 300, places=6)
+        self.assertAlmostEqual(made[1], 600, places=6)
+
+    def test_a_route_cap_throttles_its_path(self):
+        made, routed = self.flow({"a": 0.0, "b": 900.0}, [("a", 720), ("b", 720)], [("a", "b", 100.0, 1.0)])
+        self.assertAlmostEqual(routed[0], 100, places=6)
+        self.assertAlmostEqual(made[1], 800, places=6)
+
+    def test_a_cap_breaks_only_where_nothing_else_can_bring_it(self):
+        # The depot makes nothing and draws 500 past a cap of 100: the
+        # rest passes the cap, as the draw must be met.
+        made, routed = self.flow({"a": 0.0, "d": 500.0}, [("a", 720)], [("a", "d", 100.0, 1.0)])
+        self.assertAlmostEqual(made[0], 500, places=6)
+        self.assertAlmostEqual(routed[0], 500, places=6)
+
+    def test_the_routes_into_a_site_share_its_reach(self):
+        made, routed = self.flow({"a": 0.0, "b": 0.0, "c": 1500.0}, [("a", 720), ("b", 720), ("c", 720)],
+                                 [("a", "c", None, 0.5), ("b", "c", None, 0.5)], {"c": 300.0})
+        self.assertAlmostEqual(sum(routed), 300, places=6)
+        self.assertAlmostEqual(made[2], 1200, places=6)
+        self.assertAlmostEqual(made[0], made[1], places=6)
+
+    def test_the_order_of_the_inputs_changes_nothing(self):
+        draws = {"a": 0.0, "b": 300.0, "c": 900.0, "d": 1200.0}
+        producers = [("a", 720), ("b", 1440), ("c", 720), ("d", 720), ("b", 200)]
+        routes = [("a", "b", 2000 / 1.15, 0.5), ("a", "c", None, 0.4), ("b", "c", 400.0, 0.6),
+                  ("b", "d", None, 0.5), ("c", "d", None, 0.5)]
+        reach = {"c": 1500.0, "d": 1000.0}
+        made, routed = self.flow(draws, producers, routes, reach)
+        rng = random.Random(5)
+        for _ in range(6):
+            p, r = list(range(len(producers))), list(range(len(routes)))
+            rng.shuffle(p)
+            rng.shuffle(r)
+            keys = list(draws)
+            rng.shuffle(keys)
+            made2, routed2 = self.flow({k: draws[k] for k in keys}, [producers[i] for i in p],
+                                       [routes[i] for i in r], dict(reversed(list(reach.items()))))
+            for k, i in enumerate(p):
+                self.assertAlmostEqual(made2[k], made[i], places=7)
+            for k, i in enumerate(r):
+                self.assertAlmostEqual(routed2[k], routed[i], places=7)
+
+    def test_max_flow(self):
+        mf = ba_dashboard._max_flow
+        self.assertEqual(mf({("s", "a"): 5, ("a", "t"): 3}, "s", "t"), 3)
+        self.assertEqual(mf({("s", "a"): 5, ("a", "t"): 5, ("s", "b"): 2, ("b", "t"): 4}, "s", "t"), 7)
+        # A shared first hop counts once, whichever way it goes on.
+        self.assertEqual(mf({("s", "a"): 6, ("a", "b"): 4, ("a", "t"): 3, ("b", "t"): 10}, "s", "t"), 6)
+        self.assertEqual(mf({("s", "a"): math.inf, ("a", "t"): math.inf}, "s", "t"), math.inf)
+        self.assertEqual(mf({("s", "a"): 5}, "s", "t"), 0)
+
+
+class FallbackTests(unittest.TestCase):
+    """Where the solve gives no settled answer, every line is asked all it
+    sends, as before #521, and stderr is told once."""
+
+    def setUp(self):
+        self.saved = ba_dashboard.LEAST_LOAD_STEPS, ba_dashboard._polished
+        ba_dashboard._SAID_ONCE.clear()
+
+    def tearDown(self):
+        ba_dashboard.LEAST_LOAD_STEPS, ba_dashboard._polished = self.saved
+        ba_dashboard._SAID_ONCE.clear()
+
+    def assertOldFigures(self):
+        said = io.StringIO()
+        with contextlib.redirect_stderr(said):
+            c = two_breweries(1000)
+            again = two_breweries(1000)
+        for x in (c, again):
+            self.assertEqual(sold(x, F1, F2), (1000, 1000))
+            self.assertEqual((level(x, F1), level(x, F2)), ("critical", "critical"))
+            self.assertNotIn("chain", line(x, F2))
+        self.assertEqual(said.getvalue().count("did not settle"), 1)
+
+    def test_newton_that_does_not_settle(self):
+        ba_dashboard.LEAST_LOAD_STEPS = 0
+        self.assertOldFigures()
+
+    def test_a_polish_that_does_not_settle(self):
+        ba_dashboard._polished = lambda *a, **k: None
+        self.assertOldFigures()
+
+    def test_a_route_polish_that_does_not_settle_keeps_the_first(self):
+        real = self.saved[1]
+        ba_dashboard._polished = lambda *a: None if len(a) > 5 else real(*a)
+        c = two_breweries(1000)
+        self.assertEqual(sold(c, F1, F2), (500, 500))
+        self.assertEqual(line(c, F2)["chain"]["makes"], 1440)
 
 if __name__ == "__main__":
     unittest.main()
