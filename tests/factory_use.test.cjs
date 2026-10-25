@@ -349,6 +349,7 @@ test('import review withholds approximate suggestions and labels use on its own 
         }
         if(!settled && basis === 'cap' && mode === 'dem'){
           assert.match(got.manual, /staff.*Beer.*24 h/i, context);
+          assert.match(got.manual, /staff.*Beer.*24 h[^.]*\. Planned for full production\./i, context);
           assert.match(got.text, /Your figure, set while planning for full production/, context);
           assert.match(got.rows.filter(r => r.kind === 'hours').map(r => r.reason).join(' '), /Planned for full production/, context);
           assert.doesNotMatch(got.manual, /where shop demand plans/, context);
@@ -356,6 +357,92 @@ test('import review withholds approximate suggestions and labels use on its own 
         assert.deepEqual(errors, [], context);
       } finally { await page.close(); }
     }
+});
+
+// Bounds of the rendered text matter: a table cell or mark can exist in the
+// DOM yet be completely hidden by the Review card's rounded clipping edge.
+async function importCardBounds(page){
+  return page.$eval('#sbCard', card => {
+    const rect = el => {
+      const r = el.getBoundingClientRect();
+      return {left: r.left, right: r.right, top: r.top, bottom: r.bottom};
+    };
+    const elements = [...card.querySelectorAll('.sbi-now, .sbi-box, .sbi-box input, .sbi-fig, .sbi-why, .sbi-why td, .sbi-scale, .sbi-scale u, .sbi-scale em, .sbi-scale b')];
+    const boxes = elements.map(el => ({text: el.textContent, ...rect(el)}));
+    // Include each text fragment, since a constrained element can still have
+    // overflowing nowrap text. Range rectangles also handle wrapped labels.
+    for(const el of card.querySelectorAll('.sbi-why td, .sbi-scale em')){
+      const range = document.createRange(); range.selectNodeContents(el);
+      for(const r of range.getClientRects()) boxes.push({text: el.textContent, left: r.left, right: r.right, top: r.top, bottom: r.bottom});
+    }
+    return {card: rect(card), overflow: card.scrollWidth - card.clientWidth, boxes,
+      marks: [...card.querySelectorAll('.sbi-scale em')].map(el => ({text: el.textContent, ...rect(el)})),
+      values: [...card.querySelectorAll('.sbi-why td:last-child')].map(el => el.textContent)};
+  });
+}
+function assertImportCardBounds(got, context){
+  assert.ok(got.boxes.length > 0, context);
+  for(const box of got.boxes){
+    assert.ok(box.left >= got.card.left && box.right <= got.card.right &&
+      box.top >= got.card.top && box.bottom <= got.card.bottom, `${context}: clipped ${JSON.stringify(box)} in ${JSON.stringify(got.card)}`);
+  }
+  assert.ok(got.overflow <= 1, `${context}: horizontal overflow ${got.overflow}`);
+  for(let i = 0; i < got.marks.length; i++) for(let j = i + 1; j < got.marks.length; j++){
+    const a = got.marks[i], b = got.marks[j];
+    assert.ok(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top,
+      `${context}: overlapping scale labels ${a.text} / ${b.text}`);
+  }
+}
+
+test('import review keeps saved Demand amounts and scale marks inside narrow and wide cards', async () => {
+  const {spawnSync} = require('node:child_process');
+  const made = spawnSync(process.env.PYTHON || 'python', ['-m', 'tests.multistage_fixture'], {cwd: root, encoding: 'utf8'});
+  assert.equal(made.status, 0, made.stderr);
+  const data = JSON.parse(made.stdout);
+  for(const width of [390, 480, 768, 1440]) for(const settled of [false, true]) for(const mode of ['dem', 'cap']){
+    const page = await board(data.settled, {mode: 'dem'});
+    try {
+      const errors = []; page.on('pageerror', error => errors.push(error.message));
+      await page.setViewportSize({width, height: 1100});
+      await page.evaluate(() => {
+        const r = sbData().importRows[0].rows[0];
+        impSetKeep(r.impId, {value: 1800, inGame: r.inGame, basis: 'dem'});
+      });
+      await page.reload();
+      await page.evaluate(([data, mode]) => {
+        D = data; sizing = mode; sbWhich = sbMode.imports = 'all'; sub.supply = 'imports';
+        const r = sbData().importRows[0].rows[0];
+        sbSel = {s: r.s, slug: r.slug}; sbiOpen = 'why';
+        document.body.classList.add('has-board');
+        document.querySelectorAll('.page').forEach(el => { el.hidden = el.id !== 'pageSupply'; });
+        document.querySelectorAll('#pageSupply section').forEach(el => { el.hidden = el.id !== 'secImports'; el.classList.add('measured'); });
+        drawSupplyStrip(); drawImportsView(); wireAll();
+      }, [settled ? data.settled : data.fallback, mode]);
+      const context = JSON.stringify({width, settled, mode});
+      const got = await importCardBounds(page);
+      assertImportCardBounds(got, context);
+      assert.ok(got.values.includes('1,800'), context);
+      assert.equal(got.values.filter(v => v === (settled ? '1,169' : '1,680')).length, settled ? 2 : 3, context);
+      assert.match(got.marks.map(m => m.text).join(' '), /planned1,800/, context);
+      assert.deepEqual(errors, [], context);
+    } finally { await page.close(); }
+  }
+});
+
+test('import scale fits zero, equal, close, capped and reduced amounts without label collisions', async () => {
+  const page = await board(fixture());
+  try {
+    for(const width of [390, 480, 768, 1440]) for(const [now, plan, draw, cap] of [
+      [0, 0, 0, null], [100, 100, 100, 100], [1600, 1800, 1680, 1850], [1800, 100, 1680, 2000], [100, 1800, 1680, null],
+    ]){
+      await page.setViewportSize({width, height: 1100});
+      await page.evaluate(([now, plan, draw, cap]) => {
+        document.querySelector('#secProduction').innerHTML = `<div id="sbCard" class="sbi-card"><div class="sbi-sec">${
+          sbiScale({inGame: now, value: plan, fact: {demandApproximate: true}}, draw, cap)}</div></div>`;
+      }, [now, plan, draw, cap]);
+      assertImportCardBounds(await importCardBounds(page), JSON.stringify({width, now, plan, draw, cap}));
+    }
+  } finally { await page.close(); }
 });
 
 test('uncertainty preserves observed staffing and distinguishes new inputs and mixed totals', async () => {

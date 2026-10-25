@@ -11091,20 +11091,14 @@ function sbiScale(r, draw, cap){
   const top = Math.max(...marks.map(m => m[1]), 1) * 1.08;
   const pc = v => `${(v / top * 100).toFixed(1)}%`;
   const now = Number.isFinite(r.inGame) ? r.inGame : 0, plan = Number.isFinite(r.value) ? r.value : 0;
-  /* Marks within a tenth of the scale of each other share one label, and
-     labels near each other take turns above and below, so none print over
-     another. */
-  const groups = [];
-  [...marks].sort((a, z) => a[1] - z[1]).forEach(m => {
-    const last = groups[groups.length - 1];
-    if(last && (m[1] - last.at) / top < 0.1) last.marks.push(m);
-    else groups.push({at: m[1], marks: [m]});
-  });
-  groups.forEach((g, i) => { const prev = groups[i - 1]; g.lo = !!prev && (g.at - prev.at) / top < 0.3 && !prev.lo; });
+  /* Keep ticks at their values, with a wrapping legend in normal flow.
+     Label widths are independent of how close the values are, including
+     equal values and longer translated or approximation labels. */
+  marks.sort((a, z) => a[1] - z[1]);
   return `<div class="sbi-scale" role="img" aria-label="${attr(marks.map(([l, v]) => `${l} ${num(v)}`).join(", "))}"><div class="sbi-bar"><i class="base" style="width:${pc(Math.min(now, plan))}"></i>${
     plan > now ? `<i class="add" style="left:${pc(now)};width:${pc(plan - now)}"></i>` : plan < now ? `<i class="cut" style="left:${pc(plan)};width:${pc(now - plan)}"></i>` : ""}${
-    groups.map(g => g.marks.map(([, v, k], j) => `<u class="${k}${g.lo ? " lo" : ""}" style="left:${pc(v)}">${j ? "" : `<span${g.marks.length > 1 ? ` class="many"` : ""}>${
-      g.marks.map(([l, v2, k2]) => `<em class="sbi-m-${k2}">${spEsc(l)}<b>${num(v2)}</b></em>`).join("")}</span>`}</u>`).join("")).join("")}</div></div>`;
+    marks.map(([, v, k]) => `<u class="sbi-t-${k}" style="left:${pc(v)}"></u>`).join("")}</div><div class="sbi-scale-labels">${
+      marks.map(([l, v, k]) => `<em class="sbi-m-${k}">${spEsc(l)}<b>${num(v)}</b></em>`).join("")}</div></div>`;
 }
 function sbImportCard(d){
   /* With no line picked, the first one the list asks a change of: the view
@@ -11224,7 +11218,8 @@ function sbImportCard(d){
     : tt("sb.card.do.gap", "Buy about <b>{n}</b> <b>{item}</b> for <b>{depot}</b> as an urgent order.", {n: num(once.proposed), item: spEsc(r.item), depot: spEsc(shortName(b))}));
   deps.forEach(x => steps.push(tt("sb.card.do.hours.each2", {one: "BizMan › <b>{site}</b> › Schedule: staff <b>{item}</b> {need} h a day on its {m} machine (now {now}).",
     other: "BizMan › <b>{site}</b> › Schedule: staff <b>{item}</b> {need} h a day on each of its {m} machines (now {now})."},
-    {site: spEsc(D.businesses[x.s] ? shortName(D.businesses[x.s]) : "?"), item: spEsc(x.item), need: x.need, m: x.machines, n: x.machines, now: sbHoursWords(x.each)})));
+    {site: spEsc(D.businesses[x.s] ? shortName(D.businesses[x.s]) : "?"), item: spEsc(x.item), need: x.need, m: x.machines, n: x.machines, now: sbHoursWords(x.each)}) +
+    (x.basis && x.basis !== sizing ? ` ${tt("sb.ck.basis", "Planned for {basis}.", {basis: szNameLow(x.basis)})}` : "")));
   const manual = `<div class="sbi-panel" data-panel="manual"${sbiOpen === "manual" ? "" : " hidden"}><h4>${tt("sb.card.manual", "Manual instructions")}</h4><ol class="sbi-steps">${
     steps.map(x => `<li>${x}</li>`).join("")}</ol></div>`;
   /* No copy of its own: Manual instructions says the same, and Changes'
