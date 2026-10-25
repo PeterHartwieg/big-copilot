@@ -20,6 +20,7 @@ import itertools
 import math
 import random
 import unittest
+from unittest.mock import patch
 
 import ba_dashboard
 from ba_dashboard import RECIPE_ITEMS, SUPPLY_MARGIN, site_key
@@ -1171,7 +1172,9 @@ class FallbackTests(unittest.TestCase):
             again = two_breweries(1000)
         for x in (c, again):
             self.assertEqual(sold(x, F1, F2), (1000, 1000))
-            self.assertEqual((level(x, F1), level(x, F2)), ("critical", "critical"))
+            for addr in (F1, F2):
+                self.assertIs(line(x, addr).get("demandApproximate"), True)
+                self.assertIsNone(line(x, addr)["production"])
             self.assertNotIn("chain", line(x, F2))
         self.assertEqual(said.getvalue().count("did not settle"), 1)
 
@@ -1511,6 +1514,132 @@ def drifting_pair():
     return c
 
 
+def padded_drifting_pair(depots):
+    """Astra's round-7 boundary repro: neutral depots on F3's route to F4."""
+    c = drifting_pair()
+    c.targets.remove((F3, F4, BEER, 2000))
+    prev = F3
+    for i in range(depots):
+        addr = ("padding", i)
+        c.site(addr, f"Depot {i}")
+        c.hold(addr, BEER, 300)
+        c.plan(prev, addr, BEER, 2000)
+        prev = addr
+    c.plan(prev, F4, BEER, 2000)
+    return c
+
+
+def dense_five_breweries():
+    """Astra's round-7 minimal.json: F0 shares customers with the solved chain."""
+    c = Company()
+    factories = [("dense_brew", i) for i in range(5)]
+    shops = [("dense_bar", i) for i in range(3)]
+    for i, (addr, machines) in enumerate(zip(factories, (1, 3, 9, 1, 3))):
+        c.factory(addr, f"Brewery F{i}", machines=machines)
+        c.hold(addr, WATER, 900)
+        c.hold(addr, BEER, 300)
+    for i, (addr, sales) in enumerate(zip(shops, (3600, 1000, 2400))):
+        c.shop(addr, f"Bar S{i}")
+        c.hold(addr, BEER, 200, sales)
+    for src, dest, target in ((1, 4, 2000), (2, 4, 600), (3, 4, 600)):
+        c.plan(factories[src], factories[dest], BEER, target)
+    for src, dest, target in ((0, 1, 18000), (0, 2, 6000), (1, 2, 9000), (2, 0, 6000),
+                              (2, 1, 3000), (3, 0, 6000), (4, 0, 18000), (4, 2, 1000)):
+        c.plan(factories[src], shops[dest], BEER, target)
+    return c, factories
+
+
+class UnsettledDemandTests(unittest.TestCase):
+    def assertApproximate(self, c, addrs):
+        for addr in addrs:
+            with self.subTest(addr=addr):
+                row = line(c, addr)
+                self.assertIs(row.get("demandApproximate"), True)
+                self.assertIsNone(row["production"], "an unverified split must not advise buying machines")
+                self.assertIsInstance(row["soldDay"], int)
+                self.assertIsInstance(row["needDay"], int)
+
+    def test_dense_capped_split_withholds_advice_even_outside_the_chain(self):
+        c, addrs = dense_five_breweries()
+        _walk, err = quietly(c)
+        self.assertIn("did not settle in 300 passes", err)
+        self.assertApproximate(c, addrs)
+        self.assertEqual(sold(c, *addrs), (628, 1881, 1986, 626, 1879))
+        # The once-only stderr warning must not suppress the payload flag
+        # on a later save refresh with the same unsettled shape.
+        again, addrs = dense_five_breweries()
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            run_with(again, RECIPES)
+        self.assertEqual(err.getvalue(), "")
+        self.assertApproximate(again, addrs)
+
+    def test_dense_settled_split_is_covered_and_no_longer_approximate(self):
+        with patch.object(ba_dashboard, "CHAIN_DRAW_PASSES", 3000):
+            c, addrs = dense_five_breweries()
+            _walk, err = quietly(c)
+        self.assertEqual(err, "")
+        self.assertEqual(sold(c, *addrs), (626, 1878, 1992, 626, 1878))
+        self.assertEqual(tuple(line(c, a)["needDay"] for a in addrs), (720, 2160, 2290, 720, 2160))
+        self.assertEqual([level(c, a) for a in addrs], ["ok"] * 5)
+        self.assertTrue(all(not line(c, a).get("demandApproximate") for a in addrs))
+
+    def test_neutral_depots_preserve_the_split_at_the_large_site_boundary(self):
+        self.assertEqual(ba_dashboard.ROUTE_POLISH_SITES, 30)
+        for sites in (30, 31, 32):
+            with self.subTest(sites=sites):
+                c = padded_drifting_pair(sites - 4)
+                _walk, err = quietly(c)
+                self.assertEqual(err, "")
+                self.assertEqual(sold(c, F3, F4), (625, 625))
+                self.assertEqual(tuple(line(c, a)["needDay"] for a in (F3, F4)), (719, 719))
+                self.assertEqual(tuple((line(c, a)["chain"]["makes"], line(c, a)["chain"]["need"])
+                                       for a in (F3, F4)), ((1080, 1078),) * 2)
+                self.assertTrue(all(not line(c, a).get("demandApproximate") for a in (F1, F2, F3, F4)))
+
+    def test_exhausting_only_the_large_cap_marks_the_result_approximate(self):
+        with patch.object(ba_dashboard, "CHAIN_DRAW_PASSES_LARGE", 50):
+            for sites in (31, 32):
+                with self.subTest(sites=sites):
+                    c = padded_drifting_pair(sites - 4)
+                    _walk, err = quietly(c)
+                    self.assertIn(f"chain of {sites} sites", err)
+                    self.assertIn("did not settle in 50 passes", err)
+                    self.assertEqual(sold(c, F3, F4), (624, 626))
+                    self.assertApproximate(c, (F1, F2, F3, F4))
+
+    def test_a_new_sizing_clears_the_previous_unsettled_flag(self):
+        c, _addrs = dense_five_breweries()
+        with contextlib.redirect_stderr(io.StringIO()):
+            sizing = sizing_of(c)
+        self.assertTrue(sizing.unsettled)
+        sizing.set_made(lambda *_: False)
+        self.assertFalse(sizing.unsettled)
+
+    def test_uncertainty_reaches_ingredients_but_not_unrelated_products(self):
+        for ingredient in (False, True):
+            with self.subTest(ingredient=ingredient):
+                c, addrs = dense_five_breweries()
+                maltings = ("maltings", 1)
+                c.factory(maltings, "Maltings", rid=MALT_RID)
+                c.hold(maltings, MALT, 500)
+                if ingredient:
+                    for addr in addrs:
+                        c.hold(addr, MALT, 300)
+                        c.plan(maltings, addr, MALT, 18000)
+                    recipes = MALT_RECIPES
+                else:
+                    c.shop(SHOP_A, "Malt customer")
+                    c.hold(SHOP_A, MALT, 200, 100)
+                    c.plan(maltings, SHOP_A, MALT, 3000)
+                    recipes = {**RECIPES, MALT: MALT_RECIPES[MALT]}
+                _walk, err = quietly(c, recipes)
+                self.assertIn("did not settle", err)
+                row = line(c, maltings, MALT)
+                self.assertEqual(bool(row.get("demandApproximate")), ingredient)
+                self.assertEqual(row["production"] is None, ingredient)
+
+
 def grok_five_breweries(roles=(F1, F2, F3, F4, F5)):
     """Grok's round-5 graph: five breweries (`roles`, Breweries 0 to 4),
     one machine each, and two bars selling 1,500 and 1,200. Brewery 0 tops
@@ -1720,13 +1849,13 @@ class FixedPointTests(unittest.TestCase):
         self.assertEqual(shipped[2], (1320.0, 1437.5))
 
     def test_seven_breweries_settle_whatever_the_cap(self):
-        # Astra's round 6: plain passes settle in 16. Stepping ahead (the
-        # removed _leap()) jumped across a change in what binds every six
+        # Astra's round 6: plain passes settle in 16. Stepping ahead
+        # jumped across a change in what binds every six
         # passes and never settled, so the board showed whatever the cap
         # left (1878 / 1856 / 1861 / 1871 / 802 at 50).
         real = ba_dashboard.CHAIN_DRAW_PASSES
         seen = set()
-        for cap in (20, 50, 51, 300, 1000):
+        for cap in (16, 17, 20, 50, 51, 300, 1000):
             ba_dashboard.CHAIN_DRAW_PASSES = cap
             try:
                 c = seven_breweries()
@@ -1776,9 +1905,27 @@ class FixedPointTests(unittest.TestCase):
         self.assertEqual(seen, {(((900, 1035, "critical"), (0, 0, "ok"), (900, 1035, "critical"),
                                   (900, 1035, "critical"), (0, 0, "ok")), ((1200.0, 1725.0), (960.0, 1380.0)))})
 
+    def test_grok_five_breweries_in_every_factory_and_route_input_order(self):
+        for order in itertools.permutations(range(5)):
+            for reverse in (False, True):
+                with self.subTest(order=order, reverse_routes=reverse):
+                    c = grok_five_breweries()
+                    c.sites = [c.sites[i] for i in order] + c.sites[5:]
+                    if reverse:
+                        c.targets.reverse()
+                    walk, err = quietly(c)
+                    self.assertEqual(err, "")
+                    self.assertEqual(sold(c, F1, F2, F3, F4, F5), (900, 0, 900, 900, 0))
+                    self.assertEqual(tuple(line(c, a)["needDay"] for a in (F1, F2, F3, F4, F5)),
+                                     (1035, 0, 1035, 1035, 0))
+                    self.assertEqual([level(c, a) for a in (F1, F2, F3, F4, F5)],
+                                     ["critical", "ok", "critical", "critical", "ok"])
+                    self.assertAlmostEqual(brought(walk, SHOP_A)[0], 1200, delta=1e-3)
+                    self.assertAlmostEqual(brought(walk, SHOP_B)[0], 960, delta=1e-3)
+
     def test_a_line_asked_exactly_its_capacity_fits(self):
-        # The passes stop within 1e-7 of the fixed point, so a need of
-        # exactly 720 can read 720.00005: still within the line's capacity.
+        # Successive passes agree to 1e-7, which is no bound on the distance
+        # to the fixed point: an exact need of 720 can read 720.00005.
         self.assertEqual(ba_dashboard._line_use(1, 30, 720, 626, 720.00005 / 1.15)["production"]["level"], "ok")
         self.assertEqual(ba_dashboard._line_use(1, 30, 720, 626, 720.01 / 1.15)["production"]["level"], "warn")
         self.assertEqual(ba_dashboard._line_use(1, 30, 720, 720, 720.0001)["production"]["level"], "warn")

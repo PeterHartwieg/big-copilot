@@ -239,8 +239,25 @@ loads read on its split (`demand()` times the share) equal the solve's outputs, 
 routes and loads match the pass before. Each pass solves on what the last one asked and drops
 the item's `demand()` memos first (`_forget()`), so a site past the chain is read on that
 pass's split. At `CHAIN_DRAW_PASSES` (`CHAIN_DRAW_PASSES_LARGE` past `ROUTE_POLISH_SITES`
-sites) the last split stands and stderr is told. The passes stop within 1e-7 of the fixed
-point, so `_line_use()` reads a need within `LINE_FULL_SLACK` of a line's capacity as fitting.
+sites) the last split stands as approximate and stderr is told. The stop rule checks
+agreement between successive passes and solve/read-back consistency to 1e-7 relative to
+each figure (or one unit for figures under one); it does not bound the distance to a
+fixed point. `_line_use()` allows `LINE_FULL_SLACK` relative to a line's capacity for
+numerical residue, not as a general bound on the split's error. The large-site cap is
+150 passes; the smaller chains retain 300.
+
+`_DemandSizing.unsettled` records the item and whether recipe demand was included when
+the outer passes exhaust their cap or the inner solve returns no answer. After all
+lines are sized, `_factories()` marks their payload rows `demandApproximate: true` and
+sets `production` to null, withholding both covered verdicts and machine-upgrade advice.
+This conservatively covers every line making the affected item, including factories
+outside the solved chain that share its customers, and ingredient lines whose draw
+depends on an affected product. Other products keep their verdicts. The last sold/need,
+hours and chain figures remain available as estimates. Production shows a visible
+explanation and marks affected rows, including in Changes; the factory page shows the
+same note and withholds machine advice. `set_made()` clears the unsettled state on a
+new sizing. A settled split has no `demandApproximate` key.
+
 `demand()` shares what reaches a site in the chain between its senders as the solve routes it
 (`routed_split()`), so each line's share of its site's draw is the solve's output, and the
 Demand-mode walk asks each route into such a site the same part (`walk_split()`, the

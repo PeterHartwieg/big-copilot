@@ -7195,6 +7195,7 @@ function spMachineRead(slot, gap){
    rented that makes nothing, else the machine rostered for the fewest hours,
    else the word that every one runs around the clock. */
 function spLinesRead(site){
+  if((site.lines || []).some(l => l.demandApproximate)) return spEsc(sbDemandUnsettled());
   const idle = (site.unnamed || []).find(u => u.idle);
   if(idle){
     const slot = (idle.slots || [])[0];
@@ -7272,7 +7273,7 @@ function spLines(site){
   (site.lines || []).forEach(l => {
     const stop = !l.atRoster || (l.missing || []).length;
     html += `<div class="sp-line" data-line="${attr(spKeyTok(l.slug, l.item))}" data-el="${attr(spKeyTok(l.slug, l.item))}">
-      <div>${spEsc(l.item)}<span class="sub">${where(l)}</span>${spLineChips(site, l)}</div>
+      <div>${spEsc(l.item)}<span class="sub">${where(l)}</span>${sbDemandApproxNote(l)}${spLineChips(site, l)}</div>
       ${spMachines(l.machines, l.gaps, l.slots)}
       <div class="sp-belt${stop ? " sp-stop" : ""}"></div>
       <div class="sp-n">${spNum(l.atRoster)}<small>${tt("sp.lines.rated", "of {n} rated", {n: spNum(l.makes)})}</small></div>
@@ -9653,7 +9654,7 @@ function sbLineFact(l){
    line's factory, for the chain it shares its product with (`chain`, #521). */
 function sbProdFact(l, s = l.s){
   const p = l.production;
-  if(l.named || !p || p.status !== "short") return null;
+  if(l.named || l.demandApproximate || !p || p.status !== "short") return null;
   return {st: "short", why: "machines", lvl: p.level || "warn", more: p.more, makesWith: p.makesWith, need: l.needDay,
     chain: l.chain || null, s};
 }
@@ -9676,6 +9677,9 @@ function sbProdWorst(lines){
     .sort(([, p, x], [, q, y]) => (q.lvl === "critical") - (p.lvl === "critical") || q.more - p.more || y - x)
     .map(([l]) => l)[0] || null;
 }
+const sbDemandUnsettled = () => tt("sb.line.demandUnsettled", "Demand sharing did not settle; the figures are approximate and machine advice is unavailable.");
+const sbDemandApproxNote = l => l.demandApproximate
+  ? `<span class="sub" data-tip="${attr(sbDemandUnsettled())}">${tt("sb.line.demandApproximate", "Approximate demand")}</span>` : "";
 /* "short" never stands alone on a factory row: it names what is short. */
 function szShortWord(f){
   if(!f || f.st !== "short") return "";
@@ -10650,7 +10654,7 @@ function sbLineRow(d, r, site){
         attr(tt("sb.line.forget", "Forget this name"))}">${CLOSE_ICON}</button>` : ""}
       <span class="sub">${tt("sb.line.rate", "{station}{slots}, {rate}/h a machine", {station: spEsc(r.workstation), slots: slotText(r), rate: r.rate})}${r.limitHeld && Number.isFinite(r.limit)
         ? ` · <span data-tip="${attr(tt("sb.line.limit.tip", "Produce up to stops the line once {item} holds {n:,}", {item: r.item, n: r.limit}))}">${
-          tt("sb.line.limit", "held by Produce up to {n:,}", {n: r.limit})}</span>` : ""}</span></td>
+        tt("sb.line.limit", "held by Produce up to {n:,}", {n: r.limit})}</span>` : ""}</span>${sbDemandApproxNote(r)}</td>
     <td class="l">${spMachines(r.machines, r.gaps, r.slots)}</td>
     <td class="l">${hours}</td>
     <td>${num(r.makes ?? 0)}${r.missing && r.missing.length ? `<span class="sub">${tt("sb.line.stopped", "stopped: no {items}", {items: sbList(r.missing.map(spEsc))})}</span>`
@@ -10706,7 +10710,7 @@ function sbFactoryPart(d, claimed, ctx, view, o){
     const lines = !o.lines ? [] : site.lines.map(l => {
       const r = {...l, s, fact: sbLineFact(l), makers: makers[l.slug], prod: sbProdFact(l, s), ing: sbLineInputsFact(site, l)};
       r.chk = sbChk(d, claimed, s, l.slug, SB_LINE_KINDS, l.rid);
-      r.keep = sbWorth(r.fact, r.chk) || !!r.prod;
+      r.keep = sbWorth(r.fact, r.chk) || !!r.prod || !!r.demandApproximate;
       return r;
     }).concat(site.unnamed.map(u => ({...u, s, unnamed: true, slug: null, fact: null, chk: [], keep: true})));
     if(!o.inputs) site = {...site, needs: []};
@@ -10740,7 +10744,7 @@ function sbFactoryPart(d, claimed, ctx, view, o){
         : tt("sb.fac.imports.n", {one: "{n} import", other: "{n} imports"}, {n: imports.length}), "", planLink);
     const shownLines = whole ? lines : lines.filter(r => r.keep);
     const objectKey = `${view}|${b ? b.key : "none"}`;
-    const defaultOpen = left > 0 || keep.some(r => (r.fact && r.fact.lvl === "critical") || (r.prod && r.prod.lvl === "critical"));
+    const defaultOpen = left > 0 || keep.some(r => r.demandApproximate || (r.fact && r.fact.lvl === "critical") || (r.prod && r.prod.lvl === "critical"));
     const objectOpen = !!arrivedHere || (sbOpenObj.has(objectKey) ? sbOpenObj.get(objectKey) : defaultOpen || sbWhich === "all");
     if(o.lines) drawnLines.push(...shownLines.map(r => ({...r, objectKey, objectOpen})));
     const shownInputs = whole ? inputs : inputs.filter(r => r.keep);
@@ -10783,7 +10787,7 @@ function sbFactoryPart(d, claimed, ctx, view, o){
       other: "{n} lines here make less round the clock than they need with the margin: more machines close that, more hours cannot"}, {n: lacking.length}) : "";
     const short = worst ? " " + sbStatus(sbProdFact(worst), lackTip, lackTip, tt("sb.fac.machines.chip",
       {one: "{n} line short of machines", other: "{n} lines short of machines"}, {n: lacking.length})) : "";
-    return sbObject(view, s, {icon: "gear", how, stats: stats + short, left,
+    return sbObject(view, s, {icon: "gear", how, stats: stats + short + sbDemandApproxNote({demandApproximate: lines.some(r => r.demandApproximate)}), left,
       open: defaultOpen, body});
   });
   const lineN = szTally(everyLine.filter(r => r.fact), r => r.fact);
@@ -10794,6 +10798,7 @@ function sbFactoryPart(d, claimed, ctx, view, o){
   /* Short hours, short and tight inputs are counted on the row of views and
      marked on their rows (declutter U6); these are said nowhere else. */
   const machinesShort = everyLine.filter(r => r.prod).length;
+  const approximate = everyLine.some(r => r.demandApproximate);
   const problems = [machinesShort ? tt("sb.fac.machines", {one: "{n} line makes less than its shops need, even round the clock",
       other: "{n} lines make less than their shops need, even round the clock"}, {n: machinesShort}) : "",
     inN.stalled ? tt("sb.fac.stalled", {one: "{n} input is stalled", other: "{n} inputs are stalled"}, {n: inN.stalled}) : "",
@@ -10811,18 +10816,20 @@ function sbFactoryPart(d, claimed, ctx, view, o){
   if(!f.sites.length) verdict = D.meta.locale === false
     ? tt("sb.fac.noLocale", "Factory lines need the game's recipe pages: load en.json (More menu) to see them.") : tt("sb.fac.none", "No factory is set up.");
   else {
-    verdict = problems.length ? `<b>${sbSemi(problems)}</b>` : slack ? ""
+    verdict = problems.length ? `<b>${sbSemi(problems)}</b>` : slack || approximate ? ""
       : tt("sb.fac.allGood", "Every line runs the hours it needs and every factory input covers what the lines need");
     if(slack) verdict = verdict ? sbThen(verdict, sbCap(slack)) : sbCap(slack);
     if(young) verdict = sbThen(verdict, tt("sb.fac.young", {one: "{n} row is too new to judge", other: "{n} rows are too new to judge"}, {n: young}));
-    verdict += ".";
+    if(verdict) verdict += ".";
   }
-  const calm = !every.some(r => r.fact && ["critical", "warn"].includes(r.fact.lvl)) && !machinesShort && !unnamed;
+  if(approximate) verdict += (verdict ? " " : "") + sbDemandUnsettled();
+  const calm = !every.some(r => r.fact && ["critical", "warn"].includes(r.fact.lvl)) && !machinesShort && !unnamed && !approximate;
   const names = [...ramping].map(x => D.businesses[x] ? spEsc(shortName(D.businesses[x])) : null).filter(Boolean);
-  const ramp = sizing === "dem" && names.length ? `<div class="sb-ramp"><span class="ic">${spIcon("alert")}</span><span>${tt("sb.fac.ramp",
+  const ramp = (approximate ? `<div class="sb-ramp"><span class="ic">${spIcon("alert")}</span><span>${spEsc(sbDemandUnsettled())}</span></div>` : "")
+    + (sizing === "dem" && names.length ? `<div class="sb-ramp"><span class="ic">${spIcon("alert")}</span><span>${tt("sb.fac.ramp",
     {one: "<b>{n} shop downstream has traded under a week</b>: {shops}. Their use is a straight line through the days they have traded, so the figures below <b>may still be ramping</b>.",
      other: "<b>{n} shops downstream have traded under a week</b>: {shops}. Their use is a straight line through the days they have traded, so the figures below <b>may still be ramping</b>."},
-    {n: names.length, shops: sbList(names)})}</span></div>` : "";
+    {n: names.length, shops: sbList(names)})}</span></div>` : "");
   return {blocks: blocks.join(""), verdict, calm, ramp, every, keptAll, everyLine, everyInput, drawnLines};
 }
 

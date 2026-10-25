@@ -3,12 +3,11 @@
 // ingredient status, each its own chip, on Supply › Production and on the
 // factory page. Runs on the synthetic R8 fixture (tests/fixtures/r8_supply.json),
 // never a save.
-const {test, before, after} = require('node:test');
+const {test, before} = require('node:test');
 const assert = require('node:assert/strict');
-const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
-const {chromium} = require('playwright');
+const {suiteBrowser, boardHtml, abortExternal} = require('./_page.cjs');
 const {en, enRe} = require('./_i18n.cjs');
 // The column heads and status words, from the catalogue (tests/_i18n.cjs).
 const SOLD = en('sb.col.sold'), MAKES = en('sb.col.makes'), SHIPS = en('sb.col.ships');
@@ -17,25 +16,15 @@ const ORDER = en('sb.word.short.order'), HOURS = en('sb.word.short.hours');
 const root = path.join(__dirname, '..');
 const FIXTURE = path.join(root, 'tests', 'fixtures', 'r8_supply.json');
 const fixture = () => JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
-let browser, html;
-before(async () => {
-  if(process.env.BOARD_TARGET === 'web') html = fs.readFileSync(path.join(root, 'web/index.html'), 'utf8');
-  else {
-    const result = spawnSync(process.env.PYTHON || 'python',
-      ['-c', 'from ba_dashboard import render; import sys; sys.stdout.buffer.write(render(None).encode("utf-8"))'],
-      {cwd: root, maxBuffer: 16 * 1024 * 1024});
-    assert.equal(result.status, 0, result.stderr?.toString());
-    html = result.stdout.toString();
-  }
-  browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
-});
-after(async () => { await browser?.close(); });
+const browser = suiteBrowser();
+let html;
+before(() => { html = boardHtml(); });
 
 /* Supply › Production drawn from `data`, under `which` (all or changes). */
 async function board(data, {which = 'all', mode = 'cap'} = {}){
   require('./_payload_contract.cjs').assertPayloadShape(data, 'factory_use');
-  const page = await browser.newPage({viewport: {width: 1280, height: 1000}});
-  await page.route('https://**', route => route.abort());
+  const page = await (await browser()).newPage({viewport: {width: 1280, height: 1000}});
+  await abortExternal(page);
   await page.route('http://board.test/**', route => route.fulfill({contentType: 'text/html', body: html}));
   await page.goto('http://board.test/');
   await page.evaluate(([data, which, mode]) => {
@@ -148,6 +137,33 @@ test('a line sharing its product with another factory names the link of the chai
       // The factory page's read-out says the same link.
       const read = await page.evaluate(() => spLinesRead(D.supply.factories.sites[0]));
       assert.match(read, enRe(key, {...names, makes: 1440, need: 2300}));
+    } finally { await page.close(); }
+  }
+});
+
+test('unsettled demand is visible on both factory views and withholds machine advice', async () => {
+  for(const which of ['all', 'changes']) for(const mode of ['cap', 'dem']){
+    const data = shortOfMachines(fixture());
+    const row = data.supply.factories.sites[0].lines.find(l => l.slug === 'bread');
+    // Even a stale production verdict beside the flag must not become advice.
+    row.demandApproximate = true;
+    const page = await board(data, {which, mode});
+    try {
+      const bread = await line(page, 'bread');
+      assert.match(Object.values(bread.cells).join(' | '), enRe('sb.line.demandApproximate'));
+      assert.ok(!bread.chips.some(c => enRe('sb.word.short.machines').test(c.word)));
+      assert.match(await page.locator('#secProduction').innerText(), enRe('sb.line.demandUnsettled'));
+      assert.doesNotMatch(await page.evaluate(() => viewTips['supply/production'] || ''), enRe('sb.fac.machines', {n: 1}));
+      const panel = await page.evaluate(() => {
+        const site = D.supply.factories.sites[0];
+        const el = document.createElement('div');
+        el.innerHTML = spLines(site);
+        return {text: el.textContent, read: spLinesRead(site), prod: sbProdFact(site.lines.find(l => l.slug === 'bread'))};
+      });
+      assert.match(panel.text, enRe('sb.line.demandApproximate'));
+      assert.match(panel.read, enRe('sb.line.demandUnsettled'));
+      assert.equal(panel.prod, null);
+      assert.doesNotMatch(panel.text, enRe('sb.word.short.machines'));
     } finally { await page.close(); }
   }
 });

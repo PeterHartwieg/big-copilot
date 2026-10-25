@@ -6261,9 +6261,9 @@ LEAST_LOAD_STEPS = 200  # the most Newton steps _least_load_flow() takes
 # passes agree to 1e-7. Fuzzed chains of up to ten sites: of 12,000 shapes
 # with two shops, the slowest settled within 254 solves; of 8,000 denser ones
 # with three shops, 40 were still moving at 300 passes and 6 at 3,000. At the
-# cap the last split stands, and stderr is told.
+# cap the last split stands as approximate, and stderr and the board are told.
 CHAIN_DRAW_PASSES = 300
-CHAIN_DRAW_PASSES_LARGE = 50
+CHAIN_DRAW_PASSES_LARGE = 150
 # How far past its capacity, as a share of it, a line's need may read and
 # still count as fitting (_line_use()). The passes stop where two agree to
 # 1e-7, which on a chain closing in slowly leaves the split further than that
@@ -7783,6 +7783,7 @@ class _DemandSizing:
         self.sold_dem, self.sold_measured, self.ramping, self.sold_sales = ends
         self.drawn, self.levels_at, self.split_at, self.chain_at = {}, {}, {}, {}
         self.group_at, self.routed_at, self.sent_at = {}, {}, {}
+        self.unsettled = set()  # (item, with recipe demand): no verified split
         self.graph = {}
         self.set_made(lambda _site, _item: False)
 
@@ -7848,6 +7849,7 @@ class _DemandSizing:
         self.group_at.clear()
         self.routed_at.clear()
         self.sent_at.clear()
+        self.unsettled.clear()
 
     def brought(self, site: str, item: str) -> float:
         """What a site's own import and wholesale delivery bring it a day. A
@@ -8062,7 +8064,7 @@ class _DemandSizing:
         its split are the solve's outputs, and the draws, the routes and the
         loads are the last pass's; at CHAIN_DRAW_PASSES
         (CHAIN_DRAW_PASSES_LARGE past ROUTE_POLISH_SITES sites) the last
-        split stands.
+        split stands as approximate (`unsettled`).
         The producers' outputs at that optimum are unique, so no share
         depends on the sites' names or the order they are read in, and a
         sender's capacity counts once however many paths it reaches a site
@@ -8088,7 +8090,7 @@ class _DemandSizing:
 
         A split whose lines or any producer behind it the board cannot read
         (an unnamed recipe), or whose routes lead back to a site that brings
-        nothing, is None; so is every split where the solve does not settle,
+        nothing, is None; so is every split where the inner solve does not settle,
         which stderr is told once.
         The chain each split shares (merges()) is noted in `chain_at`: its
         senders, and the most its lines, its own import and the producers
@@ -8214,6 +8216,7 @@ class _DemandSizing:
             self._forget(item, flag)
             solved = _least_load_flow(draws, [(site, c) for site, c, _line in producers], routes, most)
             if solved is None:
+                self.unsettled.add(memo)
                 _said_once(f"could not split {item} between the factories of a chain of {len(order)} sites: "
                            "the solve did not settle, so each line is asked for all it sends, as before")
                 self._forget(item, flag)
@@ -8244,6 +8247,7 @@ class _DemandSizing:
                 break
             last, draws = now, asked
         else:
+            self.unsettled.add(memo)
             _said_once(f"the draw on a chain of {len(order)} sites making {item} did not settle "
                        f"in {cap_passes} passes: the last split stands")
         # The demand() and levels() figures read on the passes' splits go,
@@ -9425,6 +9429,8 @@ def _supply_factory_flow(save: Save, names: Names, businesses: list, *, index: d
         "merges": sizing.merges,
         # The chain whose split a line shares, for the sold days to add up.
         "group": sizing.group,
+        # Shared with _factories(): a capped/fallback split cannot advise machines.
+        "unsettled": sizing.unsettled,
         # Named by _factories() before it sizes a line: what each makes.
         "demandMade": sizing.set_made,
         "index": index,
@@ -11048,7 +11054,8 @@ def _line_use(machines: int, rate: float, makes: float, sold: float | None,
     critical where `use` alone is past it, a warning where only the margin
     is. A line nothing draws on reads 0, 0 and covered. All three are None
     where no demand can be read at all (no plan walk: `sold` and `use`
-    None)."""
+    None). After sizing all lines, _factories() also clears `production`
+    where the demand split is approximate, retaining the estimated figures."""
     if sold is None or use is None:
         return {"soldDay": None, "needDay": None, "production": None}
     need = use * (1 + SUPPLY_MARGIN)
@@ -11858,6 +11865,17 @@ def _factories(
         )
     sites.sort(key=lambda s: -s["machines"])
     depots = _depot_flow(flow, index)
+    # A capped split can change what another factory sharing its shops is
+    # asked, even outside the solved chain. Conservatively mark every line
+    # of the item, and any ingredient whose draw depends on it. Read this
+    # after all lines are sized: a later recipe can expose the uncertainty.
+    unsettled = {item for item, _flag in flow.get("unsettled", ())}
+    if unsettled:
+        for site in sites:
+            for line in site["lines"]:
+                if unsettled & ({line["slug"]} | fed_by(line["slug"])):
+                    line["demandApproximate"] = True
+                    line["production"] = None
     return {
         "sites": sites,
         "machines": sum(s["machines"] for s in sites),
