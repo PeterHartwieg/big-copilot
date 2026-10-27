@@ -134,7 +134,8 @@ class FoldTests(unittest.TestCase):
             i18n.load("de", tree.root)
         self.assertEqual(i18n.languages(tree.root), ["de", "fr"])
         taken = i18n.fold(ENGLISH, tree.root)
-        self.assertEqual(taken, {"de": ["f.a", "f.c", "f.gone"]})
+        # f.b keeps main's review: the branch's mark on it predates it.
+        self.assertEqual(taken, {"de": {"bases": ["f.a", "f.c"], "marked": ["f.a", "f.c", "f.gone"], "unmarked": []}})
         self.assertEqual(sorted(os.listdir(tree.path(""))), ["base.json", "de.json", "fr.json"])
         self.assertEqual(i18n.load("de", tree.root)[1],
                          {"f.a": "Lost {w:$}", "f.b": "No staff", "f.c": "Fresh", "f.d": "Closed"})
@@ -151,11 +152,28 @@ class FoldTests(unittest.TestCase):
         tree = self.tree({"de": {"f.a": "Verlust {w:$}"}, "fr": {"f.a": "Perte {w:$} aujourd'hui"}},
                          {"f.a": {"en": "Lost {w:$} today", "of": ["fr"]}},
                          {"de.base.json": {"f.a": "Lost {w:$}"}, "de.ai.json": {"f.a": "gpt"}})
-        self.assertEqual(i18n.fold(english, tree.root), {"de": ["f.a"]})
+        self.assertEqual(i18n.fold(english, tree.root), {"de": {"bases": ["f.a"], "marked": ["f.a"], "unmarked": []}})
         self.assertEqual(i18n.load("de", tree.root)[1], {"f.a": "Lost {w:$}"})
         self.assertEqual(i18n.drafted("de", tree.root), {"f.a": "gpt"})
         self.assertEqual(i18n.shipped("de", english, tree.root), {}, "stale: it ships nothing")
         self.assertEqual(i18n.load("fr", tree.root)[1], {"f.a": "Lost {w:$} today"})
+
+    def test_fold_keeps_a_review_the_branch_made(self):
+        # Both sides record the same English for f.a and f.b, both drafts on
+        # main. The branch ran `reviewed de f.a`, so its de.ai.json lacks f.a:
+        # main's mark on it goes, and f.b stays marked.
+        store = {"f.a": {"en": "Lost {w:$}", "of": ["de"], "ai": {"de": "gpt"}},
+                 "f.b": {"en": "No staff", "of": ["de"], "ai": {"de": "gpt"}}}
+        tables = {"de": {"f.a": "Verlust {w:$}", "f.b": "Niemand"}}
+        bases = {"f.a": "Lost {w:$}", "f.b": "No staff"}
+        tree = self.tree(tables, store, {"de.base.json": bases, "de.ai.json": {"f.b": "gpt"}})
+        self.assertEqual(i18n.fold(ENGLISH, tree.root), {"de": {"bases": [], "marked": [], "unmarked": ["f.a"]}})
+        self.assertEqual(i18n.drafted("de", tree.root), {"f.b": "gpt"})
+        self.assertEqual(i18n.load("de", tree.root)[1], bases)
+        # Without the branch's marks file there is no telling, so main's marks stay.
+        tree = self.tree(tables, store, {"de.base.json": bases})
+        self.assertEqual(i18n.fold(ENGLISH, tree.root), {"de": {"bases": [], "marked": [], "unmarked": []}})
+        self.assertEqual(i18n.drafted("de", tree.root), {"f.a": "gpt", "f.b": "gpt"})
 
 
 if __name__ == "__main__":

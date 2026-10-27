@@ -792,14 +792,21 @@ def languages(root: str = ROOT) -> list[str]:
 def fold(english: dict | None = None, root: str = ROOT) -> dict:
     """Take the files base.json replaced (i18n/<lang>.base.json and
     <lang>.ai.json, which a branch from before it still has after merging
-    main) into base.json, and delete them. Returns {lang: [keys taken]}.
+    main) into base.json, and delete them. Returns, per language,
+    {"bases": keys whose English came from the old file, "marked": keys
+    whose draft mark did, "unmarked": keys whose base.json mark went}, so the
+    author can check what changed.
 
     The old file fills each key base.json records no English for in that
     language, with its draft mark. Where both record one, base.json's stays,
     unless only the old file's is today's English: then the branch translated
-    a changed English, and its base and mark win. A mark the old file holds
-    for a key neither file has an English for comes along too. The marks of
-    every other key stay as base.json has them."""
+    a changed English, and its base and mark win. Where both record the same
+    English and the branch's <lang>.ai.json is there without the key's mark,
+    the branch reviewed it (`reviewed` or `accept`), so base.json's mark goes:
+    neither side can draft over a current translation, so only a review
+    explains the difference. A mark the old file holds for a key neither file
+    has an English for comes along too. Every other mark stays as base.json
+    has it."""
     folder = os.path.join(root, "i18n")
     names = _legacy(root)
     if not names:
@@ -807,29 +814,38 @@ def fold(english: dict | None = None, root: str = ROOT) -> dict:
     english = catalogue() if english is None else english
     store = _store(root)
     langs = sorted({name[:-len(suffix)] for name in names for suffix in LEGACY_SUFFIXES if name.endswith(suffix)})
-    changes, taken = {}, {}
+    changes, report = {}, {}
     for lang in langs:
         base, marks = _shares(store, lang)
         old, old_marks = _flat(root, f"{lang}.base.json"), _flat(root, f"{lang}.ai.json")
-        got = []
+        has_marks = os.path.isfile(os.path.join(folder, f"{lang}.ai.json"))
+        got = {"bases": [], "marked": [], "unmarked": []}
+
+        def mark(key, model):
+            if model is None and key in marks:
+                del marks[key]
+                got["unmarked"].append(key)
+            elif model is not None and marks.get(key) != model:
+                marks[key] = model
+                got["marked"].append(key)
+
         for key, text in sorted(old.items()):
             now = _english_text(key, english)
             if key not in base or (text == now and base[key] != now):
                 base[key] = text
-                if key in old_marks:
-                    marks[key] = old_marks[key]
-                else:
-                    marks.pop(key, None)
-                got.append(key)
+                got["bases"].append(key)
+                mark(key, old_marks.get(key))
+            elif text == base[key] and has_marks and key not in old_marks:
+                mark(key, None)
         for key, model in sorted(old_marks.items()):
             if key not in old and key not in base and key not in marks:
-                marks[key] = model
-                got.append(key)
-        changes[lang], taken[lang] = (None, base, marks), sorted(got)
+                mark(key, model)
+        changes[lang] = (None, base, marks)
+        report[lang] = {kind: sorted(keys) for kind, keys in got.items()}
     _rewrite(root, changes)
     for name in names:
         os.remove(os.path.join(folder, name))
-    return taken
+    return report
 
 
 def status(lang: str, english: dict | None = None, params: dict | None = None) -> dict:
@@ -1205,8 +1221,12 @@ def main(argv=None) -> int:
                 print(f"{lang}: " + (", ".join(f"{len(v)} dropped from {PRUNED[k].format(lang=lang)}"
                                                for k, v in dropped.items()) or "nothing to prune"))
         elif args.cmd == "fold":
-            for lang, keys in fold().items():
-                print(f"{lang}: {len(keys)} keys taken into i18n/{BASE_FILE} from its old files")
+            for lang, got in fold().items():
+                print(f"{lang}: from its old files, {len(got['bases'])} English bases and {len(got['marked'])} "
+                      f"draft marks taken into i18n/{BASE_FILE}, {len(got['unmarked'])} marks dropped as reviewed")
+                for kind, label in (("marked", "mark taken"), ("unmarked", "mark dropped")):
+                    for k in got[kind]:
+                        print(f"  {label}: {k}")
         elif args.cmd == "ship":
             stale = ship(check=args.check)
             for path in stale:
