@@ -15,8 +15,9 @@ from tests.i18n_check import MsgAsserts, msg_param
 from pathlib import Path
 
 import build_web
+from ba_cli import cli_names
 from ba_dashboard import (
-    GAME_NAME_LANGS, NAME_COVERAGE, NAME_PREFIXES, UI_LANGS, UI_LANGS_DRAFTED, _name_text, cli_names, footer_html,
+    GAME_NAME_LANGS, NAME_COVERAGE, NAME_PREFIXES, UI_LANGS, UI_LANGS_DRAFTED, _name_text, footer_html,
     name_coverage, name_table, render,
 )
 
