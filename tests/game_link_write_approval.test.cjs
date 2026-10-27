@@ -99,7 +99,12 @@ test('cancelling the wait sends nothing more, and the next ask picks the open qu
   assert.equal(await scene.getByRole('button').count(), 0);
   await pair(page).getByText(en('nav.dlg.waiting.where')).waitFor();
   await pair(page).getByText(en('nav.dlg.scene')).waitFor();
-  assert.match(await page.locator('#footBuild').innerText(), /^Game \d+, save \d+$/);
+  // This fixture's save has no build stamp. The link still names the running
+  // game, and a stamp painted onto the board is shown beside it.
+  const health = await (await fetch(H.mockUrl + '/health')).json();
+  assert.equal(await page.locator('#footBuild').innerText(), `Game ${health.runningBuild}, save unknown`);
+  await page.evaluate(() => { D.meta.build = 3670; drawFooter(); });
+  assert.equal(await page.locator('#footBuild').innerText(), `Game ${health.runningBuild}, save 3670`);
   await pair(page).getByRole('button', {name: en("nav.dlg.cancel")}).click();
   await dialog(page).getByText(en("nav.dlg.say.notapproved"), {exact: true}).waitFor();
   const at = sent.length;
