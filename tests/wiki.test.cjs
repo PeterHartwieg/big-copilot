@@ -1,8 +1,9 @@
-/* The wiki module, run the way the board runs it: web/wiki.js is evaluated in a
-   context that stubs the handful of board helpers it shares ($, attr, icon,
-   fmt, wireTips, the map's loader), so the routing, the search, the rendering
-   of the game's own markdown and the save-side strip are all exercised against
-   the real source rather than a copy of it.
+/* The wiki module, run the way the board runs it: web/wiki.js spliced into the
+   board script, which runs whole in a vm (tests/_board.cjs), with the board's
+   page switching, tooltips and section loading stood in for and the city map
+   left out, so the routing, the search, the rendering of the game's own
+   markdown and the save-side strip are all exercised against the real source
+   rather than a copy of it.
 
    The fixture is the shape agreed for web/wiki-data.json: schemaVersion 1,
    categories, pages, and the verified guide the authored page is drawn from.
@@ -21,20 +22,12 @@ const htmlRe = (key, params = {}, options = {}) => {
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
-const {at} = require('./_slice.cjs');
+const {loadBoard} = require('./_board.cjs');
 
+/* render() splices web/wiki.js into the board script; the board's own
+   helpers (ssEsc, spEsc, hrNum, the neighbourhood tags, tt() from web/i18n.js)
+   are the real ones. */
 const WIKI = fs.readFileSync(path.join(__dirname, '..', 'web', 'wiki.js'), 'utf8');
-/* web/i18n.js runs ahead of wiki.js on the page: the Wiki's own words go
-   through its tt(). */
-const I18N = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
-/* The board's escaping and count helpers wiki.js calls (ssEsc, spEsc, hrNum),
-   read from template/board.js rather than copied, so the wiki is tested with
-   the real ones. Each is one statement, up to its first ";" at a line end. */
-const BOARD = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.js'), 'utf8').replace(/\r\n/g, '\n');
-const BOARD_HELPERS = ['const ssEsc = ', 'const spEsc = ', 'const hrNum = ', 'const hoodKeyOf = '].map(anchor => {
-  const i = at(BOARD, anchor);
-  return BOARD.slice(i, BOARD.indexOf(';\n', i) + 2);
-}).join('') + BOARD.slice(at(BOARD, 'const hoodColorAttr = '), at(BOARD, 'const hoodHtml = '));
 /* The board's neighbourhood tables, as render() writes them in: keyed by the
    game's key, the words looked up only to be shown. */
 const HOOD_EN = {midtown: 'Midtown', hellskitchen: "Hell's Kitchen", murrayhill: 'Murray Hill',
@@ -43,7 +36,22 @@ const HOOD_EN = {midtown: 'Midtown', hellskitchen: "Hell's Kitchen", murrayhill:
 const HOOD_TAGS = Object.fromEntries(Object.entries({midtown: 'MT', hellskitchen: 'HK', murrayhill: 'MH',
   lowermanhattan: 'LM', garmentdistrict: 'GD', industrycity: 'IC', thehamptons: 'HA'})
   .map(([id, tag]) => [`ba:neighborhood_${id}`, tag]));
-const hoodName = key => HOOD_EN[String(key || '').replace(/^ba:neighborhood_/, '')] || String(key || '').replace(/^ba:neighborhood_/, '');
+const HOOD_NAMES = Object.fromEntries(Object.entries(HOOD_EN).map(([id, name]) => [`ba:neighborhood_${id}`, name]));
+const FILLS = [['/*__WIKI_SCRIPT__*/', WIKI], ['/*__HOOD_TAGS__*/{}', JSON.stringify(HOOD_TAGS)],
+  ['/*__HOOD_NAMES__*/{}', JSON.stringify(HOOD_NAMES)]];
+const withWiki = source => FILLS.reduce((text, [placeholder, fill]) => {
+  assert.ok(text.includes(placeholder), `the board script has no ${placeholder} to fill`);
+  return text.replace(placeholder, () => fill);
+}, source);
+/* What the board answers on the window at load, apart from its source: the
+   inert stub tests/_board.cjs uses, and no source to read from. */
+const inert = new Proxy(function(){}, {
+  get: (_, k) => k === Symbol.toPrimitive ? () => 0 : k === Symbol.iterator ? function*(){} : k === 'length' ? 0 : inert,
+  apply: () => inert, construct: () => inert, set: () => true,
+});
+const LOAD_WINDOW = new Proxy({}, {get: (_, k) => k === 'LEDGER_SOURCE' ? {} : inert[k]});
+/* The board's own `let`s a test reads or sets as w.context.<name>. */
+const BOARD_LETS = new Set(['D', 'page', 'planType', 'planCounts']);
 
 const LOCATIONS = JSON.parse(
   fs.readFileSync(path.join(__dirname, '..', 'web', 'maps', 'locations.json'), 'utf8'));
@@ -217,65 +225,72 @@ function element(id) {
 /* `seen` is the board's feature-discovery store, the one thing the module reads
    before it draws anything: the nav's NEW badge and the Wiki's own marks share
    its keys. */
-function wiki({data = DATA, fetchImpl, save = null, seen = {}} = {}) {
+/* `reduced` is a reader who has turned motion down, which the board reads
+   once, as it loads. `w.context` is the board's global scope: its `let`s in
+   BOARD_LETS read and set the board's own bindings, and `$` is what the
+   board's $() finds by id (the board's $ asks the document). */
+function wiki({data = DATA, fetchImpl, save = null, seen = {}, reduced = false} = {}) {
   if (save) require('./_payload_contract.cjs').assertPayloadShape(save, 'wiki');
   const root = element('wikiRoot');
   const nodes = new Map([['wikiRoot', root]]);
+  let byId = id => nodes.get(id) || null;
   const drawn = [];
   const fetched = [];
   const scrolled = [];
   const tipsDropped = [];
-  const context = vm.createContext({
-    D: save,
-    page: 'wiki',
-    planType: null, planCounts: {},
-    REDUCED: false,
-    console,
-    $: id => nodes.get(id) || null,
-    $$: () => [],
-    attr: s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'),
-    icon: name => `<svg data-icon="${name}"></svg>`,
-    fmt: n => (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)).toLocaleString('en-US'),
-    num: (n, opts) => Number(n).toLocaleString('en-US', opts),
-    hasData: () => !!context.D,
+  const board = loadBoard({window: LOAD_WINDOW,
+    matchMedia: query => ({matches: reduced && /reduce/.test(query), addEventListener(){}})}, {edit: withWiki});
+  const call = (expr) => vm.runInContext(expr, board);
+  const context = new Proxy(board, {
+    get: (b, key) => key === '$' ? byId : BOARD_LETS.has(key) ? call(key) : b[key],
+    set(b, key, value) {
+      if (key === '$') byId = value;
+      else if (BOARD_LETS.has(key)) { b.__value = value; call(`${key} = __value`); }
+      else b[key] = value;
+      return true;
+    },
+  });
+  // The page around the wiki, as before the board's own boot: no
+  // feature-discovery store, so the wiki keeps its marks itself.
+  delete board.featureDiscovery;
+  Object.assign(board, {
     // These fixtures are full CLI payloads; section waits have their own cases below.
     odNeed: () => true, odReady: () => true,
     odWaitHtml: name => `<div class="od-wait" role="status">Waiting for ${name}</div>`,
     showPage(id){ drawn.push(['page', id]); },
     showSub(id, view){ drawn.push(['sub', id, view]); },
-    drawPlan(){ drawn.push(['plan', context.planType]); },
+    drawPlan(){ drawn.push(['plan', call('planType')]); },
     wireTips(){}, wireReveal(){},
     hideTip(){ tipsDropped.push(1); },
-    // The board's own neighbourhood tags, as render() writes them in.
-    HOOD_TAGS, hoodName, HOOD_NAMES: Object.fromEntries(Object.entries(HOOD_EN).map(([id, name]) => [`ba:neighborhood_${id}`, name])),
+    // The Growth hand-off on its own: Plan a factory's way in has its suites.
+    openPlan: undefined,
     requestAnimationFrame(){}, cancelAnimationFrame(){}, setTimeout(){},
     history: {replaceState(){}},
     matchMedia: () => ({matches: false, addEventListener(){}}),
     CSS: {escape: s => s},
     localStorage: {getItem: key => (key in seen ? seen[key] : null), setItem(key, value){ seen[key] = value; }},
-    document: {addEventListener(){}, body: {classList: {add(){}, remove(){}}}, activeElement: null},
+    document: {addEventListener(){}, body: {classList: {add(){}, remove(){}}}, activeElement: null,
+      getElementById: id => byId(id), querySelectorAll: () => []},
     window: {LEDGER_BUILD: 'stamp1', addEventListener(){}, scrollY: 0, scrollTo(x, y){ scrolled.push([x, y]); }},
     fetch: fetchImpl || (async (url) => {
       fetched.push(url);
       return {ok: true, status: 200, json: async () => data};
     }),
   });
-  context.window.window = context.window;
-  vm.runInContext(I18N, context);
-  vm.runInContext(BOARD_HELPERS, context);
-  vm.runInContext(WIKI, context);
-  const call = (expr) => vm.runInContext(expr, context);
+  board.window.window = board.window;
+  context.D = save;
+  context.page = 'wiki';
   return {
     context, root, drawn, fetched, scrolled, tipsDropped, call,
-    run: (fn) => vm.runInContext(`(${fn})()`, context),
+    run: (fn) => call(`(${fn})()`),
     async load(hash = 'wiki') {
-      vm.runInContext(`showWikiRoute(${JSON.stringify(hash)})`, context);
+      call(`showWikiRoute(${JSON.stringify(hash)})`);
       await new Promise(r => setImmediate(r));
       await new Promise(r => setImmediate(r));
       return root.innerHTML;
     },
     async go(hash) {
-      vm.runInContext(`showWikiRoute(${JSON.stringify(hash)})`, context);
+      call(`showWikiRoute(${JSON.stringify(hash)})`);
       await new Promise(r => setImmediate(r));
       return root.innerHTML;
     },
@@ -1044,7 +1059,8 @@ function fakeGraph(w, edges) {
   graph.querySelector = sel => ({'.wk-say': say, '.wk-ball': ball, '.wk-shadow': shadow, '.wk-graphfoot': foot,
     '.wk-park': park, '.wk-wires': svg, '[data-wiki-letgo]': letgo})[sel] || null;
   w.context.$ = id => (id === 'wikiGraph' ? graph : id === 'wikiRoot' ? w.root : null);
-  w.context.$$ = sel => sel === '.wk-node' ? nodes
+  // The board's $$() asks the graph for its nodes and lines.
+  graph.querySelectorAll = sel => sel === '.wk-node' ? nodes
     : sel === 'path' ? paths
     : sel === 'path.lit' ? paths.filter(p => p.classList.contains('lit'))
     : [];
@@ -1117,9 +1133,8 @@ test('with nothing picked the ball parks on the rule instead of vanishing', asyn
 
 test('with motion turned down the ball stays parked and no frame is asked for', async () => {
   const frames = [];
-  const w = wiki();
+  const w = wiki({reduced: true});
   w.context.requestAnimationFrame = fn => { frames.push(fn); return frames.length; };
-  w.context.REDUCED = true;
   await w.load('wiki/businesstypes-giftshop');
   const g = fakeGraph(w, [['p:a', 'f:b', 'on'], ['p:a', 's:c', 'hop']]);
   frames.length = 0;
@@ -1239,7 +1254,9 @@ test('a setup square is a real checkbox, and each card keeps its own score', asy
   const group = element('group');
   group.querySelector = sel => (sel === '.wk-ph' ? bar : sel === 'b' ? score : null);
   bar.querySelector = () => score;
-  w.context.$$ = sel => (sel === '.wk-group' ? [group] : sel === '[data-tick]' ? items : []);
+  // The board's $$() asks the page for its groups and each group for its squares.
+  w.root.querySelectorAll = sel => (sel === '.wk-group' ? [group] : []);
+  group.querySelectorAll = sel => (sel === '[data-tick]' ? items : []);
 
   w.context.tickTarget = items[1];
   w.call('wikiTick(tickTarget)');

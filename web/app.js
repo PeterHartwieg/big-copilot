@@ -2915,6 +2915,99 @@
   window.BigCopilotShell = Object.freeze({
     say, failure, errWords, savePlatform, wireSaveLocation, gameTextLanguage, dropForeignLocale,
     loopbackOrigin, newestOf, entriesOf, chooseFrom, browserLabel, readAnswer, wellFormed, exportSnapshot, portableSaveBytes,
+    // The names inside this file that the tests of startup, the game's text,
+    // the game link and the folder watcher drive (tests/resume.test.cjs,
+    // tests/game_text.test.cjs, tests/game_link.test.cjs,
+    // tests/performance.test.cjs). A test reads and sets a `let` here, calls
+    // a function or puts a stand-in in its place, and reads a `const`; run()
+    // in tests/_shell.cjs runs a test's code among them. Nothing on the page
+    // reads them. A test that needs another name adds it here, in
+    // alphabetical order.
+    scope: Object.freeze({
+      get LINK_SCHEMA() { return LINK_SCHEMA; },
+      get NOT_READY() { return NOT_READY; },
+      get approvalMemo() { return approvalMemo; },
+      get armWatch() { return armWatch; }, set armWatch(v) { armWatch = v; },
+      get attempt() { return attempt; }, set attempt(v) { attempt = v; },
+      get becomeSource() { return becomeSource; }, set becomeSource(v) { becomeSource = v; },
+      get bindSource() { return bindSource; }, set bindSource(v) { bindSource = v; },
+      get buildFrom() { return buildFrom; }, set buildFrom(v) { buildFrom = v; },
+      get checkFolder() { return checkFolder; }, set checkFolder(v) { checkFolder = v; },
+      get checkLink() { return checkLink; }, set checkLink(v) { checkLink = v; },
+      get chooseFrom() { return chooseFrom; }, set chooseFrom(v) { chooseFrom = v; },
+      get closeSavePicker() { return closeSavePicker; }, set closeSavePicker(v) { closeSavePicker = v; },
+      get company() { return company; }, set company(v) { company = v; },
+      get dirHandle() { return dirHandle; }, set dirHandle(v) { dirHandle = v; },
+      get directoryPickPending() { return directoryPickPending; }, set directoryPickPending(v) { directoryPickPending = v; },
+      get dropLink() { return dropLink; }, set dropLink(v) { dropLink = v; },
+      get failure() { return failure; },
+      get finishAttempt() { return finishAttempt; }, set finishAttempt(v) { finishAttempt = v; },
+      get followWrite() { return followWrite; }, set followWrite(v) { followWrite = v; },
+      get gameWrite() { return gameWrite; }, set gameWrite(v) { gameWrite = v; },
+      get handlers() { return handlers; }, set handlers(v) { handlers = v; },
+      get handles() { return handles; },
+      get idleState() { return idleState; }, set idleState(v) { idleState = v; },
+      get keepApproval() { return keepApproval; }, set keepApproval(v) { keepApproval = v; },
+      get lastFile() { return lastFile; }, set lastFile(v) { lastFile = v; },
+      get lastFileGen() { return lastFileGen; }, set lastFileGen(v) { lastFileGen = v; },
+      get lastGood() { return lastGood; }, set lastGood(v) { lastGood = v; },
+      get lastLinkStamp() { return lastLinkStamp; }, set lastLinkStamp(v) { lastLinkStamp = v; },
+      get linkBase() { return linkBase; }, set linkBase(v) { linkBase = v; },
+      get linkDown() { return linkDown; }, set linkDown(v) { linkDown = v; },
+      get linkFeatures() { return linkFeatures; },
+      get linkFetch() { return linkFetch; }, set linkFetch(v) { linkFetch = v; },
+      get linkFolderHandle() { return linkFolderHandle; }, set linkFolderHandle(v) { linkFolderHandle = v; },
+      get linkGone() { return linkGone; }, set linkGone(v) { linkGone = v; },
+      get linkHealth() { return linkHealth; }, set linkHealth(v) { linkHealth = v; },
+      get linkMoved() { return linkMoved; }, set linkMoved(v) { linkMoved = v; },
+      get linkNotReady() { return linkNotReady; }, set linkNotReady(v) { linkNotReady = v; },
+      get linkRunning() { return linkRunning; }, set linkRunning(v) { linkRunning = v; },
+      get linkSchema() { return linkSchema; }, set linkSchema(v) { linkSchema = v; },
+      get linkSpace() { return linkSpace; }, set linkSpace(v) { linkSpace = v; },
+      get linkTime() { return linkTime; },
+      get linkToGame() { return linkToGame; }, set linkToGame(v) { linkToGame = v; },
+      get linkUrl() { return linkUrl; }, set linkUrl(v) { linkUrl = v; },
+      get linkWait() { return linkWait; }, set linkWait(v) { linkWait = v; },
+      get linkWrites() { return linkWrites; },
+      get loadFromHandle() { return loadFromHandle; }, set loadFromHandle(v) { loadFromHandle = v; },
+      get loadFromLink() { return loadFromLink; }, set loadFromLink(v) { loadFromLink = v; },
+      get localeState() { return localeState; }, set localeState(v) { localeState = v; },
+      get lookRun() { return lookRun; }, set lookRun(v) { lookRun = v; },
+      get loopbackPermission() { return loopbackPermission; }, set loopbackPermission(v) { loopbackPermission = v; },
+      get note() { return note; }, set note(v) { note = v; },
+      get noted() { return noted; },
+      get offerReopen() { return offerReopen; }, set offerReopen(v) { offerReopen = v; },
+      get paintStrip() { return paintStrip; }, set paintStrip(v) { paintStrip = v; },
+      get pick() { return pick; }, set pick(v) { pick = v; },
+      get pickFolder() { return pickFolder; }, set pickFolder(v) { pickFolder = v; },
+      get pickedOnce() { return pickedOnce; }, set pickedOnce(v) { pickedOnce = v; },
+      get place() { return place; }, set place(v) { place = v; },
+      get readHealth() { return readHealth; }, set readHealth(v) { readHealth = v; },
+      get refreshFromGame() { return refreshFromGame; }, set refreshFromGame(v) { refreshFromGame = v; },
+      get refreshSaveMenu() { return refreshSaveMenu; }, set refreshSaveMenu(v) { refreshSaveMenu = v; },
+      get reportContext() { return reportContext; }, set reportContext(v) { reportContext = v; },
+      get resetLocale() { return resetLocale; }, set resetLocale(v) { resetLocale = v; },
+      get resumeSource() { return resumeSource; }, set resumeSource(v) { resumeSource = v; },
+      get runtimeReady() { return runtimeReady; }, set runtimeReady(v) { runtimeReady = v; },
+      get savePicker() { return savePicker; },
+      get sayStoreTrouble() { return sayStoreTrouble; }, set sayStoreTrouble(v) { sayStoreTrouble = v; },
+      get scanHandle() { return scanHandle; }, set scanHandle(v) { scanHandle = v; },
+      get snapshot() { return snapshot; }, set snapshot(v) { snapshot = v; },
+      get sourceGen() { return sourceGen; }, set sourceGen(v) { sourceGen = v; },
+      get startAttempt() { return startAttempt; }, set startAttempt(v) { startAttempt = v; },
+      get state() { return state; }, set state(v) { state = v; },
+      get stopWatch() { return stopWatch; }, set stopWatch(v) { stopWatch = v; },
+      get stored() { return stored; },
+      get strip() { return strip; },
+      get supersede() { return supersede; }, set supersede(v) { supersede = v; },
+      get syncWatchBtn() { return syncWatchBtn; }, set syncWatchBtn(v) { syncWatchBtn = v; },
+      get takeLocale() { return takeLocale; }, set takeLocale(v) { takeLocale = v; },
+      get toggleWatch() { return toggleWatch; }, set toggleWatch(v) { toggleWatch = v; },
+      get update() { return update; }, set update(v) { update = v; },
+      get watchChecking() { return watchChecking; }, set watchChecking(v) { watchChecking = v; },
+      get watchTimer() { return watchTimer; }, set watchTimer(v) { watchTimer = v; },
+      get wireLanding() { return wireLanding; }, set wireLanding(v) { wireLanding = v; },
+    }),
   });
 
   /* --- the landing: reveal, the drop zone, the sphere ------------------ */
@@ -3299,8 +3392,13 @@
       note("info", () => tt("app.history.forgotten", "History forgotten. The next save starts a fresh record."));
     });
 
-    // A folder chosen on an earlier visit: resume when access is still
-    // granted. Requesting fresh access stays in the Update click handler.
+    await resumeSource();
+  });
+
+  // The end of startup, a function of its own so tests/resume.test.cjs can
+  // run it. A folder chosen on an earlier visit: resume when access is still
+  // granted. Requesting fresh access stays in the Update click handler.
+  async function resumeSource() {
     const resumeGen = sourceGen;
     wireLanding();
     if (!startAttempt(resumeGen)) return;
@@ -3349,5 +3447,5 @@
       idleState();
       offerReopen();
     }
-  });
+  }
 })();
