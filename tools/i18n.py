@@ -449,6 +449,7 @@ def calls() -> list[dict]:
             with open(path, encoding="utf-8") as fh:
                 found += js_calls(fh.read(), rel)
     found += python_calls(os.path.join(ROOT, "ba_dashboard.py"))
+    found += python_calls(os.path.join(ROOT, "ba_alerts.py"))
     found += guide_ui_calls()
     return found
 

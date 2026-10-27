@@ -1780,7 +1780,10 @@ change `PYODIDE_VERSION` in `web/worker.js`, and delete the old folder.
 The board's dependencies are the files `PY_CODE` (the Python modules) and `PY_DATA`
 (the game data tables) name in `build_web.py`. `tests/test_web_fresh.py` checks them
 against `CODE_FILES`/`DATA_FILES` in the worker, and `tests/worker_startup.test.cjs`
-reads its list from the same two tuples.
+reads its list from the same two tuples. `ba_cli.py`, the command line with the watch
+server and the game-link client, is not among them: the worker never fetches it and
+`ba_dashboard` never imports it, so the browser loads none of `http.server`, `urllib`
+or `argparse`.
 
 Live link snapshots transfer compressed save bytes and the hash-bound facts document
 separately. The worker writes the pair to its virtual filesystem and passes
@@ -1797,11 +1800,14 @@ large. Fixed-size decode chunks and memoryview string reads reduce temporary
 copies; `tests/save_memory_probe.py` and `tests/worker_snapshot.test.cjs` exercise
 repeated synthetic large loads and recovery through the actual bundled Pyodide.
 
-`ba_dashboard.py` ships as `strip_copy()` of the source: comments removed and docstrings
-emptied, every line where it was. The virtual filesystem is new on each page load, so
-Python compiles the module every time, and a third of the source is comments and
-docstrings. Because no line moves, tracebacks and `_raised_at()` name the source's line
-at that release. The CLI runs the source itself; the other code files ship verbatim.
+`ba_dashboard.py` ships as `strip_copy()` of the source, and so do the two modules split
+out of it: `ba_msg.py`, the message layer with `msg()`, `Msg`, `tok()`, `plain()` and
+`_wire_msgs()`, and `ba_alerts.py`, the findings with `_alerts()`, `_finding()` and
+`_condense()`. `STRIPPED` in `build_web.py` names them. Comments are removed and docstrings emptied, and
+every line stays where it was. The virtual filesystem is new on each page load, so Python
+compiles the modules every time, and a third of the source is comments and docstrings.
+Because no line moves, tracebacks and `_raised_at()` name the source's line at that
+release. The CLI runs the source itself; the other code files ship verbatim.
 
 Assembly writes each dependency and the worker itself to
 `web/assets/<full-sha256>/<filename>`, hashing the exact LF-normalized bytes.
@@ -1872,6 +1878,12 @@ it does not repair already cached or running old worker code. Such an old page
 must reload onto the pinned protocol to obtain these guarantees.
 `tests/fixtures/legacy_worker_53497965.js` preserves the actual previous worker
 bytes, and `tests/asset_cache.test.cjs` exercises its partial-cache rollout window.
+That worker fetches only `ba_save.py`, `ba_dashboard.py` and `ba_facts.py`. Its own
+release's `ba_dashboard.py` imports with those three, and the test primes a stand-in
+that does the same, since today's also needs `ba_msg.py` and `ba_alerts.py`. One edge
+follows: a pre-manifest worker that has not cached `ba_dashboard.py` and fetches
+today's fails at startup on the missing module, and the page offers reload, as for
+any other startup failure.
 
 Runtime completion and each consumed/validated body or development HTTP
 fallback emit progress before the join, keeping the pending-save inactivity

@@ -21,7 +21,7 @@ import urllib.error
 import urllib.request
 
 
-import ba_dashboard  # noqa: E402
+import ba_cli  # noqa: E402
 from tests import es3_fixture  # noqa: E402
 
 DEADLINE = 120.0  # seconds to wait for the poll thread to see a change; never reached when it works
@@ -36,12 +36,12 @@ class WatchServer(unittest.TestCase):
         self.lock = threading.Lock()
         self.write_save(day=34, mtime=1_700_000_000)
         self.out = os.path.join(self.tmp.name, "dashboard.html")
-        self.board = ba_dashboard.Board(self.save, self.out)
+        self.board = ba_cli.Board(self.save, self.out)
         self.assertTrue(self.board.refresh(settle=False))
 
         board = self.board
 
-        class Handler(ba_dashboard.BoardHandler):
+        class Handler(ba_cli.BoardHandler):
             pass
 
         Handler.board = board
@@ -140,7 +140,7 @@ class WatchServer(unittest.TestCase):
             self.assertFalse(self.board.refresh(settle=False))
         self.assertNotEqual(self.stamp(), first)
         self.assertEqual(self.day(), 36)
-        restarted = ba_dashboard.Board(self.save, self.out)
+        restarted = ba_cli.Board(self.save, self.out)
         self.assertTrue(restarted.refresh(settle=False))
         self.assertNotEqual(json.loads(restarted.stamp)["stamp"], self.stamp())
 
@@ -194,7 +194,7 @@ class WatchServer(unittest.TestCase):
             self.assertEqual(response.status, 204, "JSON with a charset is still JSON")
 
     def test_a_name_body_past_the_cap_is_refused_unread(self):
-        big = b"{" + b" " * ba_dashboard.BoardHandler.NAME_MAX_BYTES + b"}"
+        big = b"{" + b" " * ba_cli.BoardHandler.NAME_MAX_BYTES + b"}"
         self.assertEqual(self.refused(self.name_request(big)), 413)
         first = self.stamp()
         self.assertEqual(first[first.rindex("#"):], "#0")
