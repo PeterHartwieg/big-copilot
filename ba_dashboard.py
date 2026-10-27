@@ -24483,7 +24483,7 @@ def load_template() -> str:
         # order as one file, so every top-level declaration is reached when it
         # was before (a const read before its line throws).
         board = read("board.js")
-        for slot, name in (("/*__BOARD_WRITE__*/\n", "board-write.js"),):
+        for slot, name in (("/*__BOARD_STAFF__*/\n", "board-staff.js"), ("/*__BOARD_WRITE__*/\n", "board-write.js")):
             board = splice_board_script(board, read(name), slot, "template/board.js")
         scripts = [read(name) for name in ("mod-economy-model.js", "mod-demand-model.js", "open-store-model.js",
                                           "open-factory-model.js", "street-food-model.js")]

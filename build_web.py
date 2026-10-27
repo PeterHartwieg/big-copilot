@@ -562,6 +562,7 @@ STAMP_INPUTS = (
     # The board's markup and CSS, and its script, which render() reads (ba_dashboard.load_template()).
     "template/board.html",
     "template/board.js",
+    "template/board-staff.js",
     "template/board-write.js",
     "template/mod-economy-model.js",
     "template/mod-demand-model.js",

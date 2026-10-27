@@ -41,9 +41,13 @@ def between(text: str, start: str, end: str, what: str) -> str:
 
 ARCH = read("docs/architecture.md")
 DASHBOARD = read("ba_dashboard.py")
-# The board's markup and its script (the last <script> block's body).
+# The board's markup and its script (the last <script> block's body): board.js
+# and the parts load_template() splices back into it, template/board-*.js.
 PAGE = read("template/board.html")
-BOARD = read("template/board.js")
+BOARD_FILES = sorted(name for name in os.listdir(os.path.join(ROOT, "template"))
+                     if name.startswith("board") and name.endswith(".js"))
+BOARD_PARTS = [read("template/" + name) for name in BOARD_FILES]
+BOARD = "\n".join(BOARD_PARTS)
 TOKEN = re.compile(r"__[A-Z_]+__")
 LOADER = os.path.join(HERE, "_board.cjs")
 
@@ -204,7 +208,7 @@ class FindingGroupTests(unittest.TestCase):
 class RegistryPointerTests(unittest.TestCase):
     """(d) Each table a checklist under Registries names by its declaration
     carries a `Registry: "<heading>"` comment just above it, in ba_dashboard.py
-    or template/board.js, so a reader who lands on the table finds the checklist. Only the comment
+    or the board script (template/board*.js), so a reader who lands on the table finds the checklist. Only the comment
     directly above the declaration counts, not a neighbour's."""
 
     HEADINGS = ("A finding kind", "A view or a page")
@@ -238,7 +242,7 @@ class RegistryPointerTests(unittest.TestCase):
         return "\n".join(found)
 
     def test_every_declared_table_points_at_its_checklist(self):
-        sources = [DASHBOARD.split("\n"), BOARD.split("\n"), PAGE.split("\n")]
+        sources = [DASHBOARD.split("\n"), *(part.split("\n") for part in BOARD_PARTS), PAGE.split("\n")]
         for heading in self.HEADINGS:
             tag = 'Registry: "%s"' % heading
             missing = []
