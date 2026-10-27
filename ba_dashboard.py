@@ -23,7 +23,6 @@ import hashlib
 import itertools
 import json
 import math
-import numbers
 import os
 import re
 import struct
@@ -46,11 +45,12 @@ from ba_save import (
     Names, NotEnglishText, Save, _plain, bundled_locale, english_text, house_number, load_best_locale,
     load_locale, load_save,
 )
-# The message layer is ba_msg.py's. Its names are re-exported, so
-# ba_dashboard.msg and the rest keep working for every reader.
+# The message layer is ba_msg.py's. Each name is re-exported (`X as X`) for
+# the importers and tests that read it off ba_dashboard.
 from ba_msg import (
-    MSG_FIELD, MSG_FIXED, NAME_TOKEN, WEEKDAYS, Msg, _half_away, _js_round, _msg_format, _wire_msgs,
-    _wire_value, msg, plain, tok,
+    MSG_FIELD as MSG_FIELD, MSG_FIXED as MSG_FIXED, NAME_TOKEN as NAME_TOKEN, WEEKDAYS as WEEKDAYS,
+    Msg as Msg, _half_away as _half_away, _js_round as _js_round, _msg_format as _msg_format,
+    _wire_msgs as _wire_msgs, _wire_value as _wire_value, msg as msg, plain as plain, tok as tok,
 )
 try:
     import ba_mods
@@ -22858,12 +22858,18 @@ def locale_note(source: str | None, locale: dict[str, str]) -> str:
 # The findings are ba_alerts.py's. That module reads this one's helpers by
 # name, so it is imported last, once every helper exists, and it imports them
 # at its own end for the same reason: either module can then be imported
-# first. Every name is re-exported, so ba_dashboard._alerts keeps working.
+# first. Each name is re-exported (`X as X`) for the importers and tests that
+# read it off ba_dashboard.
 from ba_alerts import (  # noqa: E402
-    ALERT_UNITS, CONDENSE_AT, SUMMARIES, WORST_FIRST, _alert_id, _alerts, _amt, _condense, _demand_priority,
-    _fact_labels, _feed_notes, _feed_target_text, _finding, _idle_notes, _import_notes, _lasts_msg, _msg_list,
-    _notrouted_text, _order_says, _order_text, _runs_dry_when, _shelf_notes, _shortfall_note, _shown,
-    _staff_notes, _unnamed_notes, _unsourced_note, _worked_over,
+    ALERT_UNITS as ALERT_UNITS, CONDENSE_AT as CONDENSE_AT, SUMMARIES as SUMMARIES,
+    WORST_FIRST as WORST_FIRST, _alert_id as _alert_id, _alerts as _alerts, _amt as _amt,
+    _condense as _condense, _demand_priority as _demand_priority, _fact_labels as _fact_labels,
+    _feed_notes as _feed_notes, _feed_target_text as _feed_target_text, _finding as _finding,
+    _idle_notes as _idle_notes, _import_notes as _import_notes, _lasts_msg as _lasts_msg,
+    _msg_list as _msg_list, _notrouted_text as _notrouted_text, _order_says as _order_says,
+    _order_text as _order_text, _runs_dry_when as _runs_dry_when, _shelf_notes as _shelf_notes,
+    _shortfall_note as _shortfall_note, _shown as _shown, _staff_notes as _staff_notes,
+    _unnamed_notes as _unnamed_notes, _unsourced_note as _unsourced_note, _worked_over as _worked_over,
 )
 
 
