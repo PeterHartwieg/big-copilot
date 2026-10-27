@@ -29,21 +29,22 @@ in the language's CLDR categories). i18n/base.json, one file for every
 language, keeps the English each translation was made from, which is how a
 changed English shows up as stale. It holds one line per key:
 
-    "f.loss": {"en": "Lost {w:$}", "was": {"fr": "Lost {w:$} yesterday"}, "ai": {"de": "gpt-6-sol"}}
+    "f.loss": {"en": "Lost {w:$}", "of": ["de", "es"], "was": {"fr": "Lost {w:$} yesterday"}, "ai": {"de": "gpt-6-sol"}}
 
-`en` is the English every language that translates the key was made from,
-`was` the English of a language made from another one (null when it has none
-recorded), and `ai` the machine drafts nobody has reviewed yet, with the model
-that wrote each. A language that translates a key and is not in `was` takes
-`en`; `en` is whichever English most of them were made from. The commands
-read and write one language's share through load(), drafted() and save().
+`en` is an English translations were made from and `of` the languages made
+from it, `was` the English of each language made from another one, and `ai`
+the machine drafts nobody has reviewed yet, with the model that wrote each.
+`en` is whichever English most languages were made from, so it is stored
+once; a language named in neither `of` nor `was` has no English recorded for
+the key. The commands read and write one language's share through load(),
+drafted() and save().
 
 The build ships i18n/<lang>.json minus orphans, placeholder mismatches and
 stale keys (English changed, or none recorded) as web/i18n/<lang>.json.
 Missing and stale translations never fail the build: the page falls back to
 English per key. `status --strict` fails on what is never right: an orphan
-(a key no source names any more, with its base and any draft mark), an `en`
-no language takes (unused()) and a mismatch. The test suite holds main to it (tests/test_i18n_status.py), so a
+(a key no source names any more, with its base and any draft mark) and a
+mismatch. The test suite holds main to it (tests/test_i18n_status.py), so a
 change that drops or renames a key runs `prune`, which deletes the orphans
 from <lang>.json and base.json; git history keeps their text should a key
 come back. `status --complete` fails on missing and stale keys too, for a
@@ -657,54 +658,63 @@ def _current(root: str) -> None:
 
 
 def _entry_ok(entry) -> bool:
-    if not isinstance(entry, dict) or not set(entry) <= {"en", "was", "ai"}:
+    """One line of base.json: `en` with the languages made from it (`of`),
+    and `was` and `ai`, each {lang: string}."""
+    if not isinstance(entry, dict) or not entry or not set(entry) <= {"en", "of", "was", "ai"}:
         return False
-    was, ai = entry.get("was", {}), entry.get("ai", {})
-    return (isinstance(entry.get("en", ""), str) and isinstance(was, dict) and isinstance(ai, dict)
-            and all(v is None or isinstance(v, str) for v in was.values())
-            and all(isinstance(v, str) for v in ai.values()))
+    of, was, ai = entry.get("of", []), entry.get("was", {}), entry.get("ai", {})
+    return (("en" in entry) == bool(of) and isinstance(entry.get("en", ""), str)
+            and isinstance(of, list) and all(isinstance(lang, str) for lang in of)
+            and isinstance(was, dict) and isinstance(ai, dict) and not set(of) & set(was)
+            and all(isinstance(v, str) for v in (*was.values(), *ai.values())))
 
 
 def _store(root: str = ROOT) -> dict:
-    """i18n/base.json as it stands: {key: {"en": ..., "was": {...}, "ai": {...}}}."""
+    """i18n/base.json as it stands: {key: {"en": ..., "of": [...], "was": {...}, "ai": {...}}}."""
     path = os.path.join(root, "i18n", BASE_FILE)
     if not os.path.isfile(path):
         return {}
     with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
     if not isinstance(data, dict) or not all(_entry_ok(e) for e in data.values()):
-        raise CatalogueError(f'i18n/{BASE_FILE} is not an object of {{"en", "was", "ai"}} entries')
+        raise CatalogueError(f'i18n/{BASE_FILE} is not an object of {{"en", "of", "was", "ai"}} entries')
     return data
 
 
-def _base_of(entry: dict, lang: str, translated: bool) -> str | None:
-    """The English `lang` made its translation of a key from, by the key's
-    entry: its own under `was`, else the shared `en` when it translates the key."""
+def _base_of(entry: dict, lang: str) -> str | None:
+    """The English `lang` made its translation of a key from, as the key's
+    entry records it: its own under `was`, or `en` when `of` names it."""
     was = entry.get("was", {})
     if lang in was:
         return was[lang]
-    return entry.get("en") if translated else None
+    return entry["en"] if lang in entry.get("of", ()) else None
+
+
+def _shares(store: dict, lang: str) -> tuple[dict, dict]:
+    """One language's share of base.json: {key: English} and {key: model}."""
+    base, marks = {}, {}
+    for key, entry in store.items():
+        text = _base_of(entry, lang)
+        if text is not None:
+            base[key] = text
+        if lang in entry.get("ai", {}):
+            marks[key] = entry["ai"][lang]
+    return base, marks
 
 
 def load(lang: str, root: str = ROOT) -> tuple[dict, dict]:
     """i18n/<lang>.json, and {key: the English it was made from} out of
-    i18n/base.json, without the keys that have none recorded. A base for a key
-    the language does not translate is a leftover, which prune drops."""
+    i18n/base.json. A base for a key the language does not translate is a
+    leftover, which prune drops."""
     _current(root)
-    table = _flat(root, f"{lang}.json")
-    base = {}
-    for key, entry in _store(root).items():
-        text = _base_of(entry, lang, key in table)
-        if text is not None:
-            base[key] = text
-    return table, base
+    return _flat(root, f"{lang}.json"), _shares(_store(root), lang)[0]
 
 
 def drafted(lang: str, root: str = ROOT) -> dict:
     """{key: model} for every key of `lang` a machine drafted and nobody has
     reviewed yet: its `ai` marks in i18n/base.json."""
     _current(root)
-    return {key: entry["ai"][lang] for key, entry in _store(root).items() if lang in entry.get("ai", {})}
+    return _shares(_store(root), lang)[1]
 
 
 def save(lang: str, table: dict | None = None, base: dict | None = None, marks: dict | None = None,
@@ -721,49 +731,32 @@ def _rewrite(root: str, changes: dict) -> None:
     `changes` ({lang: (table, base, marks)}, None for what stays) put in,
     and the tables `changes` gives."""
     store = _store(root)
-    langs = set(languages(root)) | set(changes)
-    langs |= {lang for entry in store.values() for part in ("was", "ai") for lang in entry.get(part, {})}
-    langs = sorted(langs)
-    tables = {lang: _flat(root, f"{lang}.json") for lang in langs}
-    bases = {lang: {} for lang in langs}
-    drafts = {lang: {} for lang in langs}
-    for key, entry in store.items():
-        for lang in langs:
-            text = _base_of(entry, lang, key in tables[lang])
-            if text is not None:
-                bases[lang][key] = text
-        for lang, model in entry.get("ai", {}).items():
-            drafts[lang][key] = model
+    langs = sorted({lang for entry in store.values() for part in ("of", "was", "ai") for lang in entry.get(part, ())}
+                   | set(changes))
+    bases, drafts = {}, {}
+    for lang in langs:
+        bases[lang], drafts[lang] = _shares(store, lang)
     for lang, (table, base, marks) in changes.items():
         if table is not None:
-            tables[lang] = dict(table)
+            _write_table(root, lang, table)
         if base is not None:
             bases[lang] = dict(base)
         if marks is not None:
             drafts[lang] = dict(marks)
     out = {}
     for key in sorted(set().union(*bases.values(), *drafts.values())):
-        # The shared English is the one most languages translating the key
-        # were made from; on a tie, the first language's (alphabetically).
-        made = [bases[lang].get(key) for lang in langs if key in tables[lang]]
-        votes = collections.Counter(text for text in made if text is not None)
+        # `en` is the English most languages were made from; on a tie, the
+        # first language's (alphabetically). The others keep theirs under `was`.
+        made = {lang: bases[lang][key] for lang in langs if key in bases[lang]}
+        votes = collections.Counter(made.values())
         top = max(votes.values(), default=0)
-        en = next((text for text in made if text is not None and votes[text] == top), None)
-        was = {}
-        for lang in langs:
-            text = bases[lang].get(key)
-            # A language translating the key and made from another English (or
-            # none recorded), and one keeping a base for a key it does not translate.
-            if (key in tables[lang] and text != en) or (key not in tables[lang] and text is not None):
-                was[lang] = text
+        en = next((text for text in made.values() if votes[text] == top), None)
+        entry = {} if en is None else {"en": en, "of": [lang for lang, text in made.items() if text == en]}
+        was = {lang: text for lang, text in made.items() if text != en}
         ai = {lang: drafts[lang][key] for lang in langs if key in drafts[lang]}
-        entry = {} if en is None else {"en": en}
         entry.update({name: part for name, part in (("was", was), ("ai", ai)) if part})
         if entry:
             out[key] = entry
-    for lang, (table, _, _) in changes.items():
-        if table is not None:
-            _write_table(root, lang, tables[lang])
     path = os.path.join(root, "i18n", BASE_FILE)
     if not out:
         if os.path.isfile(path):
@@ -796,37 +789,17 @@ def languages(root: str = ROOT) -> list[str]:
                   if n.endswith(".json") and n != BASE_FILE and not n.endswith(LEGACY_SUFFIXES))
 
 
-def unused(root: str = ROOT) -> list[str]:
-    """The keys of i18n/base.json whose shared English no language takes, as
-    none translates the key without its own `was`. save() never writes one;
-    a hand edit can leave one, and `prune` drops it (tidy())."""
-    _current(root)
-    tables = {lang: _flat(root, f"{lang}.json") for lang in languages(root)}
-    return sorted(key for key, entry in _store(root).items()
-                  if not entry or ("en" in entry and not any(
-                      key in table and lang not in entry.get("was", {}) for lang, table in tables.items())))
-
-
-def tidy(root: str = ROOT) -> list[str]:
-    """Drop unused() from i18n/base.json, and return those keys."""
-    spare = unused(root)
-    if spare:
-        _rewrite(root, {})
-    return spare
-
-
 def fold(english: dict | None = None, root: str = ROOT) -> dict:
     """Take the files base.json replaced (i18n/<lang>.base.json and
     <lang>.ai.json, which a branch from before it still has after merging
     main) into base.json, and delete them. Returns {lang: [keys taken]}.
 
-    The old file fills each key base.json has no English for in that language.
-    Where both have one, base.json's stays, unless only the old file's is
-    today's English: then the branch translated a changed English, and its
-    base wins. A key whose English comes from the old file takes its draft
-    mark from there too (or loses base.json's), and a mark the old file holds
-    for a key neither file has an English for comes along. The marks of every
-    other key stay as base.json has them."""
+    The old file fills each key base.json records no English for in that
+    language, with its draft mark. Where both record one, base.json's stays,
+    unless only the old file's is today's English: then the branch translated
+    a changed English, and its base and mark win. A mark the old file holds
+    for a key neither file has an English for comes along too. The marks of
+    every other key stay as base.json has them."""
     folder = os.path.join(root, "i18n")
     names = _legacy(root)
     if not names:
@@ -836,13 +809,7 @@ def fold(english: dict | None = None, root: str = ROOT) -> dict:
     langs = sorted({name[:-len(suffix)] for name in names for suffix in LEGACY_SUFFIXES if name.endswith(suffix)})
     changes, taken = {}, {}
     for lang in langs:
-        table = _flat(root, f"{lang}.json")
-        base = {}
-        for key, entry in store.items():
-            text = _base_of(entry, lang, key in table)
-            if text is not None:
-                base[key] = text
-        marks = {key: entry["ai"][lang] for key, entry in store.items() if lang in entry.get("ai", {})}
+        base, marks = _shares(store, lang)
         old, old_marks = _flat(root, f"{lang}.base.json"), _flat(root, f"{lang}.ai.json")
         got = []
         for key, text in sorted(old.items()):
@@ -1223,10 +1190,6 @@ def main(argv=None) -> int:
                     orphans += len(st["orphan"]) + sum(len(v) for v in left.values())
                     mismatches += len(st["mismatch"])
                     pending += (len(st["missing"]) + len(st["stale"])) if args.complete else 0
-            spare = [] if args.lang else unused()
-            if spare:
-                print(f"{len(spare)} left in i18n/{BASE_FILE} for keys no language translates")
-                orphans += len(spare) if args.strict or args.complete else 0
             if orphans:
                 print("i18n: orphaned keys or leftover marks; run python tools/i18n.py prune", file=sys.stderr)
             if mismatches:
@@ -1241,9 +1204,6 @@ def main(argv=None) -> int:
                 dropped = prune(lang, english)
                 print(f"{lang}: " + (", ".join(f"{len(v)} dropped from {PRUNED[k].format(lang=lang)}"
                                                for k, v in dropped.items()) or "nothing to prune"))
-            spare = [] if args.lang else tidy()
-            if spare:
-                print(f"i18n/{BASE_FILE}: {len(spare)} dropped for keys no language translates")
         elif args.cmd == "fold":
             for lang, keys in fold().items():
                 print(f"{lang}: {len(keys)} keys taken into i18n/{BASE_FILE} from its old files")

@@ -65,68 +65,71 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(i18n.drafted(lang, tree.root), marks, lang)
         self.assertEqual(tree.store(), {
             # Shared by all three, so stored once.
-            "f.a": {"en": "Lost {w:$}", "ai": {"de": "gpt", "ru": "gpt"}},
-            # On a tie the first language's English is shared; ru translated
-            # f.b with none recorded, so it stays stale.
-            "f.b": {"en": "No staff", "was": {"fr": "No staff before", "ru": None}, "ai": {"ru": "codex"}},
-            "f.c": {"en": "Fresh"},
-            # fr keeps an English for a key it does not translate: a leftover.
-            "f.d": {"was": {"fr": "Closed"}}})
+            "f.a": {"en": "Lost {w:$}", "of": ["de", "fr", "ru"], "ai": {"de": "gpt", "ru": "gpt"}},
+            # On a tie the first language's English is the shared one. ru
+            # translated f.b with no English recorded, so it names ru nowhere.
+            "f.b": {"en": "No staff", "of": ["de"], "was": {"fr": "No staff before"}, "ai": {"ru": "codex"}},
+            "f.c": {"en": "Fresh", "of": ["fr"]},
+            # fr keeps an English for a key it does not translate: a leftover prune drops.
+            "f.d": {"en": "Closed", "of": ["fr"]}})
         lines = tree.text().splitlines()
         self.assertEqual((lines[0], lines[-1], len(lines)), ("{", "}", 6), "one key a line")
 
     def test_saving_one_language_leaves_the_others_as_they_were(self):
-        tree = self.tree({"de": {"f.a": "x"}, "fr": {"f.a": "x"}, "it": {"f.a": "x"}},
-                         {"f.a": {"en": "Lost {w:$}", "was": {"de": "Lost {w:$} today"}}})
+        tree = self.tree({}, {"f.a": {"en": "Lost {w:$}", "of": ["fr", "it"], "was": {"de": "Lost {w:$} today"}}})
         # it now agrees with de: their English becomes the shared one, and fr keeps its own.
         i18n.save("it", base={"f.a": "Lost {w:$} today"}, root=tree.root)
-        self.assertEqual(tree.store(), {"f.a": {"en": "Lost {w:$} today", "was": {"fr": "Lost {w:$}"}}})
+        self.assertEqual(tree.store(), {"f.a": {"en": "Lost {w:$} today", "of": ["de", "it"],
+                                                "was": {"fr": "Lost {w:$}"}}})
         self.assertEqual({lang: i18n.load(lang, tree.root)[1] for lang in ("de", "fr", "it")},
                          {"de": {"f.a": "Lost {w:$} today"}, "fr": {"f.a": "Lost {w:$}"},
                           "it": {"f.a": "Lost {w:$} today"}})
 
+    def test_an_english_belongs_to_the_languages_it_names_whatever_their_tables_hold(self):
+        # de translated f.a by hand and fr dropped it by hand, outside the tool:
+        # de has no English recorded (stale until accepted) and fr keeps one (a
+        # leftover), as with the per-language files.
+        tree = self.tree({"de": {"f.a": "Verlust {w:$}"}, "fr": {}}, {"f.a": {"en": "Lost {w:$}", "of": ["fr"]}})
+        self.assertEqual(i18n.load("de", tree.root), ({"f.a": "Verlust {w:$}"}, {}))
+        self.assertEqual(i18n.load("fr", tree.root), ({}, {"f.a": "Lost {w:$}"}))
+        self.assertEqual(i18n.shipped("de", ENGLISH, tree.root), {}, "stale: it ships nothing")
+
     def test_a_table_saved_without_its_base_keeps_the_base_as_it_was(self):
-        tree = self.tree({"de": {"f.a": "x"}, "fr": {"f.a": "x"}}, {"f.a": {"en": "Lost {w:$}"}})
-        # A key that leaves the table keeps its English as a leftover; one that
-        # joins it has none recorded, as before base.json.
+        tree = self.tree({"de": {"f.a": "x"}, "fr": {"f.a": "x"}}, {"f.a": {"en": "Lost {w:$}", "of": ["de", "fr"]}})
         i18n.save("de", table={"f.b": "Niemand"}, root=tree.root)
         self.assertEqual(i18n.load("de", tree.root), ({"f.b": "Niemand"}, {"f.a": "Lost {w:$}"}))
         self.assertEqual(i18n.load("fr", tree.root)[1], {"f.a": "Lost {w:$}"})
 
     def test_the_last_english_and_mark_take_the_file_with_them(self):
-        tree = self.tree({"de": {"f.a": "x"}}, {"f.a": {"en": "Lost {w:$}", "ai": {"de": "gpt"}}})
+        tree = self.tree({"de": {"f.a": "x"}}, {"f.a": {"en": "Lost {w:$}", "of": ["de"], "ai": {"de": "gpt"}}})
         i18n.save("de", table={}, base={}, marks={}, root=tree.root)
         self.assertFalse(os.path.exists(tree.path(i18n.BASE_FILE)))
         self.assertEqual(i18n.load("de", tree.root), ({}, {}))
 
-    def test_an_english_no_language_takes_is_unused_until_tidied(self):
-        tree = self.tree({"de": {"f.a": "x"}, "fr": {"f.a": "x"}},
-                         {"f.a": {"en": "Lost {w:$}"}, "f.b": {"en": "No staff", "ai": {"de": "gpt"}},
-                          "f.c": {"en": "Fresh", "was": {"de": "Fresh before"}}})
-        self.assertEqual(i18n.unused(tree.root), ["f.b", "f.c"])
-        self.assertEqual(i18n.languages(tree.root), ["de", "fr"])
-        self.assertEqual(i18n.tidy(tree.root), ["f.b", "f.c"])
-        self.assertEqual(tree.store(), {"f.a": {"en": "Lost {w:$}"}, "f.b": {"ai": {"de": "gpt"}},
-                                        "f.c": {"was": {"de": "Fresh before"}}})
-        self.assertEqual(i18n.unused(tree.root), [])
-
     def test_a_malformed_entry_is_refused(self):
-        tree = self.tree({"de": {}}, {"f.a": {"en": "Lost", "xx": 1}})
-        with self.assertRaisesRegex(i18n.CatalogueError, "base.json"):
-            i18n.load("de", tree.root)
+        for entry in ({"en": "Lost", "of": ["de"], "xx": 1}, {"en": "Lost"}, {"of": ["de"]}, {},
+                      {"en": "Lost", "of": ["de"], "was": {"de": "Lost before"}}, {"was": {"de": None}}):
+            tree = self.tree({"de": {}}, {"f.a": entry})
+            with self.assertRaisesRegex(i18n.CatalogueError, "base.json", msg=entry):
+                i18n.load("de", tree.root)
 
 
 class FoldTests(unittest.TestCase):
+    def tree(self, tables, store, legacy):
+        tree = Tree(tables, store, legacy)
+        self.addCleanup(tree.close)
+        return tree
+
     def test_fold_takes_the_old_files_in_and_deletes_them(self):
         # A branch from before base.json drafted f.c and redid f.a for a changed
         # English; main meanwhile reviewed f.b and recorded a newer f.d.
-        tree = Tree({"de": {"f.a": "Verlust {w:$}", "f.b": "Niemand", "f.c": "Frisch", "f.d": "Zu"},
-                     "fr": {"f.a": "Perte", "f.b": "Personne"}},
-                    {"f.a": {"en": "Lost {w:$} yesterday"}, "f.b": {"en": "No staff"},
-                     "f.d": {"was": {"de": "Closed"}}},
-                    {"de.base.json": {"f.a": "Lost {w:$}", "f.b": "No staff", "f.c": "Fresh", "f.d": "Closed before"},
-                     "de.ai.json": {"f.a": "gpt", "f.b": "gpt", "f.c": "gpt", "f.gone": "gpt"}})
-        self.addCleanup(tree.close)
+        tree = self.tree({"de": {"f.a": "Verlust {w:$}", "f.b": "Niemand", "f.c": "Frisch", "f.d": "Zu"},
+                          "fr": {"f.a": "Perte", "f.b": "Personne"}},
+                         {"f.a": {"en": "Lost {w:$} yesterday", "of": ["de", "fr"]},
+                          "f.b": {"en": "No staff", "of": ["de", "fr"]}, "f.d": {"en": "Closed", "of": ["de"]}},
+                         {"de.base.json": {"f.a": "Lost {w:$}", "f.b": "No staff", "f.c": "Fresh",
+                                           "f.d": "Closed before"},
+                          "de.ai.json": {"f.a": "gpt", "f.b": "gpt", "f.c": "gpt", "f.gone": "gpt"}})
         with self.assertRaisesRegex(i18n.CatalogueError, "fold"):
             i18n.load("de", tree.root)
         self.assertEqual(i18n.languages(tree.root), ["de", "fr"])
@@ -138,6 +141,21 @@ class FoldTests(unittest.TestCase):
         self.assertEqual(i18n.drafted("de", tree.root), {"f.a": "gpt", "f.c": "gpt", "f.gone": "gpt"})
         self.assertEqual(i18n.load("fr", tree.root)[1], {"f.a": "Lost {w:$} yesterday", "f.b": "No staff"})
         self.assertEqual(i18n.fold(ENGLISH, tree.root), {}, "nothing left to fold")
+
+    def test_fold_keeps_the_older_english_of_a_key_main_has_only_in_another_language(self):
+        # Main translated f.a in French alone, from today's English. The branch
+        # drafted it in German from an older English, and the merge brought
+        # that German into de.json. German records no English on main, so the
+        # old file's stands: the draft stays stale and marked, and never ships.
+        english = {"f.a": "Lost {w:$} today"}
+        tree = self.tree({"de": {"f.a": "Verlust {w:$}"}, "fr": {"f.a": "Perte {w:$} aujourd'hui"}},
+                         {"f.a": {"en": "Lost {w:$} today", "of": ["fr"]}},
+                         {"de.base.json": {"f.a": "Lost {w:$}"}, "de.ai.json": {"f.a": "gpt"}})
+        self.assertEqual(i18n.fold(english, tree.root), {"de": ["f.a"]})
+        self.assertEqual(i18n.load("de", tree.root)[1], {"f.a": "Lost {w:$}"})
+        self.assertEqual(i18n.drafted("de", tree.root), {"f.a": "gpt"})
+        self.assertEqual(i18n.shipped("de", english, tree.root), {}, "stale: it ships nothing")
+        self.assertEqual(i18n.load("fr", tree.root)[1], {"f.a": "Lost {w:$} today"})
 
 
 if __name__ == "__main__":

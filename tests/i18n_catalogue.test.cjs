@@ -160,20 +160,21 @@ test("the Wiki guides' labels are keyed from guideUi, one wiki.ui key per entry,
 });
 
 /* The translations: flat JSON of strings, and every key that is translated
-   carries the placeholders and plural forms of the English it came from. */
+   carries the placeholders and plural forms of the English it came from.
+   A language is a `<code>.json` with no dot in the code, so neither base.json
+   nor an old checkout's de.base.json or de.ai.json counts as one. */
 const LANGS = fs.readdirSync(path.join(ROOT, 'i18n'))
-  .filter(n => n.endsWith('.json') && n !== 'base.json')
+  .filter(n => /^[^.]+\.json$/.test(n) && n !== 'base.json')
   .map(n => n.slice(0, -5));
 const STORE = JSON.parse(fs.readFileSync(path.join(ROOT, 'i18n', 'base.json'), 'utf8'));
 const readTable = lang => JSON.parse(fs.readFileSync(path.join(ROOT, 'i18n', `${lang}.json`), 'utf8'));
 /* One language's base out of i18n/base.json, as load() in tools/i18n.py reads
-   it: {key: the English it was made from}, its own under `was`, else the
-   shared `en` for a key it translates. */
-function baseOf(lang, table){
+   it: {key: the English it was made from}, its own under `was`, else `en`
+   when `of` names it. */
+function baseOf(lang){
   const base = {};
   for(const [k, e] of Object.entries(STORE)){
-    const was = e.was || {};
-    const text = Object.hasOwn(was, lang) ? was[lang] : Object.hasOwn(table, k) ? e.en : undefined;
+    const text = e.was && Object.hasOwn(e.was, lang) ? e.was[lang] : (e.of || []).includes(lang) ? e.en : undefined;
     if(typeof text === 'string') base[k] = text;
   }
   return base;
@@ -187,12 +188,16 @@ test('i18n/ holds German, as flat JSON of strings beside one base of every langu
     assert.ok(!Array.isArray(data), lang);
     for(const [k, v] of Object.entries(data)) assert.equal(typeof v, 'string', `${lang}.json ${k}`);
   }
-  const strings = (o, nullable) => o === undefined || (typeof o === 'object' && o && !Array.isArray(o)
-    && Object.values(o).every(v => typeof v === 'string' || (nullable && v === null)));
+  const strings = o => o === undefined || (typeof o === 'object' && o && !Array.isArray(o)
+    && Object.values(o).every(v => typeof v === 'string'));
   for(const [k, e] of Object.entries(STORE)){
-    assert.ok(e && typeof e === 'object' && Object.keys(e).every(f => ['en', 'was', 'ai'].includes(f)), `base.json ${k}`);
-    assert.ok(e.en === undefined || typeof e.en === 'string', `base.json ${k}`);
-    assert.ok(strings(e.was, true) && strings(e.ai, false), `base.json ${k}`);
+    const where = `base.json ${k}`;
+    assert.ok(e && typeof e === 'object' && Object.keys(e).length, where);
+    assert.ok(Object.keys(e).every(f => ['en', 'of', 'was', 'ai'].includes(f)), where);
+    // `en` comes with the languages made from it, and none of them is also under `was`.
+    assert.equal(typeof e.en === 'string', Array.isArray(e.of) && e.of.length > 0, where);
+    assert.ok(e.of === undefined || e.of.every(l => typeof l === 'string' && !(e.was && Object.hasOwn(e.was, l))), where);
+    assert.ok(strings(e.was) && strings(e.ai), where);
   }
 });
 
@@ -262,7 +267,7 @@ function mismatches(lang, table, base, passed = {}){
 test('every translated key records the English it was made from', () => {
   for(const lang of LANGS){
     const table = readTable(lang);
-    const base = baseOf(lang, table);
+    const base = baseOf(lang);
     assert.deepEqual(Object.keys(table).filter(k => !(k in base)), [],
       `${lang}: run python tools/i18n.py accept ${lang} <key> after translating`);
   }
@@ -271,7 +276,7 @@ test('every translated key records the English it was made from', () => {
 test('every translation carries the placeholders and plural forms of the English it was made from', () => {
   for(const lang of LANGS){
     const table = readTable(lang);
-    assert.deepEqual(mismatches(lang, table, baseOf(lang, table), PASSED()), [], lang);
+    assert.deepEqual(mismatches(lang, table, baseOf(lang), PASSED()), [], lang);
   }
 });
 

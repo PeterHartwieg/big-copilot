@@ -20,14 +20,8 @@ class Files:
     key was made from and its draft marks (load(), drafted() and save()).
     tests/test_i18n_store.py covers the files themselves."""
 
-    def __init__(self, table, base=None, marks=None, spare=()):
+    def __init__(self, table, base=None, marks=None):
         self.files = {"table": dict(table), "base": dict(base or {}), "marks": dict(marks or {})}
-        # Keys whose shared English no language takes (unused()), until tidy().
-        self.spare = list(spare)
-
-    def _tidy(self, root=None):
-        spare, self.spare = self.spare, []
-        return spare
 
     def _save(self, lang, table=None, base=None, marks=None, root=None):
         for kind, data in (("table", table), ("base", base), ("marks", marks)):
@@ -40,8 +34,6 @@ class Files:
             load=lambda lang, root=i18n.ROOT: (dict(self.files["table"]), dict(self.files["base"])),
             drafted=lambda lang, root=i18n.ROOT: dict(self.files["marks"]),
             save=self._save,
-            unused=lambda root=i18n.ROOT: list(self.spare),
-            tidy=self._tidy,
             languages=lambda root=i18n.ROOT: ["de"])
 
 
@@ -105,18 +97,6 @@ class PruneTests(unittest.TestCase):
         code, text = _status(files, "--strict")
         self.assertEqual(code, 1, text)
         self.assertIn("1 left in de's draft marks in i18n/base.json", text)
-
-    def test_strict_fails_on_an_english_no_language_takes_until_pruned(self):
-        files = Files({"f.b": "Niemand"}, {"f.b": "No staff"}, spare=["f.x"])
-        code, text = _status(files, "--strict")
-        self.assertEqual(code, 1, text)
-        self.assertIn("1 left in i18n/base.json for keys no language translates", text)
-        self.assertEqual(_status(files, "--strict", "de")[0], 0, "a named language is not held to it")
-        with files.patch(), mock.patch.object(i18n, "calls", lambda: FOUND), \
-                contextlib.redirect_stdout(io.StringIO()) as out:
-            self.assertEqual(i18n.main(["prune"]), 0)
-        self.assertIn("i18n/base.json: 1 dropped for keys no language translates", out.getvalue())
-        self.assertEqual(_status(files, "--strict")[0], 0)
 
     def test_strict_fails_on_a_mismatch(self):
         files = Files({"f.a": "Verlust {x}"}, {"f.a": "Lost {w:$}"})
