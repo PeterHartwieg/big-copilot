@@ -167,7 +167,11 @@ class StripMessages(StripDashboard):
     NAME = "ba_msg.py"
 
 
+class StripAlerts(StripDashboard):
+    NAME = "ba_alerts.py"
+
+
 class EveryStrippedFile(unittest.TestCase):
     def test_each_file_the_worker_gets_stripped_is_checked(self):
-        checked = {case.NAME for case in (StripDashboard, StripMessages)}
+        checked = {case.NAME for case in (StripDashboard, StripMessages, StripAlerts)}
         self.assertEqual(checked, set(build_web.STRIPPED))

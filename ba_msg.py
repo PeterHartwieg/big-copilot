@@ -1,10 +1,10 @@
 """Big Copilot's own sentences, and the game names inside them.
 
 msg() writes a sentence in English and keeps its catalogue key and params
-beside it (Msg), so the page can write it in the reader's language;
+beside it in a Msg, so the page can write it in the reader's language.
 _wire_msgs() hands those to the page at the end of a build. tok() and plain()
-carry a game name inside a sentence as a token the page can swap
-(docs/architecture.md, "UI text"). ba_dashboard re-exports every name here.
+carry a game name inside a sentence as a token the page can swap. The rules
+are "UI text" in docs/architecture.md. ba_dashboard re-exports every name here.
 
 Nothing here reads a file or imports another of the board's modules, so any
 module can import it first.

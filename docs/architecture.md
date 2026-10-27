@@ -1793,9 +1793,10 @@ large. Fixed-size decode chunks and memoryview string reads reduce temporary
 copies; `tests/save_memory_probe.py` and `tests/worker_snapshot.test.cjs` exercise
 repeated synthetic large loads and recovery through the actual bundled Pyodide.
 
-`ba_dashboard.py` ships as `strip_copy()` of the source, and so does `ba_msg.py`, the
-message layer split out of it with `msg()`, `Msg`, `tok()`, `plain()` and `_wire_msgs()`.
-`STRIPPED` in `build_web.py` names them. Comments are removed and docstrings emptied, and
+`ba_dashboard.py` ships as `strip_copy()` of the source, and so do the two modules split
+out of it: `ba_msg.py`, the message layer with `msg()`, `Msg`, `tok()`, `plain()` and
+`_wire_msgs()`, and `ba_alerts.py`, the findings with `_alerts()`, `_finding()` and
+`_condense()`. `STRIPPED` in `build_web.py` names them. Comments are removed and docstrings emptied, and
 every line stays where it was. The virtual filesystem is new on each page load, so Python
 compiles the modules every time, and a third of the source is comments and docstrings.
 Because no line moves, tracebacks and `_raised_at()` name the source's line at that
