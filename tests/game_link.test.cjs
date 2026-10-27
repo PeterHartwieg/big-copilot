@@ -18,6 +18,7 @@ const words = (v) => (typeof v === 'function' ? v() : v);
 const section = between(source, '  /* --- the game link (docs/game-link-api.md)', '  /* --- building');
 const updater = between(source, '  async function update()', '  /* --- watching the folder');
 const watcher = between(source, '  async function checkFolder()', '  function armWatch()');
+const reporting = between(source, '  const reportSource = () =>', '  async function openReport(');
 // The page's attempt, as app.js keeps it: one read at a time, per source,
 // and a build in it ends it itself.
 const attempts = between(source, '  function finishAttempt(gen)', '  // Cancel ownership');
@@ -63,6 +64,7 @@ function harness({routes = {}} = {}) {
     __waits: waits,
     __advance: (ms) => { clock.now += ms; },
     document: {hidden: false},
+    window: {LEDGER_BUILD: 'test'},
     location: {hash: ''},
     localStorage: {getItem: () => null, setItem() {}, removeItem(key) { delete remembered[key]; }},
     // the app helpers the section is allowed to touch
@@ -111,7 +113,8 @@ function harness({routes = {}} = {}) {
     },
   });
   vm.runInContext(i18n, context);
-  vm.runInContext(attempts + '\n' + section + '\n' + updater + '\n' + watcher, context);
+  vm.runInContext(attempts + '\n' + section + '\n' + updater + '\n' + watcher + '\n' + reporting, context);
+  vm.runInContext('heldFailure = null; sectionFailure = null; builtGen = null; snapshot = ""; lastFile = null;', context);
   vm.runInContext('linkWait = (ms) => { __waits.push(ms); __advance(ms); return Promise.resolve(); };', context);
   // linkFetch only ever reaches an address on this computer; the tests that
   // call it directly talk to the default one.
@@ -1778,6 +1781,56 @@ test('a change during the ask leaves nothing remembered', async () => {
   assert.ok(log.queries > before, 'the poll asks again: the overtaken grant was not kept');
 });
 
+
+// A /health that was already in flight when the source changed must not
+// publish. The address is not the source: the same port, chosen again, is a
+// new one, and a file or a folder is not a link.
+for (const spec of [
+  {name: 'a file', kind: 'file'},
+  {name: 'a folder', kind: 'folder'},
+  {name: 'another link address', kind: 'link', url: 'http://127.0.0.1:8323'},
+  {name: 'the same link address again', kind: 'link', url: 'http://127.0.0.1:8322'},
+]) {
+  test(`a health reply already in flight does not publish after a switch to ${spec.name}`, async () => {
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const stale = {...HEALTH, schemaVersion: 4, build: 3682, runningBuild: 3682};
+    const fresh = {...HEALTH, schemaVersion: 5, build: 3670, runningBuild: 3690};
+    const h = harness();
+    const published = [];
+    h.context.handlers = {runningBuild() { published.push(h.run('linkRunning')); }};
+    h.context.pickedOnce = (kind) => { h.context.snapshot = kind || ''; };
+    h.context.fetch = async (url) => {
+      h.seen.calls.push(String(url));
+      const body = h.seen.calls.length === 1 ? await gate : fresh;
+      return reply(200, body);
+    };
+    const reading = h.run('readHealth()');
+    for (let i = 0; i < 30 && h.seen.calls.length < 1; i++) await Promise.resolve();
+    assert.equal(h.seen.calls.length, 1, 'the first health read has left');
+    if (spec.kind === 'file') h.run('becomeSource("file", {name: "Co.hsg"})');
+    else if (spec.kind === 'folder') h.run('becomeSource("folder", {handle: {name: "Saves", kind: "directory"}})');
+    else h.run(`becomeSource("link", {url: ${JSON.stringify(spec.url)}})`);
+    let current = null;
+    if (spec.kind === 'link') current = await h.run('readHealth()');
+    release(stale);
+    const late = await reading;
+    assert.equal(late, h.run('NOT_READY'), 'the late reply is not a health answer of this source');
+    assert.equal(h.run('linkSchema'), 5, 'the late reply does not change the schema');
+    if (spec.kind === 'link') {
+      assert.equal(current.runningBuild, 3690);
+      assert.equal(h.run('reportContext().runningBuild()'), 3690);
+      assert.equal(h.run('reportContext().source'), 'link');
+      assert.deepEqual(published, [3690]);
+    } else {
+      if (spec.kind === 'file') h.run('lastFile = {name: "Co.hsg"}');
+      assert.equal(h.run('reportContext().runningBuild()'), null);
+      assert.equal(h.run('linkUrl'), null);
+      assert.equal(h.run('reportContext().source'), spec.kind);
+      assert.deepEqual(published, []);
+    }
+  });
+}
 
 test('schema 5 and every supported older game link can still load saves', async () => {
   for (const schemaVersion of [1, 2, 3, 4, 5]) {

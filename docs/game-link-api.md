@@ -428,7 +428,9 @@ state from the listener's threads.
 - `runningBuild` (mod 0.8.2) is `GameVersion.buildNumber` only. It is `0` until
   that answers, and it is never the save stamp. A mod before 0.8.2 omits the
   key. A client treats a missing or non-positive value as an unknown running
-  build and does not promote `build` into it. Additive: `schemaVersion` stays 5,
+  build and does not promote `build` into it. It does not treat `build` as the
+  save's stamp either: that number is whichever one the mod learned first, and
+  the save's stamp is the one read from the save. Additive: `schemaVersion` stays 5,
   so a page opened before this field still talks to the new mod.
 - `stamp` is `""`, `size` is `0` and `refreshedAt` is `null` until the first refresh
   has finished.

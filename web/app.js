@@ -355,11 +355,10 @@
     if (linked) heldFailure = {name: linked.name, file: linked, facts: linked.linkFacts,
       error: String(err.message || ""), trace: String(err.stack || ""), kind: String(err.name || ""),
       bytes: null, held: false,
-      // linkBuild is health.build. Once GameVersion has answered, that number
-      // is the running game, not the save stamp. Use it as the stamp only
-      // while the running build is still unknown, as a parse that died before
-      // meta.build does. Otherwise the save is unknown.
-      build: !linkRunning && linkBuildNumber(linked.linkBuild) ? linked.linkBuild : null};
+      // The reader died before it parsed a stamp, so the save is unknown.
+      // health.build is not a substitute: on an older mod it may be the
+      // running game.
+      build: null};
     if (worker) worker.terminate();
     note("");
     state("bad", () => tt("app.reader.failed", "The reader could not finish loading"), errWords(err));
@@ -1158,10 +1157,18 @@
   // answers that were never health names the port.
   const NOT_READY = Object.freeze({stamp: "", busy: true});
   async function readHealth() {
-    const res = await linkFetch("/health");
+    // This read belongs to the source that asked. The address is not enough
+    // to name it: choosing the link again at the same address is a new
+    // source, and a file or a folder is not a link. A reply that arrives
+    // after either publishes nothing.
+    const gen = sourceGen;
+    const url = linkUrl;
+    const res = await linkFetch("/health", {link: url});
+    if (gen !== sourceGen || url !== linkUrl) return NOT_READY;
     if (res.status !== 200) return NOT_READY;
     let body = null;
     try { body = await res.json(); } catch (e) {}
+    if (gen !== sourceGen || url !== linkUrl) return NOT_READY;
     if (!(body && typeof body === "object" && !Array.isArray(body))) return NOT_READY;
     // An object, from whichever caller: the run of never-health is over. What
     // the watcher said stands until a health answer of this version.
@@ -1345,9 +1352,6 @@
         // The name is the eventual download's. Internally this File holds
         // only gzip bytes; the portable Base64 envelope is created on demand.
         file.linkFacts = factsText;
-        // Best known (health.build), not a confirmed save stamp. failReader
-        // may report it as the stamp only while runningBuild is unknown.
-        file.linkBuild = health.build;
         // buildFrom() takes the stamp only once the board has taken the bytes;
         // a build that failed keeps its own reason, and the stamp behind the
         // board, so the next check reads the same bytes again.
@@ -2056,12 +2060,11 @@
       heldFailure = {name: file.name, error: String(err.message || ""), trace: err.trace || String(err.stack || ""),
         kind: err.trace ? "" : String(err.name || ""),
         bytes: err.bytes || null, facts: err.facts || null, held: !!built || err.held === true,
-        // The reader's stamp when it parsed one. A link whose mod does not
-        // say the running build may still name health.build, which is the
-        // only number an older mod has. Once runningBuild is known, health.build
-        // is not the save stamp.
-        build: builtOn !== null ? builtOn
-          : (!linkRunning && file.linkStamp && linkHealth && linkBuildNumber(linkHealth.build) ? linkHealth.build : null)};
+        // Only a stamp the reader parsed. health.build is not the save's:
+        // on an older mod it is whichever number the mod learned first. When
+        // this is null and the bytes are still in hand, the report asks the
+        // reader for the save's own stamp.
+        build: builtOn};
       state("bad", () => tt("app.build.failed", "Could not read the save"),
         () => tt("app.build.attempted", "{name} · attempted {when}", {name: file.name, when: fmtTime(at)}));
       const rewritten = err.name === "NotReadableError";
@@ -2790,9 +2793,9 @@
         const h = await readerHeld(true);
         return h && h.name === failed.name ? h.build : null;
       },
-      // The running executable, when the mod sends it. A folder or an older
-      // mod has none. Not a second read of the save.
-      runningBuild: () => linkRunning,
+      // The running executable, while this source is still the link and the
+      // mod sent one. A file, a folder, or an older mod has none.
+      runningBuild: () => (linkUrl ? linkRunning : null),
     };
   }
   async function openReport(from) {

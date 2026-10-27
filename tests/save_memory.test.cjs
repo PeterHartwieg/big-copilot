@@ -22,32 +22,40 @@ const {suiteBrowser, openPage, serveWeb} = require('./_page.cjs');
 const {createHash} = require('node:crypto');
 const browser = suiteBrowser();
 
-// health.build is the mod's best-known number. It is the save stamp only while
-// runningBuild is absent or not a build (an older mod, or GameVersion not yet
-// answered). Once runningBuild is known, a reader that dies before the save
-// is parsed must not report that running number as the save.
+// health.build is never the save stamp. A reader that dies before parsing
+// reports the save as unknown. An extraction that fails with the bytes still
+// in hand asks the reader for the save's own stamp (held), which can differ
+// from the number an older mod put in health.build.
 for (const spec of [
-  {failure: 'startup', label: 'an older mod', health: {build: 3682}, save: 3682, running: null},
-  {failure: 'validation', label: 'an older mod', health: {build: 3682}, save: 3682, running: null},
+  {failure: 'startup', label: 'an older mod', health: {build: 3682}, save: null, running: null},
+  {failure: 'validation', label: 'an older mod and no recoverable stamp', health: {build: 3682}, save: null, running: null, held: null},
+  {failure: 'validation', label: 'an older mod whose save stamp can be read', health: {build: 3682}, save: 3670, running: null, held: 3670},
   {failure: 'startup', label: 'a known running build', health: {build: 3682, runningBuild: 3682}, save: null, running: 3682},
-  {failure: 'startup', label: 'a running build of zero', health: {build: 3670, runningBuild: 0}, save: 3670, running: null},
-  {failure: 'startup', label: 'a null running build', health: {build: 3670, runningBuild: null}, save: 3670, running: null},
+  {failure: 'startup', label: 'a running build of zero', health: {build: 3670, runningBuild: 0}, save: null, running: null},
+  {failure: 'startup', label: 'a null running build', health: {build: 3670, runningBuild: null}, save: null, running: null},
 ]) {
   test(`linked snapshot reports preserve bytes and facts after ${spec.failure} failure with ${spec.label}`, async t => {
     const raw = Buffer.from([31, 139, 8, 0, 3, 2, 1]);
     const facts = {schemaVersion:1, model:'building-values-v1', stamp:'one', character:'synthetic', build:3682,
       saveSha256:createHash('sha256').update(raw).digest('hex'), buildings:[]};
     const {page, context} = await openPage(t, await browser());
-    await context.addInitScript(() => {
+    await context.addInitScript((held) => {
       localStorage.setItem('ledger_link', 'http://127.0.0.1:8322');
-      window.memoryFixture = {messages:[]};
+      window.memoryFixture = {messages:[], heldBuild: held};
       window.BigCopilotReport = {open(context) { memoryFixture.report = context; }};
       window.Worker = class {
         constructor() {memoryFixture.worker = this;}
-        postMessage(message) {memoryFixture.messages.push(message);}
+        postMessage(message) {
+          memoryFixture.messages.push(message);
+          // A real reader is ready before an extraction can fail.
+          if (message.kind === 'init') this.onmessage({data: {kind: 'progress', stage: 'ready'}});
+          if (message.kind !== 'held') return;
+          const built = memoryFixture.messages.find(m => m.kind === 'build');
+          this.onmessage({data: {kind: 'held', id: message.id, name: built ? built.name : '', build: memoryFixture.heldBuild, bytes: null}});
+        }
         terminate() {memoryFixture.terminated = true;}
       };
-    });
+    }, spec.held === undefined ? null : spec.held);
     await serveWeb(context, {host:'save-memory.test'});
     await context.route('http://127.0.0.1:8322/**', route => {
       const name = new URL(route.request().url()).pathname;
