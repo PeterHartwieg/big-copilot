@@ -133,8 +133,10 @@ class FoldTests(unittest.TestCase):
         with self.assertRaisesRegex(i18n.CatalogueError, "fold"):
             i18n.load("de", tree.root)
         self.assertEqual(i18n.languages(tree.root), ["de", "fr"])
-        taken = i18n.fold(ENGLISH, tree.root)
-        # f.b keeps main's review: the branch's mark on it predates it.
+        main = {"de": {"f.a": "Verlust {w:$} gestern", "f.b": "Niemand", "f.d": "Zu"},
+                "fr": {"f.a": "Perte", "f.b": "Personne"}}
+        taken = i18n.fold(ENGLISH, tree.root, main)
+        # f.b keeps main's review: the wording is main's, and the branch's mark predates it.
         self.assertEqual(taken, {"de": {"bases": ["f.a", "f.c"], "marked": ["f.a", "f.c", "f.gone"], "unmarked": []}})
         self.assertEqual(sorted(os.listdir(tree.path(""))), ["base.json", "de.json", "fr.json"])
         self.assertEqual(i18n.load("de", tree.root)[1],
@@ -166,14 +168,33 @@ class FoldTests(unittest.TestCase):
                  "f.b": {"en": "No staff", "of": ["de"], "ai": {"de": "gpt"}}}
         tables = {"de": {"f.a": "Verlust {w:$}", "f.b": "Niemand"}}
         bases = {"f.a": "Lost {w:$}", "f.b": "No staff"}
-        tree = self.tree(tables, store, {"de.base.json": bases, "de.ai.json": {"f.b": "gpt"}})
-        self.assertEqual(i18n.fold(ENGLISH, tree.root), {"de": {"bases": [], "marked": [], "unmarked": ["f.a"]}})
-        self.assertEqual(i18n.drafted("de", tree.root), {"f.b": "gpt"})
-        self.assertEqual(i18n.load("de", tree.root)[1], bases)
+        for main in (None, tables):
+            tree = self.tree(tables, store, {"de.base.json": bases, "de.ai.json": {"f.b": "gpt"}})
+            self.assertEqual(i18n.fold(ENGLISH, tree.root, main),
+                             {"de": {"bases": [], "marked": [], "unmarked": ["f.a"]}}, main)
+            self.assertEqual(i18n.drafted("de", tree.root), {"f.b": "gpt"})
+            self.assertEqual(i18n.load("de", tree.root)[1], bases)
         # Without the branch's marks file there is no telling, so main's marks stay.
         tree = self.tree(tables, store, {"de.base.json": bases})
         self.assertEqual(i18n.fold(ENGLISH, tree.root), {"de": {"bases": [], "marked": [], "unmarked": []}})
         self.assertEqual(i18n.drafted("de", tree.root), {"f.a": "gpt", "f.b": "gpt"})
+
+    def test_fold_keeps_a_redraft_the_branch_made_over_a_review_on_main(self):
+        # Main reviewed f.a's German; the branch redrafted it from the same
+        # English, and the merge kept the branch's wording. Its mark wins, so
+        # a later import-draft does not take the draft for a person's.
+        store = {"f.a": {"en": "Lost {w:$}", "of": ["de"]}}
+        legacy = {"de.base.json": {"f.a": "Lost {w:$}"}, "de.ai.json": {"f.a": "gpt-new"}}
+        main = {"de": {"f.a": "Verlust {w:$} (geprüft)"}}
+        for wording, main_tables, want in (
+                ("Verlust {w:$} (Entwurf)", main, {"f.a": "gpt-new"}),
+                ("Verlust {w:$} (Entwurf)", None, {"f.a": "gpt-new"}),
+                # The merge kept main's reviewed wording: main's review stands.
+                ("Verlust {w:$} (geprüft)", main, {})):
+            tree = self.tree({"de": {"f.a": wording}}, store, legacy)
+            got = i18n.fold(ENGLISH, tree.root, main_tables)
+            self.assertEqual(got, {"de": {"bases": [], "marked": sorted(want), "unmarked": []}}, wording)
+            self.assertEqual(i18n.drafted("de", tree.root), want, wording)
 
 
 if __name__ == "__main__":

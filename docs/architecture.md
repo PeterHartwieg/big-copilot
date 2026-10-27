@@ -1003,9 +1003,12 @@ touched: keep the branch's copies and run `python tools/i18n.py fold`, which tak
 build and every command that reads the translations stop and name `fold`. The old file
 fills every key `base.json` records no English for in that language, draft mark included.
 Where both record one, `base.json`'s stays unless only the old file's is today's English.
-Where both record the same English and the branch's `<lang>.ai.json` lacks the key's mark,
-the branch reviewed it, so `base.json`'s mark goes. `fold` lists every mark it took or
-dropped, for the author to check.
+Where both record the same English and the branch's `<lang>.ai.json` is there, the
+branch's mark or the lack of one wins when `<lang>.json` holds the branch's wording (it
+redrafted or reviewed the key); `fold` reads main's wording from `MERGE_HEAD`, and with no
+merge in progress takes every such wording as the branch's. Where the wording is main's
+too, an unmarked side wins, as only a review takes a mark off and keeps the words. `fold`
+lists every mark it took or dropped, for the author to check.
 
 `glossary de --out <path>` and `draft-sheet de --out <path>` read the installed game's
 `en.json` and `de.json` for the game's own words (address form: du, as the game's German

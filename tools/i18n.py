@@ -789,10 +789,30 @@ def languages(root: str = ROOT) -> list[str]:
                   if n.endswith(".json") and n != BASE_FILE and not n.endswith(LEGACY_SUFFIXES))
 
 
-def fold(english: dict | None = None, root: str = ROOT) -> dict:
+def merging_tables(root: str = ROOT) -> dict | None:
+    """{lang: table} of the other side of a merge in progress (MERGE_HEAD),
+    which is main when a branch merges main; None when no merge is under way."""
+    import subprocess
+
+    def git(*args):
+        return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True, encoding="utf-8")
+
+    if git("rev-parse", "-q", "--verify", "MERGE_HEAD").returncode != 0:
+        return None
+    out = {}
+    for name in git("ls-tree", "--name-only", "MERGE_HEAD", "i18n/").stdout.split():
+        lang = os.path.basename(name)[:-5]
+        if name.endswith(".json") and "." not in lang and os.path.basename(name) != BASE_FILE:
+            shown = git("show", f"MERGE_HEAD:{name}")
+            out[lang] = json.loads(shown.stdout) if shown.returncode == 0 else {}
+    return out
+
+
+def fold(english: dict | None = None, root: str = ROOT, main: dict | None = None) -> dict:
     """Take the files base.json replaced (i18n/<lang>.base.json and
     <lang>.ai.json, which a branch from before it still has after merging
-    main) into base.json, and delete them. Returns, per language,
+    main) into base.json, and delete them. `main` is main's {lang: table}
+    (merging_tables()), None when it cannot be known. Returns, per language,
     {"bases": keys whose English came from the old file, "marked": keys
     whose draft mark did, "unmarked": keys whose base.json mark went}, so the
     author can check what changed.
@@ -801,12 +821,13 @@ def fold(english: dict | None = None, root: str = ROOT) -> dict:
     language, with its draft mark. Where both record one, base.json's stays,
     unless only the old file's is today's English: then the branch translated
     a changed English, and its base and mark win. Where both record the same
-    English and the branch's <lang>.ai.json is there without the key's mark,
-    the branch reviewed it (`reviewed` or `accept`), so base.json's mark goes:
-    neither side can draft over a current translation, so only a review
-    explains the difference. A mark the old file holds for a key neither file
-    has an English for comes along too. Every other mark stays as base.json
-    has it."""
+    English and the branch's <lang>.ai.json is there, its mark or the lack of
+    one wins when the translation in <lang>.json is the branch's (it differs
+    from main's, or main's is unknown): the branch redrafted the key, or
+    reviewed it. Where the translation is main's too, an unmarked side wins,
+    as only a review takes a mark off and leaves the wording. A mark the old
+    file holds for a key neither file has an English for comes along too.
+    Every other mark stays as base.json has it."""
     folder = os.path.join(root, "i18n")
     names = _legacy(root)
     if not names:
@@ -817,6 +838,7 @@ def fold(english: dict | None = None, root: str = ROOT) -> dict:
     changes, report = {}, {}
     for lang in langs:
         base, marks = _shares(store, lang)
+        table = _flat(root, f"{lang}.json")
         old, old_marks = _flat(root, f"{lang}.base.json"), _flat(root, f"{lang}.ai.json")
         has_marks = os.path.isfile(os.path.join(folder, f"{lang}.ai.json"))
         got = {"bases": [], "marked": [], "unmarked": []}
@@ -835,8 +857,12 @@ def fold(english: dict | None = None, root: str = ROOT) -> dict:
                 base[key] = text
                 got["bases"].append(key)
                 mark(key, old_marks.get(key))
-            elif text == base[key] and has_marks and key not in old_marks:
-                mark(key, None)
+            elif text == base[key] and has_marks:
+                theirs = main is None or table.get(key) != main.get(lang, {}).get(key)
+                if theirs:
+                    mark(key, old_marks.get(key))
+                elif key not in old_marks:
+                    mark(key, None)
         for key, model in sorted(old_marks.items()):
             if key not in old and key not in base and key not in marks:
                 mark(key, model)
@@ -1221,7 +1247,11 @@ def main(argv=None) -> int:
                 print(f"{lang}: " + (", ".join(f"{len(v)} dropped from {PRUNED[k].format(lang=lang)}"
                                                for k, v in dropped.items()) or "nothing to prune"))
         elif args.cmd == "fold":
-            for lang, got in fold().items():
+            main_tables = merging_tables()
+            if main_tables is None:
+                print("no merge in progress, so main's wording is unknown: where both sides record the same "
+                      "English, the branch's draft marks win")
+            for lang, got in fold(main=main_tables).items():
                 print(f"{lang}: from its old files, {len(got['bases'])} English bases and {len(got['marked'])} "
                       f"draft marks taken into i18n/{BASE_FILE}, {len(got['unmarked'])} marks dropped as reviewed")
                 for kind, label in (("marked", "mark taken"), ("unmarked", "mark dropped")):
