@@ -6,7 +6,7 @@ needs, and the unit prices the Plan page reads.
 import unittest
 from tests.i18n_check import MsgAsserts, find_msg
 
-from ba_dashboard import DELIVERY_LOG_SIZE, RECIPE_ITEMS, Names, _ingredient_prices, plain, site_key
+from ba_dashboard import DELIVERY_LOG_SIZE, RECIPE_ITEMS, Names, _ingredient_prices
 from tests.test_supply_facts import (BEER, DISTRIB, FACTORY, HUB, RECIPES, RID, SHOP_A, SODA, WATER,
                                      Company, Stub, tx)
 from tests import test_supply_facts

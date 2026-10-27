@@ -1,7 +1,6 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const M = require('../template/street-food-model.js');
 const {rules} = require('../ba_street_food_rules.json');
 const regions = require('../web/maps/locations.json').regions;

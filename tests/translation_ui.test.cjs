@@ -250,11 +250,11 @@ test('rendered searches retain clock and currency anchors without matching every
   for(const [query,key] of [['Monday09:00','sp.hour.when'],['Mon09:00','sp.hour.whenshort'],['$5.64','sp.home.perm2.v'],['$5,64','sp.home.perm2.v']]){
     await page.locator('#trSearch').fill(query);
     let found=false;
-    do{
+    for(;;){
       if(await page.locator(`[data-key="${key}"]`).count()){found=true;break;}
       if(await page.locator('#trNext').isDisabled())break;
       await page.locator('#trNext').click();
-    }while(true);
+    }
     assert.ok(found,query+' finds '+key);
   }
   await page.locator('#trSearch').fill('Foot traffic12');

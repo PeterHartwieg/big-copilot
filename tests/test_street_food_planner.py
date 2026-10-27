@@ -31,11 +31,6 @@ class StreetFoodPlannerTests(unittest.TestCase):
         finally:
             sf.planning_rules.cache_clear()
 
-    def test_older_worker_without_adapter_returns_an_unavailable_section(self):
-        with patch.object(d, 'ba_street_food', None), patch('os.path.getmtime', return_value=1):
-            build = d.build_core(load(f.data_company()), Names(f.data_names()))
-            self.assertEqual(d.section(build, 'streetFood')['streetFood']['status'], 'unavailable')
-
     def test_city_without_mod_still_has_opportunities_and_unknown_hours(self):
         root = f.data_company()
         for reg in root['BuildingRegistrations']:

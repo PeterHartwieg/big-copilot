@@ -337,7 +337,7 @@ class FixtureCase(unittest.TestCase):
 
         @contextlib.contextmanager
         def both():
-            with contextlib.redirect_stdout(io.StringIO()) as out, contextlib.redirect_stderr(
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
                 io.StringIO()
             ) as err:
                 yield err
@@ -958,7 +958,7 @@ class WriteTests(FixtureCase):
 
     def test_the_cli_writes_the_payload_and_reports_it(self):
         out = os.path.join(self.root, "web", "wiki-data.json")
-        with self.quiet() as stderr:
+        with self.quiet():
             code = build.main(self.cli(out))
         self.assertEqual(code, 0)
         self.assertTrue(os.path.exists(out))

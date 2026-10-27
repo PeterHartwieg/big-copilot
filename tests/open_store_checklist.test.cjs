@@ -4,7 +4,7 @@
 // tests/open_store.test.cjs.
 const {test} = require('node:test');
 const H = require('./_open_store.cjs');
-const {assert, en, enRe, textRe, path, LIQ, SITE, board, steps, money, planned, MKPLAN, running, LINK, rows, until, line, opened, linked, routed, wanted, FULL, HIRES, SHORT6, hiring, realHiring, spy, traded} = H;
+const {assert, en, enRe, textRe, LIQ, SITE, board, planned, MKPLAN, running, LINK, rows, until, opened, linked, routed, wanted, FULL, HIRES, SHORT6, hiring, realHiring, spy} = H;
 
 test('headquarters checks lease, workstations and staff without customer tasks or schedule writes', async t => {
   const page = await board(t, {hq: true});

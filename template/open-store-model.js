@@ -417,7 +417,7 @@ const OpenStoreModel = (() => {
       let billed = 0, staffed = 0, open = 0;
       const days=Array.from({length:7},()=>({revenue:0,cogs:0,wages:0,open:0,staffed:0}));
       const interiorData=modModule("interiors").data;
-      let carry=0; // Full-day forecasts start after the owner morning reset.
+      let carry; // Full-day forecasts start after the owner morning reset.
       for(let wd = 0; wd < 7; wd++){
         carry=0; // InteriorDirector.Round resets the booking remainder every morning.
         for(const [a, z] of slots[wd] || []){
@@ -523,7 +523,7 @@ const OpenStoreModel = (() => {
         }).filter(Boolean).sort((a, z) => a.setup - z.setup);
         const kit = choices[0] || null;
         const loss = osCannibal(slug, b.hood, p => p !== l.p, b.key)?.loss || 0;
-        let margin = l.units * (l.price - l.cost),utilityDelta=0,startupDelta=0,after=null,delta=null,marginByDay=null;
+        let margin = l.units * (l.price - l.cost),utilityDelta=0,startupDelta=0,after,delta=null,marginByDay=null;
         if(companion){
           if(!kit)return fail(slug,b,['expansion-equipment-price-unavailable']);
           if(loss && pricesModule.status==='ready' && pricesModule.data.takingsFactorThousandths!==1000)

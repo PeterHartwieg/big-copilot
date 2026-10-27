@@ -122,50 +122,6 @@ const TRANSLATE = pageScope(['web/i18n.js', 'template/translate.html', 'web/tran
 // drops `a` from rest on purpose.
 const UNUSED = { args: 'none', caughtErrors: 'none', ignoreRestSiblings: true };
 
-// Findings in files this change does not own, each fixed in a follow-up. A rule
-// in `off` is off in that one file only; no-unused-vars stays on there for every
-// name but the ones `unused` lists; `directives` stops reporting a stale
-// eslint-disable comment.
-const FOLLOW_UP = {
-  'template/board.js': { // 9 no-unused-vars, 2 no-useless-assignment, 2 no-prototype-builtins: fixed in a follow-up
-    unused: ['smaller', 'each', 't', 'ofWholesale', 'ofKit', 'ofIngredientsUncontracted', 'sfSpotWord'],
-    off: ['no-useless-assignment', 'no-prototype-builtins'] },
-  'template/mod-demand-model.js': { off: ['no-useless-assignment'] }, // 1, fixed in a follow-up
-  'template/open-factory-model.js': { unused: ['g'] }, // 1, fixed in a follow-up
-  'template/open-store-model.js': { off: ['no-useless-assignment'] }, // 2, fixed in a follow-up
-  'web/app.js': { off: ['no-useless-assignment'] }, // 1, fixed in a follow-up
-  'web/community.js': { off: ['no-useless-assignment'] }, // 1, fixed in a follow-up
-  'web/map.js': { off: ['preserve-caught-error'] }, // 1, fixed in a follow-up
-  'web/report.js': { off: ['no-useless-assignment'] }, // 2, fixed in a follow-up
-  'tests/businesses_expansion.test.cjs': { unused: ['GIFTS', 'SPIRITS'] }, // 2, fixed in a follow-up
-  'tests/chart_hover.test.cjs': { unused: ['en'] }, // 1, fixed in a follow-up
-  'tests/community-browser.test.cjs': { off: ['no-useless-escape'] }, // 1, fixed in a follow-up
-  'tests/findability.test.cjs': { unused: ['path', 'fs'] }, // 2, fixed in a follow-up
-  'tests/finder.test.cjs': { unused: ['plan'] }, // 1, fixed in a follow-up
-  'tests/finder_layout.test.cjs': { unused: ['path', 'at', 'facts', 'saved'] }, // 4, fixed in a follow-up
-  'tests/finder_saved.test.cjs': { unused: ['chip', 'pick'] }, // 2, fixed in a follow-up
-  'tests/fold_views.test.cjs': { unused: ['path', 'fs'] }, // 2, fixed in a follow-up
-  'tests/game_link_write_approval.test.cjs': { unused: ['until'], off: ['no-useless-escape'] }, // 1 each, fixed in a follow-up
-  'tests/game_link_write_imports.test.cjs': { unused: ['kept', 'corner'] }, // 2, fixed in a follow-up
-  'tests/game_link_write_schedule.test.cjs': { unused: ['button', 'pair', 'kept'] }, // 3, fixed in a follow-up
-  'tests/game_names.test.cjs': { unused: ['enRe'] }, // 1, fixed in a follow-up
-  'tests/i18n_layout.test.cjs': { off: ['no-useless-escape'] }, // 1, fixed in a follow-up
-  'tests/import_routes.test.cjs': { unused: ['redraw'] }, // 1, fixed in a follow-up
-  'tests/import_setto.test.cjs': { unused: ['fs'] }, // 1, fixed in a follow-up
-  'tests/job_demands.test.cjs': { unused: ['enRe', 'path', 'fs'] }, // 3, fixed in a follow-up
-  'tests/layout.test.cjs': { unused: ['en', 'path', 'fs'] }, // 3, fixed in a follow-up
-  'tests/office_site.test.cjs': { unused: ['fs'] }, // 1, fixed in a follow-up
-  'tests/open_store.test.cjs': { unused: ['rows', 'until', 'line'] }, // 3, fixed in a follow-up
-  'tests/open_store_checklist.test.cjs': { unused: ['path', 'steps', 'money', 'line', 'traded'] }, // 5, fixed in a follow-up
-  'tests/open_store_opened.test.cjs': { unused: ['running', 'rows', 'until', 'line'] }, // 4, fixed in a follow-up
-  'tests/plan_extra.test.cjs': { unused: ['fs'] }, // 1, fixed in a follow-up
-  'tests/roster.test.cjs': { unused: ['tile'], directives: true }, // 1 no-unused-vars, 1 stale directive, fixed in a follow-up
-  'tests/site_panel.test.cjs': { unused: ['fs'] }, // 1, fixed in a follow-up
-  'tests/street_food_model.test.cjs': { unused: ['fs'] }, // 1, fixed in a follow-up
-  'tests/supply_sort.test.cjs': { unused: ['fs', 'root'] }, // 2, fixed in a follow-up
-  'tests/translation_ui.test.cjs': { off: ['no-constant-condition'] }, // 1, fixed in a follow-up
-};
-
 export default [
   {
     ignores: ['.claude/', 'node_modules/', 'tests/fixtures/', 'web/py/', 'web/assets/', 'web/pyodide/', 'web/wiki/',
@@ -245,12 +201,4 @@ export default [
     files: ['web/app.js'],
     rules: { 'no-unused-vars': ['error', { ...UNUSED, varsIgnorePattern: '^lookRun$' }], 'no-func-assign': 'off' },
   },
-  ...Object.entries(FOLLOW_UP).map(([rel, { unused = [], off = [], directives }]) => ({
-    files: [rel],
-    ...(directives ? { linterOptions: { reportUnusedDisableDirectives: 'off' } } : {}),
-    rules: {
-      ...(unused.length ? { 'no-unused-vars': ['error', { ...UNUSED, varsIgnorePattern: `^(?:${unused.join('|')})$` }] } : {}),
-      ...Object.fromEntries(off.map(rule => [rule, 'off'])),
-    },
-  })),
 ];

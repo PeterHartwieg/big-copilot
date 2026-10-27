@@ -11,7 +11,7 @@
 // point at an existing installation.
 const {test} = require('node:test');
 const H = require('./_open_store.cjs');
-const {assert, en, textEn, textRe, LIQ, MID, SITE, board, steps, strip, money, planned, rows, until, line, opened, FULL, OPENED} = H;
+const {assert, en, textEn, textRe, LIQ, MID, SITE, board, steps, strip, money, planned, opened, FULL, OPENED} = H;
 
 test('headquarters finds offices and prices a default outfit and weekly rent without a profit model', async t => {
   const page = await board(t, {hq: true});

@@ -10,7 +10,7 @@
 // existing Playwright installation.
 const {test, before} = require('node:test');
 const assert = require('node:assert/strict');
-const {en, enRe, UI_LANGS} = require('./_i18n.cjs');
+const {en, UI_LANGS} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');

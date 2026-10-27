@@ -2680,7 +2680,7 @@
   function dropForeignLocale() {
     const text = stored.get(LOCALE_KEY);
     if (!text) return;
-    let parsed = null;
+    let parsed;
     try { parsed = JSON.parse(text); } catch (e) { return; }
     if (gameTextLanguage(parsed, "") === null) return;
     try { localStorage.removeItem(LOCALE_KEY); } catch (e) {}

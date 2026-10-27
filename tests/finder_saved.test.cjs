@@ -3,7 +3,7 @@
    the synthetic premises payload are tests/_finder.cjs. */
 const {test} = require('node:test');
 const H = require('./_finder.cjs');
-const {assert, en, enRe, at, HK, MT, HK_NAME, HK_HOOD, MT_HOOD, PREMISES, fixture, openMap, chip, turnOn, pick, rowKeys, saved, savedNames, saveAs} = H;
+const {assert, en, enRe, at, HK, MT, HK_NAME, HK_HOOD, MT_HOOD, PREMISES, fixture, openMap, turnOn, rowKeys, saved, savedNames, saveAs} = H;
 
 test('a saved search comes back in one click, for every character and after a reload', async () => {
   const context = await H.browser.newContext();
