@@ -71,6 +71,41 @@ function remember(key, v){ try{ localStorage.setItem(key, v); }catch(e){} }
 function rememberedJson(key){ try{ return JSON.parse(localStorage.getItem(key)); }catch(e){ return null; } }
 function rememberJson(key, v){ try{ localStorage.setItem(key, JSON.stringify(v)); }catch(e){} }
 function forget(key){ try{ localStorage.removeItem(key); }catch(e){} }
+/* A remembered JSON record read back against a field table, `shape`: each
+   field's rule takes the stored value (and the whole stored record) and gives
+   the value the board uses, so every field decides for itself what a missing
+   or bad value becomes. A rule that gives undefined leaves its field out. A
+   stored value that is not an object reads as an empty record: every field at
+   its fallback. Without `base` the record holds the table's fields, in its
+   order; with `base` it is open: the base's fields, then every stored field as
+   it was, then the table's. rememberedRecord() reads the key itself. */
+function keptRecord(raw, shape, base = null){
+  const rec = raw && typeof raw === "object" ? raw : {};
+  const out = base ? Object.assign({}, base, rec) : {};
+  for(const [field, rule] of Object.entries(shape)){
+    const v = rule(rec[field], rec);
+    if(v === undefined) delete out[field]; else out[field] = v;
+  }
+  return out;
+}
+function rememberedRecord(key, shape, base = null){ return keptRecord(rememberedJson(key), shape, base); }
+/* The rules a field table is written in; a field with a coercion of its own
+   takes a function of the same form, (value, record) => kept. */
+const KEEP = {
+  str: (or = null) => v => typeof v === "string" ? v : or,
+  num: (or = null) => v => Number.isFinite(v) ? v : or,
+  bool: (or = null) => v => typeof v === "boolean" ? v : or,
+  flag: () => v => !!v,
+  oneOf: (allowed, or = null) => v => allowed.includes(v) ? v : or,
+  /* An object (not a list) of the entries whose value `test` passes, else {}. */
+  table: test => v => v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter(([, x]) => test(x))) : {},
+  /* A record of its own, cleaned against `shape` (a bad one: every field at its fallback). */
+  record: shape => v => keptRecord(v, shape),
+  /* A list, else []: the items `keep` passes, each cleaned by `item`, any it
+     gives null for dropped, then at most `max`. */
+  list: (item, {keep = null, max = Infinity} = {}) => v => (Array.isArray(v) ? v : [])
+    .filter(x => !keep || keep(x)).map(x => item(x)).filter(x => x != null).slice(0, max),
+};
 const el = (t,c,h) => { const e=document.createElement(t); if(c)e.className=c; if(h!==undefined)e.innerHTML=h; return e; };
 const sign = n => n>0?"pos":n<0?"neg":"";
 const sum = (rows,key) => rows.reduce((a,b)=>a+(b[key]||0),0);
@@ -12361,9 +12396,8 @@ function drawMarket(){
 const planNames = names => names.length > 2
   ? tt("gr.os.why.more", "{items} +{n}", {items: names.slice(0, 2).join(", "), n: names.length - 2}) : names.join(", ");
 /* A kept plan's loan, as the loaders read it back from storage. */
-const planFinanceClean = f => f && typeof f === "object" ? {on: !!f.on,
-  amount: f.amount == null || !Number.isFinite(+f.amount) ? null : Math.max(0, +f.amount),
-  bank: typeof f.bank === "string" ? f.bank : null} : {on: false, amount: null, bank: null};
+const planFinanceClean = KEEP.record({on: KEEP.flag(),
+  amount: v => v == null || !Number.isFinite(+v) ? null : Math.max(0, +v), bank: KEEP.str()});
 /* The plan's lender: its own pick, else Vantander, else the first bank. */
 function planBank(plan){
   const banks = (osFacts().finance || {}).banks || [], fin = (plan && plan.finance) || {};
@@ -12744,29 +12778,31 @@ const OS_ICON = {
 const osIcon = name => OS_ICON[name] ? `<svg class="os-ico" viewBox="0 0 24 24" aria-hidden="true">${OS_ICON[name]}</svg>` : icon(name);
 
 /* --- the plans, per character -------------------------------------------- */
+/* The kept record, {plans, current}: a plan without a string id and type is
+   dropped, and each field of the rest falls back on its own. */
+const OS_RECORD = {
+  plans: KEEP.list(KEEP.record({id: KEEP.str(), type: KEEP.str(), hood: KEEP.str(), key: KEEP.str(),
+    mode: KEEP.oneOf(["self", "firm"]), finance: planFinanceClean, step: KEEP.oneOf(OS_STEPS, "what"),
+    made: v => +v || null, snap: osSnapClean, opened: KEEP.num(), paid: KEEP.flag(),
+    /* A plan kept before `sold` was: one whose store opened is taken as a record. */
+    sold: (v, p) => "sold" in p ? !!v : Number.isFinite(p.opened)}),
+  {keep: p => p && typeof p.id === "string" && typeof p.type === "string"}),
+  current: KEEP.str(),
+};
 function osLoad(){
   const who = osStore();
   if(osPlansFor === who) return;
   osPlansFor = who; osPlans = []; osCur = null; osStep = "what"; osBest = new Map();
   let dirty = false;
   try{
-    const raw = rememberedJson(who);
-    if(raw && Array.isArray(raw.plans)){
-      osPlans = raw.plans.filter(p => p && typeof p.id === "string" && typeof p.type === "string")
-        .map(p => ({id: p.id, type: p.type, hood: typeof p.hood === "string" ? p.hood : null,
-          key: typeof p.key === "string" ? p.key : null, mode: p.mode === "self" ? "self" : p.mode === "firm" ? "firm" : null,
-          finance: planFinanceClean(p.finance),
-          step: OS_STEPS.includes(p.step) ? p.step : "what", made: +p.made || null, snap: osSnapClean(p.snap),
-          opened: Number.isFinite(p.opened) ? p.opened : null, paid: !!p.paid,
-          /* A plan kept before `sold` was: one whose store opened is taken as a record. */
-          sold: "sold" in p ? !!p.sold : Number.isFinite(p.opened)}));
-      /* The stores that opened since the last visit are history before the caps count. */
-      dirty = osReconcile();
-      const before = osPlans.length;
-      osPlans = osCapPlans(osPlans);
-      if(osPlans.length !== before) dirty = true;
-      osCur = osPlans.some(p => p.id === raw.current) ? raw.current : null;
-    }
+    const kept = rememberedRecord(who, OS_RECORD);
+    osPlans = kept.plans;
+    /* The stores that opened since the last visit are history before the caps count. */
+    dirty = osReconcile();
+    const before = osPlans.length;
+    osPlans = osCapPlans(osPlans);
+    if(osPlans.length !== before) dirty = true;
+    osCur = osPlans.some(p => p.id === kept.current) ? kept.current : null;
   }catch(e){}
   const plan = osPlan();
   osStep = plan ? plan.step : "what";
@@ -14688,6 +14724,18 @@ const ofStore = () => `${OF_KEY}:${(D && D.meta && D.meta.character) || "default
 const ofIcon = name => OS_ICON[name] ? osIcon(name) : SP_ICON[name] ? spIcon(name) : icon(name);
 
 /* --- the plans, per character -------------------------------------------- */
+/* The kept record, {plans, current}: a plan without a string id and type is
+   dropped, the first OF_MAX_PLANS of the rest kept, each field falling back
+   on its own. */
+const OF_RECORD = {
+  plans: KEEP.list(KEEP.record({id: KEEP.str(), type: KEEP.str(), site: KEEP.str(),
+    counts: KEEP.table(n => Number.isFinite(n) && n >= 0),
+    size: KEEP.oneOf(["peak", "average", "now", "custom", "auto"], "custom"),
+    key: KEEP.str(), mode: KEEP.oneOf(["self", "firm"]), depot: KEEP.bool(), depotKey: KEEP.str(),
+    finance: planFinanceClean, step: KEEP.oneOf(OF_STEPS, "what"), made: KEEP.num(), inv: KEEP.num()}),
+  {keep: p => p && typeof p.id === "string" && typeof p.type === "string", max: OF_MAX_PLANS}),
+  current: KEEP.str(),
+};
 function ofLoad(){
   const who = ofStore();
   if(ofPlansFor === who) return;
@@ -14697,20 +14745,9 @@ function ofLoad(){
   ofPlansFor = who; ofPlans = []; ofCur = null; ofStep = "what"; ofSizeMode = "auto"; ofModeNow = "self";
   if(switched){ planCounts = {}; planTarget = null; }
   try{
-    const raw = rememberedJson(who);
-    if(raw && Array.isArray(raw.plans)){
-      ofPlans = raw.plans.filter(p => p && typeof p.id === "string" && typeof p.type === "string").slice(0, OF_MAX_PLANS)
-        .map(p => ({id: p.id, type: p.type, site: typeof p.site === "string" ? p.site : null,
-          counts: p.counts && typeof p.counts === "object" && !Array.isArray(p.counts)
-            ? Object.fromEntries(Object.entries(p.counts).filter(([, n]) => Number.isFinite(n) && n >= 0)) : {},
-          size: ["peak", "average", "now", "custom", "auto"].includes(p.size) ? p.size : "custom",
-          key: typeof p.key === "string" ? p.key : null, mode: p.mode === "self" || p.mode === "firm" ? p.mode : null,
-          depot: typeof p.depot === "boolean" ? p.depot : null, depotKey: typeof p.depotKey === "string" ? p.depotKey : null,
-          finance: planFinanceClean(p.finance),
-          step: OF_STEPS.includes(p.step) ? p.step : "what", made: Number.isFinite(p.made) ? p.made : null,
-          inv: Number.isFinite(p.inv) ? p.inv : null}));
-      ofCur = ofPlans.some(p => p.id === raw.current) ? raw.current : null;
-    }
+    const kept = rememberedRecord(who, OF_RECORD);
+    ofPlans = kept.plans;
+    ofCur = ofPlans.some(p => p.id === kept.current) ? kept.current : null;
   }catch(e){}
   /* A plan kept as the current one comes back with its type, its factory and its lines. */
   const plan = ofPlan();
@@ -19705,13 +19742,16 @@ function sfOpenAt(o, day = sfDayNow(), minute = sfMinuteNow()){
   try{ const v = M.isOpen(o, day, minute); return v === true || v === false ? v : null; }catch(e){ return null; }
 }
 
+/* The kept record, {plans, current}: each plan through sfClean(), junk
+   dropped, the first SF_MAX_PLANS kept. */
+const SF_RECORD = {plans: KEEP.list(sfClean, {max: SF_MAX_PLANS}), current: KEEP.str()};
 function sfLoad(){
   const who = sfStore();
   if(sfPlansFor === who) return;
   sfPlansFor = who; sfPlans = []; sfCur = null; sfPick = null; sfLit = null; sfDay = null; sfMinute = null; sfQuery = "";
-  const raw = rememberedJson(who);
-  if(raw && Array.isArray(raw.plans)) sfPlans = raw.plans.map(sfClean).filter(Boolean).slice(0, SF_MAX_PLANS);
-  sfCur = raw && sfPlans.some(p => p.id === raw.current) ? raw.current : (sfPlans[0] ? sfPlans[0].id : null);
+  const kept = rememberedRecord(who, SF_RECORD);
+  sfPlans = kept.plans;
+  sfCur = sfPlans.some(p => p.id === kept.current) ? kept.current : (sfPlans[0] ? sfPlans[0].id : null);
 }
 /* A kept plan read back: through the model's normalizePlan() where there is
    one (junk is dropped), keeping the board's own fields beside it: the

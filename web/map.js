@@ -281,6 +281,20 @@ let finderSavedList = null;
    has is dropped, as a neighbourhood this save lacks already was. */
 const finderHoodKeys = hoods => hoods.map(hoodKeyOf).filter(Boolean);
 const finderOldHoods = hoods => Array.isArray(hoods) && hoods.some(h => hoodKeyOf(h) !== h);
+/* The stored filters read back (loadFinder(), keptRecord() in the board
+   script): an open record over finderDefaults(), every stored field kept as it
+   was but these. */
+const FINDER_KEPT = {
+  hoods: v => Array.isArray(v) ? finderHoodKeys(v) : null,
+  layouts: v => Array.isArray(v) ? v.filter(c => typeof c === "string") : [],
+  // Availability used to be two switches; a state saved then opens on
+  // whichever list it was reading.
+  show: (v, saved) => v || (saved.buy ? "takeover" : "rent"),
+  vac: () => undefined, buy: () => undefined, sale: () => undefined, dir: () => undefined,
+  saleSort: finderSaleSort,
+  // A new load opens the plain map; only the filters are stored.
+  on: () => false,
+};
 function finderReadSaved(raw){
   let list = null;
   try{ list = JSON.parse(raw); }catch(e){}
@@ -896,21 +910,13 @@ class CityMapView {
     this.fsCharacter = who;
     this.fs = finderDefaults();
     const store = this.finderStore(); if(!store) return;
+    const saved = rememberedJson(store);
     try{
-      const saved = JSON.parse(localStorage.getItem(store));
-      if(saved && typeof saved === "object") this.fs = {...this.fs, ...saved,
-        hoods: Array.isArray(saved.hoods) ? finderHoodKeys(saved.hoods) : null,
-        layouts: Array.isArray(saved.layouts) ? saved.layouts.filter(c => typeof c === "string") : [],
-        // Availability used to be two switches; a state saved then opens on
-        // whichever list it was reading.
-        show: saved.show || (saved.buy ? "takeover" : "rent")};
-      delete this.fs.vac; delete this.fs.buy; delete this.fs.sale; delete this.fs.dir;
+      this.fs = keptRecord(saved, FINDER_KEPT, this.fs);
       // A sort saved before picks were recorded counts as picked unless it is
       // the category's own order.
       if(typeof saved?.sortPicked !== "boolean") this.fs.sortPicked = this.fs.sort !== this.sortKeys()[0];
     }catch(e){}
-    this.fs.saleSort = finderSaleSort(this.fs.saleSort);
-    this.fs.on = false;   // a new load opens the plain map; only the filters are stored
   }
   saveFinder(){
     if(!premises()) return;
