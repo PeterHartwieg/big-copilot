@@ -22,6 +22,9 @@ namespace BigCopilotLink
         private volatile string _character = "";
         private volatile string _company = "";
         private volatile int _build;
+        // GameVersion.buildNumber only. Stays 0 until the running game answers,
+        // and is never filled from the save's buildNumberAtLastSave.
+        private volatile int _runningBuild;
 
         // DateTime and long cannot be volatile, so the poll time crosses threads as
         // ticks through Interlocked.
@@ -34,6 +37,8 @@ namespace BigCopilotLink
         public string Character { get { return _character; } }
         public string Company { get { return _company; } }
         public int Build { get { return _build; } }
+        /// <summary>The running game's build, or 0 until GameVersion answers. Never the save stamp.</summary>
+        public int RunningBuild { get { return _runningBuild; } }
 
         public DateTime LastHealthPollUtc
         {
@@ -65,25 +70,54 @@ namespace BigCopilotLink
             _hour = TimeHelper.CurrentHour;
             _minute = TimeHelper.CurrentMinute;
 
+            var stamped = 0;
             var instance = SaveGameManager.Current;
             if (instance != null)
             {
                 _cash = instance.Money;
                 _character = instance.characterId ?? "";
                 _company = instance.SaveGameName ?? "";
+                stamped = instance.buildNumberAtLastSave;
             }
 
-            // The build number only has to be found once. Before the first save the
-            // fallback reads 0, so keep trying until something answers.
-            if (_build == 0) _build = ReadBuildNumber();
+            // Every pump, not once: an early save stamp must not stick after
+            // GameVersion answers. RememberBuild keeps the two numbers apart.
+            var next = RememberBuild(ReadRunningBuild(), stamped, _build, _runningBuild);
+            _build = next[0];
+            _runningBuild = next[1];
+        }
+
+        /// <summary>
+        /// What /health should publish after one refresh. <paramref name="live"/> is
+        /// GameVersion.buildNumber, or 0 when it has not answered.
+        /// <paramref name="stamped"/> is the loaded save's buildNumberAtLastSave.
+        /// <paramref name="held"/> and <paramref name="running"/> are the numbers
+        /// already published. Returns {best known, running}. A positive live build
+        /// replaces an earlier save-stamp fallback. The save stamp is never stored
+        /// as the running build, and a later miss does not put it back over a
+        /// build the game already reported.
+        /// </summary>
+        internal static int[] RememberBuild(int live, int stamped, int held, int running)
+        {
+            if (live > 0)
+            {
+                running = live;
+                held = live;
+            }
+            else if (held == 0 && stamped > 0)
+            {
+                held = stamped;
+            }
+            return new[] { held, running };
         }
 
         /// <summary>
         /// GameVersion.buildNumber is a public field (verified on build 3680; the
-        /// string getters are private). The fallback is the build stamped into the
-        /// loaded save, which is 0 until the player's first save.
+        /// string getters are private). 0 until it answers. The save stamp is not
+        /// a substitute here: <see cref="RememberBuild"/> may use it only as the
+        /// best-known number, and only while this stays 0.
         /// </summary>
-        private static int ReadBuildNumber()
+        private static int ReadRunningBuild()
         {
             try
             {
@@ -94,9 +128,7 @@ namespace BigCopilotLink
             {
                 // A version we cannot read is not worth failing health over.
             }
-
-            var instance = SaveGameManager.Current;
-            return instance != null ? instance.buildNumberAtLastSave : 0;
+            return 0;
         }
 
     }

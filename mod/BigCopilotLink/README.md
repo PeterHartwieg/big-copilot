@@ -30,6 +30,10 @@ game definitions. The collector uses game getters and never loads another mod's 
 Version 0.8.1 uses wire schema 5 and adds registered vehicle prices and economy
 capability observations to the paired facts. Update the dashboard before using this
 Link version. The dashboard still accepts older Link schemas and portable snapshots.
+Version 0.8.2 keeps schema 5 and adds `runningBuild` on `/health`: the running
+game's build, separate from the save's stamp. An older dashboard ignores the
+field. A newer dashboard shows the running build as unknown when a mod before
+0.8.2 omits it.
 HMP/RLO capability observations identify forecasts that need unsupported rules;
 they do not claim to calculate those mods' complete running costs. Unknown marketing
 catalogues leave read-only building facts available and refuse campaign writes.
@@ -319,7 +323,7 @@ packager first; repository-only compilation does not replace that check.
    | ModId | `BigCopilotLink` |
    | DisplayName | `Big Copilot Link` |
    | Author | `Peter Hartwieg` |
-   | Version | `0.8.1` |
+   | Version | `0.8.2` |
    | Mod Assembly | drag `BigCopilotLink.asmdef` into the field |
    | Locales Folder | drag the `Locales` folder into the field; the option labels are keys in `Locales/en.json` |
 
@@ -346,7 +350,7 @@ packager first; repository-only compilation does not replace that check.
    the Windows build module is not installed and that is fine, the packager's assembly
    build works and the bundle step is skipped because the mod has no assets).
 
-The release script uses a dedicated SDK in `build/sdk`, verifies the runtime and manifest versions, and writes `build/BigCopilotLink-0.8.1.zip` and SHA-256 files. It reuses the existing Workshop thumbnail. It does not install or upload the mod. Set `BA_GAME_DLLS` to prepared game references when the documented Mac shim is unavailable.
+The release script uses a dedicated SDK in `build/sdk`, verifies the runtime and manifest versions, and writes `build/BigCopilotLink-0.8.2.zip` and SHA-256 files. It reuses the existing Workshop thumbnail. It does not install or upload the mod. Set `BA_GAME_DLLS` to prepared game references when the documented Mac shim is unavailable.
 
 Unity writes a `.meta` file next to every file in this folder; they are committed,
 along with `ModManifest.asset`, because the GUIDs have to stay stable. The repo's
@@ -360,7 +364,7 @@ Launch the game, enable **Big Copilot Link** in the Mods menu, load a save, then
 curl http://127.0.0.1:8322/health
 ```
 
-Expect `{"ok":true,"schemaVersion":5,"modVersion":"0.8.1","source":"game",…,"writes":["uniforms","imports","schedule","hire","marketing","rent","wholesale"],"features":["hire.reschedule","hire.undo","rent.undo","wholesale.undo","building-facts.v1"],"paired":false}` and a
+Expect `{"ok":true,"schemaVersion":5,"modVersion":"0.8.2","source":"game",…,"build":3682,"runningBuild":3682,"writes":["uniforms","imports","schedule","hire","marketing","rent","wholesale"],"features":["hire.reschedule","hire.undo","rent.undo","wholesale.undo","building-facts.v1"],"paired":false}` and a
 `[BigCopilotLink] serving the game to Big Copilot on http://127.0.0.1:8322/` line in
 the player log (`%USERPROFILE%\AppData\LocalLow\Hovgaard Games\Big Ambitions\Player.log`;
 on a Mac, `~/Library/Logs/Hovgaard Games/Big Ambitions/Player.log`), then, a few

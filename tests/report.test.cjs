@@ -57,7 +57,7 @@ test('report.js: nothing is attached unless its box is ticked', () => {
   const parts = report.parts(CTX, {text: '  It broke.  ', save: false, details: false, bytes: BYTES, gameBuild: 3682}, e);
   assert.deepEqual(Array.from(parts, ([name]) => name), ['report']);
   const sent = JSON.parse(parts[0][1]);
-  assert.deepEqual(sent, {text: 'It broke.', siteBuild: '0123456789', gameBuild: 3682, browser: 'chrome', source: 'link'});
+  assert.deepEqual(sent, {text: 'It broke.', siteBuild: '0123456789', gameBuild: 3682, runningBuild: null, browser: 'chrome', source: 'link'});
   assert.deepEqual(e.reads, [], 'no storage is read for a report without details');
 });
 
@@ -78,6 +78,7 @@ test('report.js: the details carry the traceback and three settings, and nothing
   // The public report: the error's class and where it was raised, never its message.
   const sent = JSON.parse(parts.report);
   assert.equal(sent.gameBuild, null);
+  assert.equal(sent.runningBuild, null);
   assert.equal(sent.error, 'KeyError in _staffing (ba_dashboard.py line 4120)');
   assert.equal(parts.report.includes('private-trace-sentinel'), false);
   assert.doesNotMatch(parts.report, /Alice|Smith|Traceback/);
@@ -111,6 +112,10 @@ test('report.js: the build, source and browser are held to the values the Worker
   assert.equal(sent({source: 'C:\\Users\\alice'}, {}).source, 'none');
   assert.equal(sent(CTX, {gameBuild: '3682'}).gameBuild, null);
   assert.equal(sent(CTX, {gameBuild: 3682.5}).gameBuild, null);
+  assert.equal(sent(CTX, {runningBuild: '3682'}).runningBuild, null);
+  assert.equal(sent(CTX, {runningBuild: 0}).runningBuild, null);
+  assert.equal(sent(CTX, {gameBuild: 3670, runningBuild: 3682}).runningBuild, 3682);
+  assert.equal(sent(CTX, {gameBuild: 3670, runningBuild: 3682}).gameBuild, 3670);
   assert.equal(sent(CTX, {text: 'y'.repeat(6000)}).text.length, 5000);
   const browsers = {
     'Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 Chrome/140.0 Safari/537.36 Edg/140.0': 'edge',

@@ -2945,9 +2945,13 @@ function drawMast(){
   if(m.locale === false)
     flags.push(`<span class="flag" data-tip="${attr(tt("nav.mast.namesonly.tip", "Load the game's en.json for recipes and station capacities; without it the factory and capacity views cannot be filled"))}">${
       tt("nav.mast.namesonly.text", "NAMES ONLY")}</span>`);
-  if(m.verifiedBuild && m.build > m.verifiedBuild)
+  /* The running executable, when the link sends one, can be newer than the
+     stamp in the save. The flag names whichever is ahead of the check. */
+  const liveBuild = footRunning();
+  const seenBuild = Math.max(m.build || 0, liveBuild || 0);
+  if(m.verifiedBuild && seenBuild > m.verifiedBuild)
     flags.push(`<span class="flag" data-tip="${attr(tt("nav.mast.unchecked.tip", "This board was checked on build {v}; a newer game may have changed what the save records", {v: m.verifiedBuild}))}">${
-      tt("nav.mast.unchecked.text", "BUILD {b} UNCHECKED", {b: m.build})}</span>`);
+      tt("nav.mast.unchecked.text", "BUILD {b} UNCHECKED", {b: seenBuild})}</span>`);
   const modded = mdFlag(D.mods);
   if(modded) flags.push(modded);
   /* Live and well is the dot alone; Stale and Not live say so (declutter S9). */
@@ -20903,6 +20907,25 @@ function drawNeeds(){
     }).join("")}</div></div>` : "");
 }
 
+/* The running game, when this board is linked to a mod that sends it. */
+function footRunning(){
+  if(typeof SOURCE === "undefined" || !SOURCE.link) return null;
+  const link = SOURCE.link();
+  const game = link && link.runningBuild;
+  return Number.isInteger(game) && game > 0 ? game : null;
+}
+/* The footer's build line. A folder or a file has only the save's stamp.
+   A link names the running game and the save, and says which half is unknown. */
+function footGameLine(m){
+  const save = Number.isInteger(m.build) && m.build > 0 ? m.build : null;
+  const linked = typeof SOURCE !== "undefined" && SOURCE.link && SOURCE.link();
+  if(!linked) return save == null ? tt("foot.build.none", "Game build unknown") : tt("foot.build", "Game build {n}", {n: save});
+  const game = footRunning();
+  if(game != null && save != null) return tt("foot.build.both", "Game {game}, save {save}", {game, save});
+  if(game != null) return tt("foot.build.game", "Game {game}, save unknown", {game});
+  if(save != null) return tt("foot.build.save", "Game unknown, save {save}", {save});
+  return tt("foot.build.none", "Game build unknown");
+}
 function drawFooter(){
   const m = D.meta;
   const f = $("footFile");  // the CLI's page only: the site names the save in its source strip
@@ -20910,7 +20933,7 @@ function drawFooter(){
     f.textContent = tt("foot.file.text", "{file} · saved {when}", {file: m.source, when: m.saved});
     f.dataset.tip = tt("foot.file.tip", "Board built {when}", {when: m.generated});
   }
-  $("footBuild").textContent = tt("foot.build", "Game build {n}", {n: m.build});
+  $("footBuild").textContent = footGameLine(m);
   /* At 1500 px and under, where the masthead has no room to spare, the
      difficulty chip stands beside the game build instead; the stylesheet shows
      one or the other. */
@@ -26868,10 +26891,14 @@ const gwBox = (icon, tone, html) => `<div class="gw-ok${tone ? ` ${tone}` : ""}"
 const gwReread = done => done
   ? `<div class="gw-reread done">${gwSvg("tick")}<span>${tt("nav.dlg.reread.done", "The board shows the game as it now stands")}</span></div>`
   : `<div class="gw-reread"><span>${tt("nav.dlg.reread.now", "Reading the game again")}</span><div class="gw-prog"><i></i></div></div>`;
-/* The game's screen, sketched: its popup and a cursor heading for Allow. */
-const GW_SCENE = `<div class="gw-scene" aria-hidden="true"><div class="gw-sbar"><i></i><i></i><i></i><span>BIG AMBITIONS</span></div><div class="city">${
-  [26, 40, 18, 48, 30, 22, 44, 34, 20, 38, 28].map(h => `<i style="height:${h}px"></i>`).join("")}</div><div class="gw-pop"><b><i></i>Allow Big Copilot to change your game?</b><div class="bt"><span>Deny</span><span class="y">Allow</span></div></div>${
-  gwSvg("cursor", "gw-cursor")}</div>`;
+/* A picture of the game's screen, not a control. Allow is clicked in the
+   game window. The words inside the picture are the game's own. */
+function gwScene(){
+  return `<div class="gw-scene" role="img" aria-labelledby="gwSceneCap" aria-describedby="gwSceneNote"><div class="gw-sbar"><i></i><i></i><i></i><span>BIG AMBITIONS</span><span class="gw-cap" id="gwSceneCap">${
+    tt("nav.dlg.scene", "Illustration")}</span></div><div class="city">${
+    [26, 40, 18, 48, 30, 22, 44, 34, 20, 38, 28].map(h => `<i style="height:${h}px"></i>`).join("")}</div><div class="gw-pop" aria-hidden="true"><b><i></i>Allow Big Copilot to change your game?</b><div class="bt"><span>Deny</span><span class="y">Allow</span></div></div>${
+    gwSvg("cursor", "gw-cursor")}</div>`;
+}
 
 /* The board could not read the game after a write: its follow read gave up
    or its build failed. Cleared by the next board built. */
@@ -27018,20 +27045,22 @@ function gwAsking(dlg, state, info){
   const hint = "";
   if(state === "retry") return gwPaint(dlg, {phase: "approval", wire: "busy", say: `<b>${tt("nav.dlg.say.question", "The game is busy with a question")}</b>`,
     body: `<p class="gw-said">${tt("nav.dlg.retry.text", "The game is still answering an earlier request. Asking again in {n} s…", {n: Number(info.wait) || 1})}</p>`, hint, buttons: [cancel]});
+  const where = () => tt("nav.dlg.waiting.where", "Allow is a button in the game window, not on this picture. The game closes that question after about 60 seconds.");
+  const note = () => `<p class="gw-lead" id="gwSceneNote">${where()}</p>`;
   if(state !== "waiting") return gwPaint(dlg, {phase: "approval", wire: "ask", say: `<b>${tt("nav.dlg.say.asking", "Asking the game…")}</b>`,
-    body: `${GW_SCENE}<p class="gw-lead">${tt("nav.dlg.about.text", "The game is about to ask you, on its own screen, whether this browser may change it.")}</p>`, hint, buttons: [cancel]});
+    body: `${gwScene()}<p class="gw-lead">${tt("nav.dlg.about.text", "The game is about to ask you, on its own screen, whether this browser may change it.")}</p>${note()}`, hint, buttons: [cancel]});
   const since = info.since || Date.now();
   const clock = () => { const s = Math.max(0, Math.floor((Date.now() - since) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
   const waiting = () => gwPaint(dlg, {phase: "approval", wire: "wait", say: `<b>${tt("nav.dlg.say.waiting", "Waiting for you in the game")}</b>`, meta: clock(),
-    body: `${GW_SCENE}<p class="gw-lead">${info.resumed ? tt("nav.dlg.waiting.open", "The question is still open in the game.") + " " : ""}${
+    body: `${gwScene()}<p class="gw-lead">${info.resumed ? tt("nav.dlg.waiting.open", "The question is still open in the game.") + " " : ""}${
       tt("nav.dlg.waiting.text", "The game is asking you on its screen.")} <b>${tt("nav.dlg.waiting.do", "Switch to Big Ambitions and choose Allow.")}</b> ${
-      tt("nav.dlg.waiting.once", "It asks once for this browser.")}</p>`,
+      tt("nav.dlg.waiting.once", "It asks once for this browser.")}</p>${note()}`,
     hint, buttons: [cancel]});
-  /* The game closes its question after a minute; halfway, the dialog asks
-     whether the game is where the player can see it. The clock keeps going. */
+  /* The game closes its question after about 60 seconds; halfway, the dialog
+     asks whether the game is where the player can see it. The clock keeps going. */
   const quiet = keepTick => gwPaint(dlg, {phase: "approval", wire: "wait", say: `<b>${tt("nav.dlg.say.still", "Still waiting")}</b>`, meta: clock(), keepTick,
     body: gwBox("clock", "wait", `<b>${tt("nav.dlg.quiet.lead", "No answer from the game yet.")}</b> ${
-      tt("nav.dlg.quiet.text", "Is the game paused in a menu, or minimised? Its question waits there, and closes itself after a minute.")}`),
+      tt("nav.dlg.quiet.text", "Is the game paused in a menu, or minimised?")} ${where()}`),
     hint, buttons: [cancel]});
   const late = () => Date.now() - since >= 30000;
   let shown = late() ? "quiet" : "waiting";
@@ -28607,6 +28636,26 @@ function startWatching(){
     linkChanged: () => { odThens = odThens.filter(t => odSameScope(t.scope, odScope())); gwGate(false, true); odSourceFailed(tt("app.reader.superseded", "Save selection changed")); },
     /* The game's clock moved with no new board: the marketing gates follow it. */
     linkClock: () => gwMkTick(),
+    /* The running build arrived, or dropped off, with no new save bytes.
+       Repaint the footer and the unchecked flag, and put the live dot back
+       as it was: drawMast builds that span afresh. */
+    runningBuild(){
+      if(typeof D === "undefined" || !D || !D.meta) return;
+      const live = $("live");
+      const cls = live ? live.className : "";
+      const word = live && live.querySelector("em") ? live.querySelector("em").textContent : "";
+      const title = live ? live.title : "";
+      drawMast();
+      drawFooter();
+      const again = $("live");
+      if(!again || !cls) return;
+      /* "just" is a short flash. Its timeout still names the node drawMast
+         just replaced, so copying the class would leave the new dot lit. */
+      again.className = cls.split(/\s+/).filter(c => c && c !== "just").join(" ");
+      again.title = title;
+      const em = again.querySelector("em");
+      if(em) em.textContent = word;
+    },
     lost(){
       const dot = $("live");
       /* "Not live" replaces a Stale mark: nothing repaints an off dot. */

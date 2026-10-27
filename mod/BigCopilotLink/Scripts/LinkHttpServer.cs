@@ -391,6 +391,9 @@ namespace BigCopilotLink
             w.Prop("modVersion", LinkMod.Version);
             w.Prop("source", "game");
             w.Prop("build", _health.Build);
+            // The running executable only. 0 until GameVersion answers. Mods
+            // before 0.8.2 omit the key; a client must not read "build" as this.
+            w.Prop("runningBuild", _health.RunningBuild);
             w.Prop("character", _health.Character);
             w.Prop("company", _health.Company);
             w.Prop("day", _health.Day);

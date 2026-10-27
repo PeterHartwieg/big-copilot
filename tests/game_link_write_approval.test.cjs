@@ -92,6 +92,30 @@ test('cancelling the wait sends nothing more, and the next ask picks the open qu
   page.on('request', (req) => sent.push(new URL(req.url()).pathname));
   await button(page, GIFTS).click();
   await pair(page).getByText(WAITING).waitFor();
+  // The sketch is a picture. Allow is not a button on this page.
+  const scene = pair(page).locator('.gw-scene');
+  assert.equal(await scene.evaluate((el) => getComputedStyle(el).pointerEvents), 'none');
+  assert.equal(await scene.evaluate((el) => getComputedStyle(el).cursor), 'default');
+  assert.equal(await scene.getByRole('button').count(), 0);
+  assert.equal(await scene.getAttribute('role'), 'img');
+  assert.equal(await scene.getAttribute('aria-labelledby'), 'gwSceneCap');
+  assert.equal(await scene.getAttribute('aria-describedby'), 'gwSceneNote');
+  assert.equal(await scene.getAttribute('aria-hidden'), null);
+  assert.equal(await scene.locator('.gw-pop').getAttribute('aria-hidden'), 'true');
+  await pair(page).getByText(en('nav.dlg.waiting.where')).waitFor();
+  await pair(page).getByText(en('nav.dlg.scene')).waitFor();
+  // The caption sits on the trailing edge of the picture's title bar.
+  assert.equal(await scene.evaluate(el => {
+    const cap = el.querySelector('.gw-cap');
+    const bar = el.querySelector('.gw-sbar');
+    return bar.getBoundingClientRect().right - cap.getBoundingClientRect().right < 12;
+  }), true);
+  // This fixture's save has no build stamp. The link still names the running
+  // game, and a stamp painted onto the board is shown beside it.
+  const health = await (await fetch(H.mockUrl + '/health')).json();
+  assert.equal(await page.locator('#footBuild').innerText(), `Game ${health.runningBuild}, save unknown`);
+  await page.evaluate(() => { D.meta.build = 3670; drawFooter(); });
+  assert.equal(await page.locator('#footBuild').innerText(), `Game ${health.runningBuild}, save 3670`);
   await pair(page).getByRole('button', {name: en("nav.dlg.cancel")}).click();
   await dialog(page).getByText(en("nav.dlg.say.notapproved"), {exact: true}).waitFor();
   const at = sent.length;
@@ -262,6 +286,8 @@ test('the game\'s approval: after 30 s the dialog asks whether the game can be s
   await page.clock.runFor(11000);
   assert.equal(await pair(page).getByText(en("nav.dlg.say.still")).isVisible(), true);
   assert.equal(await pair(page).getByText(en("nav.dlg.quiet.lead")).isVisible(), true);
+  assert.equal(await pair(page).getByText(en("nav.dlg.waiting.where")).isVisible(), true);
+  assert.equal(await pair(page).locator('.gw-scene').count(), 0, 'the picture is gone once the dialog asks if the game can be seen');
   // The keyboard stays on Cancel through the repaint.
   assert.equal(await page.evaluate(() => document.activeElement.dataset.gwB), en('nav.dlg.cancel'));
   const meta = pair(page).locator('.gw-meta');

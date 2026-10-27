@@ -143,11 +143,20 @@ class MockContract(unittest.TestCase):
         status, _, body = call(self.url + "/health")
         health = json.loads(body)
         self.assertEqual(status, 200)
-        for key in ("ok", "schemaVersion", "source", "build", "character", "company", "day",
+        for key in ("ok", "schemaVersion", "source", "build", "runningBuild", "character", "company", "day",
                     "hour", "minute", "cash", "stamp", "busy", "size", "refreshedAt", "writes", "paired"):
             self.assertIn(key, health)
         self.assertEqual(health["source"], "mock")
         self.assertEqual(health["schemaVersion"], 1)
+        # The mock has one executable, so the running build matches the one it was given.
+        self.assertEqual(health["runningBuild"], 3680)
+        self.assertEqual(health["build"], 3680)
+        self.link.running_build = 3699
+        self.assertEqual(json.loads(call(self.url + "/health")[2])["runningBuild"], 3699)
+        self.assertEqual(json.loads(call(self.url + "/health")[2])["build"], 3680)
+        # False omits the field, as a mod before 0.8.2 does.
+        self.link.running_build = False
+        self.assertNotIn("runningBuild", json.loads(call(self.url + "/health")[2]))
         self.assertTrue(health["stamp"])
         self.assertEqual(health["size"], os.path.getsize(self.path))
 

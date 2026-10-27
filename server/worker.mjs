@@ -376,18 +376,31 @@ function reportFacts(raw, withDetails) {
     return null;
   }
   if (typeof data !== "object" || data === null || Array.isArray(data)) return null;
-  const keys = ["text", "siteBuild", "gameBuild", "browser", "source", "error"];
+  // runningBuild is optional: a page from before it existed omits the key.
+  const keys = ["text", "siteBuild", "gameBuild", "runningBuild", "browser", "source", "error"];
   if (Object.keys(data).some((key) => !keys.includes(key))) return null;
-  const { text, siteBuild, gameBuild = null, browser, source, error = null } = data;
+  const { text, siteBuild, gameBuild = null, runningBuild = null, browser, source, error = null } = data;
   if (typeof text !== "string" || text.length > REPORT_TEXT_MAX) return null;
   const said = text.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "").trim();
   if (!said) return null;
   if (typeof siteBuild !== "string" || !/^(?:[0-9a-f]{10}|dev)$/.test(siteBuild)) return null;
-  if (gameBuild !== null && !(Number.isSafeInteger(gameBuild) && gameBuild > 0 && gameBuild < 1000000)) return null;
+  // gameBuild is the save's stamp. runningBuild is the executable. Either
+  // may be missing; a present value has to be a build number.
+  const buildNumber = (v) => v === null || (Number.isSafeInteger(v) && v > 0 && v < 1000000);
+  if (!buildNumber(gameBuild) || !buildNumber(runningBuild)) return null;
   if (typeof browser !== "string" || !Object.hasOwn(REPORT_BROWSERS, browser)) return null;
   if (typeof source !== "string" || !Object.hasOwn(REPORT_SOURCES, source)) return null;
   if (error !== null && (typeof error !== "string" || !REPORT_ERROR.test(error) || !withDetails)) return null;
-  return { text: said, siteBuild, gameBuild, browser, source, error };
+  return { text: said, siteBuild, gameBuild, runningBuild, browser, source, error };
+}
+
+// Both numbers, or one word when the page knows neither. gameBuild is the
+// save stamp; runningBuild is the executable.
+function reportBuildCell(facts) {
+  const game = facts.runningBuild;
+  const save = facts.gameBuild;
+  if (game === null && save === null) return "unknown";
+  return `game ${game === null ? "unknown" : game}, save ${save === null ? "unknown" : save}`;
 }
 
 function reportTitle(facts) {
@@ -409,7 +422,7 @@ function reportBody(facts, folder, attached) {
   const yes = (on) => (on ? "yes" : "no");
   const rows = [
     ["Site build", "`" + facts.siteBuild + "`"],
-    ["Game build", facts.gameBuild === null ? "unknown" : String(facts.gameBuild)],
+    ["Game build", reportBuildCell(facts)],
     ["Browser", REPORT_BROWSERS[facts.browser]],
     ["Source", REPORT_SOURCES[facts.source]],
     ["Save attached", yes(attached.save)],

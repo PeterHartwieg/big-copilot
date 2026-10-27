@@ -176,7 +176,8 @@ test('report: a save and details go to R2 in one folder; the issue holds only th
   assert.deepEqual(Buffer.from(await stored.arrayBuffer()), Buffer.from(await save.arrayBuffer()), 'the save is stored byte for byte');
   assert.equal(await (await bucket.get(`${folder}/details.json`)).text(), details);
   const meta = JSON.parse(await (await bucket.get(`${folder}/report.json`)).text());
-  assert.deepEqual(Object.keys(meta).sort(), ['browser', 'details', 'gameBuild', 'receivedAt', 'save', 'siteBuild', 'source']);
+  assert.deepEqual(Object.keys(meta).sort(), ['browser', 'details', 'gameBuild', 'receivedAt', 'runningBuild', 'save', 'siteBuild', 'source']);
+  assert.equal(meta.runningBuild, null);
   assert.equal(meta.save, true);
   assert.equal(JSON.stringify(meta).includes('worked yesterday'), false, "the player's text goes to the issue only");
 
@@ -191,7 +192,7 @@ test('report: a save and details go to R2 in one folder; the issue holds only th
   assert.equal(issue.title, 'Bug report: The board stopped at Reading the save.');
   assert.match(issue.body, /```text\nThe board stopped at Reading the save\.\nIt worked yesterday\.\n```/);
   assert.match(issue.body, /\| Site build \| `0123456789` \|/);
-  assert.match(issue.body, /\| Game build \| 3682 \|/);
+  assert.match(issue.body, /\| Game build \| game unknown, save 3682 \|/);
   assert.match(issue.body, /\| Browser \| Chrome \|/);
   assert.match(issue.body, /\| Source \| Save folder \|/);
   assert.match(issue.body, /\| Save attached \| yes \|/);
@@ -211,6 +212,17 @@ test('report: with nothing attached nothing is stored, and the issue says so', a
   assert.match(issue.body, /\| Save attached \| no \|/);
   assert.match(issue.body, /\| Technical details attached \| no \|/);
   assert.doesNotMatch(issue.body, /Private folder|### Error/);
+});
+
+test('report: the running game and the save stamp are both on the issue, and an older page may omit the running build', async () => {
+  const both = await expectStatus(await send([['report', reportJson({gameBuild: 3670, runningBuild: 3682, source: 'link'})]]), 201, 'both builds');
+  assert.match(JSON.parse(github.calls.at(-1).body).body, /\| Game build \| game 3682, save 3670 \|/);
+  assert.equal(both.issue.number > 0, true);
+  // No runningBuild key: a page from before the field. The save stamp still stands.
+  await expectStatus(await send([['report', reportJson({gameBuild: 3670, source: 'link'})]]), 201, 'save stamp only');
+  assert.match(JSON.parse(github.calls.at(-1).body).body, /\| Game build \| game unknown, save 3670 \|/);
+  await expectStatus(await send([['report', reportJson({gameBuild: null, runningBuild: 3682, source: 'link'})]]), 201, 'running build only');
+  assert.match(JSON.parse(github.calls.at(-1).body).body, /\| Game build \| game 3682, save unknown \|/);
 });
 
 test('report: the error line is public only with the details, and only as a class and a place in the code', async () => {
@@ -316,6 +328,8 @@ test('report: each part is checked by name, kind and size, and the report by its
     ['unknown field', [['report', reportJson({email: 'a@b.c'})]]],
     ['bad site build', [['report', reportJson({siteBuild: 'abc'})]]],
     ['bad game build', [['report', reportJson({gameBuild: '3682'})]]],
+    ['bad running build', [['report', reportJson({runningBuild: '3682'})]]],
+    ['zero running build', [['report', reportJson({runningBuild: 0})]]],
     ['unknown browser', [['report', reportJson({browser: 'Mozilla/5.0 (Windows NT 10.0)'})]]],
     ['unknown source', [['report', reportJson({source: 'C:\\Users\\alice'})]]],
     ['error too long', [['report', reportJson({error: 'E' + 'e'.repeat(200)})], ['details', '{}']]],

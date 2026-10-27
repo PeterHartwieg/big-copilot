@@ -354,7 +354,11 @@
     supersede();
     if (linked) heldFailure = {name: linked.name, file: linked, facts: linked.linkFacts,
       error: String(err.message || ""), trace: String(err.stack || ""), kind: String(err.name || ""),
-      bytes: null, held: false, build: Number.isInteger(linked.linkBuild) ? linked.linkBuild : null};
+      bytes: null, held: false,
+      // The reader died before it parsed a stamp, so the save is unknown.
+      // health.build is not a substitute: on an older mod it may be the
+      // running game.
+      build: null};
     if (worker) worker.terminate();
     note("");
     state("bad", () => tt("app.reader.failed", "The reader could not finish loading"), errWords(err));
@@ -786,6 +790,10 @@
   // The /health body read with the newest bytes, for the strip; after a
   // failed build it names the failed bytes' game, not the board's.
   let linkHealth = null;
+  // GameVersion.buildNumber from a mod that sends runningBuild (0.8.2).
+  // Null when the mod omits it, or until the game answers. Never copied
+  // from health.build: that number can stay on the save's stamp.
+  let linkRunning = null;
   // The game's clock ({day, hour, minute}) at the newest /health of that same
   // game, read by any caller: it moves on every read, new bytes or not, so
   // what the board judges by the hour (a marketing agency open now, the import
@@ -800,6 +808,26 @@
   const LINK_SCHEMA = 5;
   let linkSchema = LINK_SCHEMA;
   const linkVersionKnown = v => v === 1 || v === 2 || v === 3 || v === 4 || v === LINK_SCHEMA;
+  // A build number the report and the footer may show. Anything else is unknown.
+  const linkBuildNumber = (v) => (Number.isInteger(v) && v > 0 && v < 1000000 ? v : null);
+  // /health reads of one source overlap: the watcher can be in flight while
+  // Update reads again. Each read takes a number when it starts. A reply
+  // publishes only when no later read of this page has published already, so
+  // an older answer cannot replace a newer running build. A reply from
+  // another source is dropped before this, by its generation and address.
+  let healthReads = 0;
+  let healthPublished = 0;
+  // The running game, from a health object that carries the field. An older
+  // mod leaves it out; that is unknown, not health.build.
+  function noteRunningBuild(health) {
+    const next = health && Object.prototype.hasOwnProperty.call(health, "runningBuild")
+      ? linkBuildNumber(health.runningBuild) : null;
+    if (next === linkRunning) return;
+    linkRunning = next;
+    if (handlers && handlers.runningBuild) {
+      try { handlers.runningBuild(); } catch (e) {}
+    }
+  }
   const linkSpeaks = () => linkVersionKnown(linkSchema);
   let linkGone = false;   // the watcher has said the game went away
   let linkNotReady = 0;   // /health answers in a row that were never health, any caller
@@ -1066,6 +1094,7 @@
     linkUrl = null;
     lastLinkStamp = "";
     linkHealth = null;
+    linkRunning = null;
     linkNow = null;
     linkSchema = LINK_SCHEMA;
     linkGone = false;
@@ -1135,11 +1164,24 @@
   // answers that were never health names the port.
   const NOT_READY = Object.freeze({stamp: "", busy: true});
   async function readHealth() {
-    const res = await linkFetch("/health");
+    // This read belongs to the source that asked. The address is not enough
+    // to name it: choosing the link again at the same address is a new
+    // source, and a file or a folder is not a link. A reply that arrives
+    // after either publishes nothing.
+    const gen = sourceGen;
+    const url = linkUrl;
+    const seq = ++healthReads;
+    const res = await linkFetch("/health", {link: url});
+    if (gen !== sourceGen || url !== linkUrl) return NOT_READY;
     if (res.status !== 200) return NOT_READY;
     let body = null;
     try { body = await res.json(); } catch (e) {}
+    if (gen !== sourceGen || url !== linkUrl) return NOT_READY;
     if (!(body && typeof body === "object" && !Array.isArray(body))) return NOT_READY;
+    // The caller still hears its own answer. Shared state stays with the
+    // later read when this one started first and landed second.
+    if (seq < healthPublished) return body;
+    healthPublished = seq;
     // An object, from whichever caller: the run of never-health is over. What
     // the watcher said stands until a health answer of this version.
     linkNotReady = 0;
@@ -1149,6 +1191,7 @@
     linkSchema = body.schemaVersion;
     if (spoke !== linkSpeaks()) linkMoved();
     tickClock(body);
+    if (linkVersionKnown(body.schemaVersion)) noteRunningBuild(body);
     return body;
   }
   // The game's clock from a health answer of the game behind the board (same
@@ -1321,7 +1364,6 @@
         // The name is the eventual download's. Internally this File holds
         // only gzip bytes; the portable Base64 envelope is created on demand.
         file.linkFacts = factsText;
-        file.linkBuild = health.build;
         // buildFrom() takes the stamp only once the board has taken the bytes;
         // a build that failed keeps its own reason, and the stamp behind the
         // board, so the next check reads the same bytes again.
@@ -2030,7 +2072,11 @@
       heldFailure = {name: file.name, error: String(err.message || ""), trace: err.trace || String(err.stack || ""),
         kind: err.trace ? "" : String(err.name || ""),
         bytes: err.bytes || null, facts: err.facts || null, held: !!built || err.held === true,
-        build: builtOn !== null ? builtOn : file.linkStamp && linkHealth && Number.isInteger(linkHealth.build) ? linkHealth.build : null};
+        // Only a stamp the reader parsed. health.build is not the save's:
+        // on an older mod it is whichever number the mod learned first. When
+        // this is null and the bytes are still in hand, the report asks the
+        // reader for the save's own stamp.
+        build: builtOn};
       state("bad", () => tt("app.build.failed", "Could not read the save"),
         () => tt("app.build.attempted", "{name} · attempted {when}", {name: file.name, when: fmtTime(at)}));
       const rewritten = err.name === "NotReadableError";
@@ -2759,6 +2805,9 @@
         const h = await readerHeld(true);
         return h && h.name === failed.name ? h.build : null;
       },
+      // The running executable, while this source is still the link and the
+      // mod sent one. A file, a folder, or an older mod has none.
+      runningBuild: () => (linkUrl ? linkRunning : null),
     };
   }
   async function openReport(from) {
@@ -2803,7 +2852,8 @@
     link: () => (linkUrl && linkHealth ? {writes: linkWrites(), features: linkFeatures(), character: linkHealth.character || "",
       company: linkHealth.company || "", day: linkTime().day, hour: linkTime().hour, minute: linkTime().minute,
       mod: typeof linkHealth.modVersion === "string" ? linkHealth.modVersion : "",
-      approved: !!approvalToken(linkUrl), stamp: lastLinkStamp, source: sourceGen} : null),
+      approved: !!approvalToken(linkUrl), stamp: lastLinkStamp, source: sourceGen,
+      runningBuild: linkRunning} : null),
     // Resolves to {status, error, body}; see gameWrite().
     write: (kind, body, opts) => gameWrite(kind, body, opts),
     // Update, for a board that learns the game has moved on.

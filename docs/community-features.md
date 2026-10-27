@@ -156,7 +156,10 @@ the CLI's `dashboard.html` keeps the plain Discord link. The form posts
 `multipart/form-data` to `POST /api/report` in `server/worker.mjs`:
 
 - `report`, always: the player's text (at most 5,000 characters), the site build
-  (`LEDGER_BUILD`), the game build, the browser family, the source kind and, only with
+  (`LEDGER_BUILD`), the save's build (`gameBuild`, the save's
+  `buildNumberAtLastSave`) and the running game's build (`runningBuild`, from
+  the link's `/health`, or null when the mod does not send it or no game is
+  linked), the browser family, the source kind and, only with
   the technical details ticked, the error's class and where it was raised
   (`KeyError in _staffing (ba_dashboard.py line 4120)`, built by `brErrorLine()` from
   the part of a Python traceback that comes before any message text; for a script error,
