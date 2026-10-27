@@ -7,6 +7,7 @@
     "test": "node tools/verify.mjs node",
     "test:community": "node tools/verify.mjs node \"tests/community-*.test.cjs\"",
     "check:worker": "node tools/verify.mjs worker",
+    "lint": "node tools/verify.mjs lint",
     "deploy": "node tools/deploy.mjs",
     "verify": "node tools/verify.mjs",
     "test:optimized": "node tools/verify.mjs optimized",
@@ -15,7 +16,10 @@
     "verify:check": "node tools/verify.mjs check"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "esbuild": "^0.28.1",
+    "eslint": "10.12.0",
+    "globals": "17.13.0",
     "miniflare": "^5.20260911.0-alpha",
     "playwright": "^1.63.0",
     "wrangler": "^4.131.1"
