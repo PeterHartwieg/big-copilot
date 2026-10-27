@@ -1,17 +1,11 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {en} = require('./_i18n.cjs');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
-const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
-const {between} = require('./_slice.cjs');
-const startup = between(source, '    // A folder chosen on an earlier visit:', '  });', {last: true});
-// The page's tt(), which app.js writes every word through.
-const i18n = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
-// web/app.js run whole, for the helpers startup calls: errWords(), and the
-// loopback check a remembered link goes through.
-const {shell} = require('./_shell.cjs').loadShell();
+// web/app.js run whole. Startup's last step, resumeSource(), runs through
+// BigCopilotShell.scope with stand-ins for what it hands the source to; the
+// helpers it calls itself, errWords() and the loopback check a remembered
+// link goes through, are the real ones.
+const {loadShell} = require('./_shell.cjs');
 
 async function resume(permission, options = {}) {
   const loads = [];
@@ -22,21 +16,20 @@ async function resume(permission, options = {}) {
     if (options.supersede) context.sourceGen++;
     return permission;
   }, requestPermission(){throw new Error('Startup must not request permission');}};
-  const context = vm.createContext({
-    errWords:shell.errWords, loopbackOrigin:shell.loopbackOrigin,
-    canHandle:options.supported !== false, dirHandle:null, sourceGen:0,
-    handles:{async get(){return options.missing ? null : handle;}},
-    stored:{get:(key) => key === 'ledger_link' && options.link ? options.link : ''},
-    LINK_KEY:'ledger_link', LINK_DEFAULT:'http://127.0.0.1:8322', linkUrl:null, URL,
-    runtimeReady:true, pick:{dir:'character', name:'chosen.hsg'},
+  // A browser without the File System Access API has no folder handle to reopen.
+  const {scope: context} = loadShell({globals: options.supported !== false ? {showDirectoryPicker(){}} : {}});
+  context.handles.get = async () => (options.missing ? null : handle);
+  context.stored.get = (key) => (key === 'ledger_link' && options.link ? options.link : '');
+  context.runtimeReady = true;
+  context.pick = {dir:'character', name:'chosen.hsg'};
+  Object.assign(context, {
     place(){}, idleState(){}, wireLanding(){}, paintStrip(){}, offerReopen(){ context.reopened = true; },
     startAttempt(){return true;}, finishAttempt(){}, state(){},
     note(...args){notes.push(args.map((a) => (typeof a === 'function' ? a() : a)));},
     async loadFromHandle(value){loads.push(value);},
     async loadFromLink(why, gen){links.push([typeof why === 'function' ? why() : why, gen]);},
   });
-  vm.runInContext(i18n, context);
-  await vm.runInContext(`(async () => {${startup}\n})()`, context);
+  await context.resumeSource();
   return {loads, links, notes, handle, context};
 }
 
