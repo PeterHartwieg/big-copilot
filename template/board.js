@@ -3140,7 +3140,7 @@ function drawKpiLine(){
 /* --- the finding kinds -------------------------------------------------------
    Every "group" a finding in the Needs attention panel can carry, one record
    each, in the order the kinds panel lists them. Python emits the group (note()
-   in _alerts(), _finding() in a helper such as _idle_notes(), or an
+   or _finding() in a helper _alerts() runs, such as _idle_notes(), or an
    AMENITY_DEMANDS row); the two sides share only the group key.
    - label, note: the kinds panel's words, read in the UI language every time
      (keep them literal getters: a copy would freeze one language);
@@ -3177,7 +3177,7 @@ function drawKpiLine(){
      yet it is still shown on one: `site` picks the site where it bites
      hardest, `otherwise` is where the link goes when no site has it. */
 /* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
-   needs: its group, emitted by note() in _alerts() or _finding() in a helper
+   needs: its group, emitted by note() or _finding() in a helper _alerts() runs,
    such as _idle_notes() (or an AMENITY_DEMANDS row); its FINDING_KINDS record
    with id, label, note, on, link, route and evidence (or NO_EVIDENCE in
    tests/alert_kinds.test.cjs); ALERT_UNITS if its worth is money, else

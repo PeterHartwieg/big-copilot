@@ -44,9 +44,13 @@ DASHBOARD = read("ba_dashboard.py")
 # The findings, split out of ba_dashboard.py: _alerts(), its note()s and the
 # _*_notes helpers, ALERT_UNITS, SUMMARIES and WORST_FIRST.
 ALERTS = read("ba_alerts.py")
-# The board's markup and its script (the last <script> block's body).
+# The board's markup and its script (the last <script> block's body), every
+# template/board*.js part of it.
 PAGE = read("template/board.html")
-BOARD = read("template/board.js")
+BOARD_PARTS = {name: read("template/" + name)
+               for name in sorted(os.listdir(os.path.join(ROOT, "template")))
+               if name.startswith("board") and name.endswith(".js")}
+BOARD = "\n".join(BOARD_PARTS.values())
 TOKEN = re.compile(r"__[A-Z_]+__")
 LOADER = os.path.join(HERE, "_board.cjs")
 
@@ -243,7 +247,8 @@ class RegistryPointerTests(unittest.TestCase):
         return "\n".join(found)
 
     def test_every_declared_table_points_at_its_checklist(self):
-        sources = [DASHBOARD.split("\n"), ALERTS.split("\n"), BOARD.split("\n"), PAGE.split("\n")]
+        sources = [DASHBOARD.split("\n"), ALERTS.split("\n"), *(part.split("\n") for part in BOARD_PARTS.values()),
+                   PAGE.split("\n")]
         for heading in self.HEADINGS:
             tag = 'Registry: "%s"' % heading
             missing = []

@@ -579,7 +579,7 @@ GAME_NAME_LANGS = {
 #   locale   the number locale the page formats in (TT_NUM_LOCALES in
 #            web/i18n.js, whose TT_LANGS lists these codes in this order)
 #   plurals  its CLDR plural categories (PLURALS in tools/i18n.py reads them)
-#   drafted  still mostly machine-drafted (i18n/<lang>.ai.json): the footer
+#   drafted  still mostly machine-drafted (its draft marks in i18n/base.json): the footer
 #            says so under the picker, with a link to help check it
 # tests/test_i18n_languages.py holds web/i18n.js, i18n/ and Intl's plural rules
 # to it. The footer's Language list shows these first, as "Whole page"; every

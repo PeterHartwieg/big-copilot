@@ -2555,9 +2555,8 @@
   /* --- watching the folder ---------------------------------------------- */
   async function checkFolder() {
     if (document.hidden || watchChecking || attempt || readerError) return;
-    // One watcher, two sources. typeof rather than a bare read, so the
-    // sliced tests can run this function without the link's names.
-    if (typeof linkUrl === "string" && linkUrl) {
+    // One watcher, two sources.
+    if (linkUrl) {
       // The same guard as the folder's: a visibility change and the interval
       // must not both start a check of the same stamp.
       watchChecking = true;

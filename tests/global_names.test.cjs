@@ -45,6 +45,7 @@ const SOURCES = [
   {name: 'template/mod-demand-model.js', text: read('template/mod-demand-model.js')},
   {name: 'template/open-store-model.js', text: read('template/open-store-model.js')},
   {name: 'template/open-factory-model.js', text: read('template/open-factory-model.js')},
+  {name: 'template/street-food-model.js', text: read('template/street-food-model.js')},
   {name: 'template/board.js', text: read('template/board.js')},
   {name: 'template/board-write.js', text: read('template/board-write.js')},
   {name: 'web/map.js', text: read('web/map.js')},
