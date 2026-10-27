@@ -1091,6 +1091,7 @@
   // leaves the link the next visit's source; forgetting also forgets the
   // folder this tab would fall back to.
   function dropLink(forget = true) {
+    const linked = !!linkUrl;
     linkUrl = null;
     lastLinkStamp = "";
     linkHealth = null;
@@ -1102,6 +1103,12 @@
     if (forget) {
       linkFolderHandle = null;
       try { localStorage.removeItem(LINK_KEY); } catch (e) {}
+    }
+    // The last good board stays up. Tell it this game is gone before the
+    // source-changed notice, so the footer and the unchecked flag drop the
+    // running build even when the next read never lands.
+    if (linked && handlers && handlers.runningBuild) {
+      try { handlers.runningBuild(); } catch (e) {}
     }
     linkMoved();
   }

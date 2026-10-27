@@ -1782,6 +1782,26 @@ test('a change during the ask leaves nothing remembered', async () => {
 });
 
 
+test('clearing the link, or replacing it with a file, tells the board the running build is gone', () => {
+  for (const how of ['clear', 'file']) {
+    const h = harness();
+    const told = [];
+    h.context.handlers = {runningBuild() { told.push(h.run('linkRunning')); }};
+    h.run('linkRunning = 3690');
+    if (how === 'clear') h.run('dropLink()');
+    else {
+      h.run('becomeSource("file", {name: "Other.hsg"})');
+      h.run('lastFile = {name: "Other.hsg"}');
+    }
+    assert.equal(h.run('linkUrl'), null, how);
+    assert.equal(h.run('linkRunning'), null, how);
+    assert.equal(h.run('reportContext().runningBuild()'), null, how);
+    if (how === 'file') assert.equal(h.run('reportContext().source'), 'file', how);
+    // The board is told after the value is gone, so a repaint cannot keep 3690.
+    assert.deepEqual(told, [null], how);
+  }
+});
+
 // A /health that was already in flight when the source changed must not
 // publish. The address is not the source: the same port, chosen again, is a
 // new one, and a file or a folder is not a link.
@@ -1821,13 +1841,15 @@ for (const spec of [
       assert.equal(current.runningBuild, 3690);
       assert.equal(h.run('reportContext().runningBuild()'), 3690);
       assert.equal(h.run('reportContext().source'), 'link');
-      assert.deepEqual(published, [3690]);
+      // Leaving the previous link tells the board its game is gone, then the
+      // new link publishes. The late reply does not put 3682 in either place.
+      assert.deepEqual(published, [null, 3690]);
     } else {
       if (spec.kind === 'file') h.run('lastFile = {name: "Co.hsg"}');
       assert.equal(h.run('reportContext().runningBuild()'), null);
       assert.equal(h.run('linkUrl'), null);
       assert.equal(h.run('reportContext().source'), spec.kind);
-      assert.deepEqual(published, []);
+      assert.deepEqual(published, [null], 'the clear is told, and the late reply is not');
     }
   });
 }
