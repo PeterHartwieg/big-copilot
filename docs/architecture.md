@@ -1871,6 +1871,12 @@ it does not repair already cached or running old worker code. Such an old page
 must reload onto the pinned protocol to obtain these guarantees.
 `tests/fixtures/legacy_worker_53497965.js` preserves the actual previous worker
 bytes, and `tests/asset_cache.test.cjs` exercises its partial-cache rollout window.
+That worker fetches only `ba_save.py`, `ba_dashboard.py` and `ba_facts.py`. Its own
+release's `ba_dashboard.py` imports with those three, and the test primes a stand-in
+that does the same, since today's also needs `ba_msg.py` and `ba_alerts.py`. One edge
+follows: a pre-manifest worker that has not cached `ba_dashboard.py` and fetches
+today's fails at startup on the missing module, and the page offers reload, as for
+any other startup failure.
 
 Runtime completion and each consumed/validated body or development HTTP
 fallback emit progress before the join, keeping the pending-save inactivity
