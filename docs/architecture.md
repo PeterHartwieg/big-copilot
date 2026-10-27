@@ -1648,8 +1648,9 @@ Python side, and on the board one record in `FINDING_KINDS`; then `ALERT_UNITS` 
 worth is money (else `NOT_MONEY` in `tests/alert_kinds.test.cjs`), and its player-facing
 line under "What counts as a finding" in `docs/dashboard-reference.md`. Every other row is
 *only if*. The same summary sits above `ALERT_UNITS` and `_alerts()` in `ba_alerts.py`, where
-every finding anchor below lives (`def _alerts(`, `_finding(`, the `_*_notes` helpers,
-`SUMMARIES`, `WORST_FIRST`, `def _condense(`), and above `FINDING_KINDS` in `template/board.js`.
+every Python anchor below lives (`def _alerts(`, `_finding(`, the `_*_notes` helpers,
+`SUMMARIES`, `WORST_FIRST`, `def _condense(`) except `AMENITY_DEMANDS = {`, which stays in
+`ba_dashboard.py`, and above `FINDING_KINDS` in `template/board.js`.
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |

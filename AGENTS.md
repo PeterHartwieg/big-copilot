@@ -14,7 +14,7 @@ and `template/board.js` (the board script, with the game writes in `template/boa
 The calculation models beside them, `template/open-store-model.js`,
 `template/open-factory-model.js`, `template/mod-economy-model.js`,
 `template/mod-demand-model.js` and `template/street-food-model.js`, are explicit-input
-arithmetic that `load_template()` embeds ahead of the board script. The eighth file in
+arithmetic that `load_template()` embeds ahead of the board script. The ninth file in
 `template/`, `translate.html`, is the translation page (below).
 Find each part by its anchor, never by line number — the files are long and
 the numbers drift.
