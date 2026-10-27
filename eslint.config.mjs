@@ -239,7 +239,12 @@ export default [
   // --------------------------------------------------------------- exceptions
   // `lookRun` holds the latest link check's promise for tests/game_link.test.cjs,
   // which awaits it inside the shell; no code of the page reads it.
-  { files: ['web/app.js'], rules: { 'no-unused-vars': ['error', { ...UNUSED, varsIgnorePattern: '^lookRun$' }] } },
+  // BigCopilotShell.scope lets the tests stand in for the file's functions: its
+  // setters assign to the function declarations on purpose.
+  {
+    files: ['web/app.js'],
+    rules: { 'no-unused-vars': ['error', { ...UNUSED, varsIgnorePattern: '^lookRun$' }], 'no-func-assign': 'off' },
+  },
   ...Object.entries(FOLLOW_UP).map(([rel, { unused = [], off = [], directives }]) => ({
     files: [rel],
     ...(directives ? { linterOptions: { reportUnusedDisableDirectives: 'off' } } : {}),
