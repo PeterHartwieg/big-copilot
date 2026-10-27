@@ -81,11 +81,20 @@ svg{display:block}
 section{content-visibility:auto; contain-intrinsic-size:auto 620px}
 section.measured{content-visibility:visible}
 
-/* ===== kept from the old board: what the artboards could not show ==========
-   Header sorting, the site picker's full list inside its .seg, the open
-   site's row in the portfolio, a paused import pipe, the two pipe tables
-   under the map, the naming controls on the factory-lines view, and the
-   growth grid's sortable columns and empty cells. ============================ */
+/* ===== the board's stylesheet from before the redesign ====================
+   This region predates the redesign region below (its banner is "the
+   redesign's shell and Overview"), is still in use, and is the larger part
+   of this sheet. In order: what the artboards could not show (header
+   sorting, the site picker's full list inside its .seg, the open site's row
+   in the portfolio, a paused import pipe, the two pipe tables under the map,
+   the naming controls on the factory-lines view, the growth grid's sortable
+   columns and empty cells); the reveal, the brand and its coins, the clock
+   and its difficulty chip, the live dot; tooltips; sections; kpis; findings;
+   the dialog; next moves; tables; charts; the heat grid; waves; plan a chain;
+   the flow map; site detail; a site's own page; the site panel; the kinds
+   popover; company; the footer and the changelog dialog; the source row;
+   reduced motion; and the narrow screens of Today, Company, Growth and a
+   site's page. ============================================================ */
 thead th[data-i]{cursor:pointer; user-select:none}
 thead th[data-i]:hover{color:var(--ink)}
 thead th svg.sort{display:inline-block; width:11px; height:11px; stroke:var(--accent); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; vertical-align:-1px; margin-left:5px}
@@ -3089,7 +3098,11 @@ body:has(#changelogDialog[open]){overflow:hidden}
 .nx-arrive .nx-back svg{width:14px;height:14px;stroke:var(--accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .nx-arrive .nx-back:hover{border-color:var(--accent)}
 .nx-arrive .nx-back:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.nx-arrive b{color:var(--ink);font-weight:600}
+/* Names wrap; they are never cut or pushed off the screen. */
+.nx-arrive b{color:var(--ink);font-weight:600;overflow-wrap:anywhere;min-width:0}
+/* Where the keyboard lands on arrival. */
+.nx-arrive:focus{outline:none}
+.nx-arrive:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:8px}
 /* The strip is the way back; a site page's own crumb does not repeat it. */
 body.nx-arrived .ss-crumbs .ss-crumb.from{display:none}
 /* the utilities menu (··· and, on a phone, Map & more): hung off <body> */
@@ -3148,86 +3161,18 @@ body.px-on{overflow:hidden}
   .nx-local a.on{border-color:var(--ink)}
 }
 
-/* ----- chunk 1 corrections (review round 1) -------------------------------- */
-/* A loss reads as one, figure and line. */
-#kpis .kpi.ov-neg .v{color:var(--neg)}
-#kpis .kpi.ov-neg .spark polyline{stroke:var(--neg)}
-#kpis .kpi.ov-neg .spark .area,#kpis .kpi.ov-neg .spark .pt{fill:var(--neg)}
-/* The severity filters are switches: on is filled and ticked, off is an
-   outline with a hollow dot -- both in full-strength text. */
-.ov-head .sev,.ov-head .sev.off{opacity:1;color:var(--ink-2);border-color:var(--rule)}
-.ov-head .sev[aria-pressed="true"]{background:var(--surface);color:var(--ink);border-color:var(--ink-3)}
-.ov-head .sev[aria-pressed="false"] i{background:transparent!important;box-shadow:inset 0 0 0 1.5px currentColor}
-.ov-head .sev[aria-pressed="false"] span{text-decoration:line-through;text-decoration-thickness:1px}
-/* A filter unfolds every row it keeps. */
-#alerts.ov-sev .ov-later:not(.hide){display:grid}
-/* Where the keyboard lands on arrival. */
-.nx-arrive:focus{outline:none}
-.nx-arrive:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:8px}
-.ov-news:focus{outline:2px solid var(--info);outline-offset:2px}
-/* Names wrap; they are never cut or pushed off the screen. */
-#alertSection .find.ov-f .what,.ov-now,.nx-arrive b,.nx-card b,.nx-row .nm,.nx-row .st{overflow-wrap:anywhere;min-width:0}
-#alertSection .find.ov-f .site{white-space:normal;flex-wrap:wrap;overflow:visible;min-width:0;font-size:13px;color:var(--ink-2)}
-#alertSection .find.ov-f .site .ss-sl{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
-.ov-l1{max-width:100%}
-.ov-l1 > *{max-width:100%}
-/* The phone's company line, and the four figures it opens. */
-.ov-ctx{display:none}
+/* A board with no save shows the Game guide alone; the phone's bar has
+   nothing else to offer it. */
+body.no-save .nx-tabs{display:none}
+/* The source strip of the site in one line on a phone: its word, its
+   buttons; the file line keeps one line and says the rest on the menu. The
+   strip's other rules are in build_web.py's BANNER. */
 @media (max-width:560px){
-  .ov-ctx{display:flex;align-items:center;flex-wrap:wrap;gap:4px 16px;border-bottom:1px solid var(--rule-soft);font:500 12.5px/1.2 "IBM Plex Mono",monospace;color:var(--ink-2);min-height:40px;padding:4px 0}
-  .ov-ctx span{display:inline-flex;align-items:baseline;gap:6px}
-  .ov-ctx small{font:inherit;color:var(--ink-3)}
-  .ov-ctx b{font-weight:500;color:var(--ink)}
-  .ov-ctx b.neg{color:var(--neg)}
-  .ov-kmore{margin-left:auto;display:inline-flex;align-items:center;gap:4px;min-height:36px;padding:0 4px;border:0;background:none;color:var(--ink-2);font:500 12.5px/1 Archivo,sans-serif;cursor:pointer}
-  .ov-kmore[aria-expanded="true"] svg{transform:rotate(180deg)}
-  .ov-kmore:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
-  #pageToday:not(.ov-kopen) #kpis{display:none}
-  #pageToday.ov-kopen #kpis.kpis{margin-top:10px}
-  #alertSection{margin-top:14px}
-  .ov-head h2{font-size:22px}
-
-  /* The source strip of the site in one line: its word, its buttons; the
-     file line keeps one line and says the rest on the menu. */
   .wrap .source-row .strip{margin-top:6px;padding:6px 10px;gap:8px;flex-wrap:nowrap}
   .wrap .source-row .strip .st{flex-wrap:nowrap;min-width:0;gap:8px}
   .wrap .source-row .strip .file{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.3}
   .wrap .source-row .strip .right{gap:6px}
 }
-/* ----- chunk 1, review round 2: the phone's first screen -------------------
-   A critical finding and its action above the bottom bar on a 320 x 568
-   phone, the hosted board's source strip and news included: each row reads
-   headline, then action, then the evidence (the DOM keeps headline, evidence,
-   action, so a screen reader hears why before what to do); the head is one
-   tight block. */
-@media (max-width:560px){
-  #alertSection .find.ov-f .ov-t{display:contents}
-  #alertSection .find.ov-f .ov-l1{grid-column:2/-1;grid-row:1}
-  #alertSection .find.ov-f .ov-ac{grid-row:2}
-  #alertSection .find.ov-f .ov-det{grid-row:2}
-  #alertSection .find.ov-f .ov-now{grid-column:2/-1;grid-row:3}
-  #alertSection .find.ov-f .ov-vz{grid-row:4}
-  #alertSection .find.ov-f > .gw-find{grid-row:5}
-  #alertSection .find.ov-f .ov-x{grid-row:6}
-  #pageToday #alertSection .find.ov-f{padding:10px 0;row-gap:6px}
-  .ov-head{gap:8px}
-  .ov-head .sev{min-height:32px;padding:0 10px}
-  #pageToday #alertSection{margin-top:8px}
-  #pageToday #alerts .ov-band{margin-top:4px;padding-top:8px}
-
-  /* Customize checks is its icon here (its words stay its name and its tip),
-     so it and All tools share the row with the severity filters. */
-  #alertKindsToggle > span{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
-  #alertKindsToggle.nx-btn{min-width:36px;min-height:32px;padding:0 9px;justify-content:center}
-  .ov-head .aside{gap:6px}
-  .ov-head .aside .nx-btn{min-height:32px}
-  /* An action's words never run past its button: tighter, and a longer one
-     (a translation, larger text) takes a second line inside it. */
-  #alertSection .find.ov-f .ov-ac .nx-btn{padding:0 10px;gap:6px;white-space:normal;text-align:left;line-height:1.2;overflow-wrap:anywhere;hyphens:auto;min-width:0}
-}
-/* A board with no save shows the Game guide alone; the phone's bar has
-   nothing else to offer it. */
-body.no-save .nx-tabs{display:none}
 
 /* the company figures: one strip, a line under each */
 /* Every figure gets the same width (the long-figure sizes are read off it), so
@@ -3254,12 +3199,36 @@ body.no-save .nx-tabs{display:none}
 #kpis .spark{height:28px;margin-top:6px}
 #kpis .spark svg{height:28px}
 #kpis a.kpi.td-go:hover .v{color:var(--accent)}
+/* A loss reads as one, figure and line. */
+#kpis .kpi.ov-neg .v{color:var(--neg)}
+#kpis .kpi.ov-neg .spark polyline{stroke:var(--neg)}
+#kpis .kpi.ov-neg .spark .area,#kpis .kpi.ov-neg .spark .pt{fill:var(--neg)}
+/* The phone's company line, and the four figures it opens. */
+.ov-ctx{display:none}
+@media (max-width:560px){
+  .ov-ctx{display:flex;align-items:center;flex-wrap:wrap;gap:4px 16px;border-bottom:1px solid var(--rule-soft);font:500 12.5px/1.2 "IBM Plex Mono",monospace;color:var(--ink-2);min-height:40px;padding:4px 0}
+  .ov-ctx span{display:inline-flex;align-items:baseline;gap:6px}
+  .ov-ctx small{font:inherit;color:var(--ink-3)}
+  .ov-ctx b{font-weight:500;color:var(--ink)}
+  .ov-ctx b.neg{color:var(--neg)}
+  .ov-kmore{margin-left:auto;display:inline-flex;align-items:center;gap:4px;min-height:36px;padding:0 4px;border:0;background:none;color:var(--ink-2);font:500 12.5px/1 Archivo,sans-serif;cursor:pointer}
+  .ov-kmore[aria-expanded="true"] svg{transform:rotate(180deg)}
+  .ov-kmore:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+  #pageToday:not(.ov-kopen) #kpis{display:none}
+  #pageToday.ov-kopen #kpis.kpis{margin-top:10px}
+}
 
 /* Needs attention: the product's first block */
 #alertSection{margin-top:26px;content-visibility:visible}
 .ov-head{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px}
 .ov-head h2{margin:0;font-size:28px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
-.ov-head .sev{min-height:32px;background:none;font:500 12.5px/1 "IBM Plex Mono",monospace;border:1px solid transparent}
+/* The severity filters are switches: on is filled and ticked, off is an
+   outline with a hollow dot -- both in full-strength text. */
+.ov-head .sev{opacity:1;color:var(--ink-2);min-height:32px;background:none;font:500 12.5px/1 "IBM Plex Mono",monospace;border:1px solid transparent}
+.ov-head .sev.off{opacity:1;color:var(--ink-2);border-color:var(--rule)}
+.ov-head .sev[aria-pressed="true"]{background:var(--surface);color:var(--ink);border-color:var(--ink-3)}
+.ov-head .sev[aria-pressed="false"] i{background:transparent!important;box-shadow:inset 0 0 0 1.5px currentColor}
+.ov-head .sev[aria-pressed="false"] span{text-decoration:line-through;text-decoration-thickness:1px}
 .ov-head .sev:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .ov-head .sev span{font-family:Archivo,sans-serif;font-size:12.5px}
 .ov-head .aside{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px}
@@ -3274,9 +3243,13 @@ body.no-save .nx-tabs{display:none}
 .nx-btn.pill{border-radius:17px}
 #alertKindsToggle.nx-btn{width:auto;height:auto}
 #alerts:not(.ov-all) .ov-later{display:none}
+/* A filter unfolds every row it keeps. */
+#alerts.ov-sev .ov-later:not(.hide){display:grid}
 .ov-task > span:first-child{grid-column:1;grid-row:1}
 .ov-news{display:flex;align-items:center;gap:10px;margin:0 0 10px;padding:9px 12px;border-radius:10px;border:1px solid color-mix(in srgb,var(--info) 40%,transparent);background:var(--info-soft);font-size:13px}
 .ov-news[hidden]{display:none}
+/* Where the keyboard lands on arrival. */
+.ov-news:focus{outline:2px solid var(--info);outline-offset:2px}
 .ov-news button{margin-left:auto}
 #alerts.finds{border-top:1px solid var(--rule)}
 .ov-band{display:flex;align-items:center;gap:10px;padding:14px 0 6px;font:500 10.5px/1.2 "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase}
@@ -3290,10 +3263,15 @@ body.no-save .nx-tabs{display:none}
 #alertSection .find.ov-f.crit .mark{box-shadow:0 0 0 4px var(--neg-soft)}
 .ov-t{grid-column:2;grid-row:1/3;display:flex;flex-direction:column;gap:5px;min-width:0}
 .ov-t .ov-l1{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;min-width:0}
-#alertSection .find.ov-f .what{font-size:15.5px;line-height:1.3}
+/* Names wrap; they are never cut or pushed off the screen. */
+.ov-l1{max-width:100%}
+.ov-l1 > *{max-width:100%}
+#alertSection .find.ov-f .what{overflow-wrap:anywhere;min-width:0;font-size:15.5px;line-height:1.3}
+#alertSection .find.ov-f .site{white-space:normal;flex-wrap:wrap;overflow:visible;min-width:0;font-size:13px;color:var(--ink-2)}
+#alertSection .find.ov-f .site .ss-sl{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
 #alertSection .find.ov-f.crit .what{font-size:17px;letter-spacing:-.01em}
 .ov-k{font:500 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
-.ov-now{font-size:13.5px;color:var(--ink-2);line-height:1.4}
+.ov-now{overflow-wrap:anywhere;min-width:0;font-size:13.5px;color:var(--ink-2);line-height:1.4}
 .ov-now b{font-weight:600;color:var(--neg)}
 .find.watch .ov-now b{color:var(--warn)}
 #alertSection .find.ov-f .more{display:none}
@@ -3431,13 +3409,41 @@ body.no-save .nx-tabs{display:none}
   .ov-tp{grid-template-columns:minmax(0,1fr)}
   .ov-task{min-height:46px}
 }
+/* The phone's first screen: a critical finding and its action above the
+   bottom bar on a 320 x 568 phone, the hosted board's source strip and news
+   included. Each row reads headline, then action, then the evidence (the DOM
+   keeps headline, evidence, action, so a screen reader hears why before what
+   to do); the head is one tight block. */
+@media (max-width:560px){
+  #alertSection .find.ov-f .ov-t{display:contents}
+  #alertSection .find.ov-f .ov-l1{grid-column:2/-1;grid-row:1}
+  #alertSection .find.ov-f .ov-ac{grid-row:2}
+  #alertSection .find.ov-f .ov-det{grid-row:2}
+  #alertSection .find.ov-f .ov-now{grid-column:2/-1;grid-row:3}
+  #alertSection .find.ov-f .ov-vz{grid-row:4}
+  #alertSection .find.ov-f .ov-x{grid-row:6}
+  #pageToday #alertSection .find.ov-f{padding:10px 0;row-gap:6px}
+  .ov-head .sev{min-height:32px;padding:0 10px}
+  #pageToday #alertSection{margin-top:8px}
+  #pageToday #alerts .ov-band{margin-top:4px;padding-top:8px}
+
+  /* Customize checks is its icon here (its words stay its name and its tip),
+     so it and All tools share the row with the severity filters. */
+  #alertKindsToggle > span{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+  #alertKindsToggle.nx-btn{min-width:36px;min-height:32px;padding:0 9px;justify-content:center}
+  .ov-head .aside .nx-btn{min-height:32px}
+  /* An action's words never run past its button: tighter, and a longer one
+     (a translation, larger text) takes a second line inside it. */
+  #alertSection .find.ov-f .ov-ac .nx-btn{padding:0 10px;gap:6px;white-space:normal;text-align:left;line-height:1.2;overflow-wrap:anywhere;hyphens:auto;min-width:0}
+}
 /* the adapters: Standards' subjects, a shop's prices, the Staffing lists */
 .nx-lead{display:flex;flex-wrap:wrap;gap:10px}
 .nx-card{display:flex;flex-direction:column;gap:6px;min-width:190px;flex:1 1 190px;padding:14px 16px;border-radius:12px;background:var(--surface);border:1px solid var(--rule-soft);color:inherit;text-decoration:none;cursor:pointer;font:inherit;text-align:left}
 button.nx-card{appearance:none}
 .nx-card:hover{border-color:var(--rule)}
 .nx-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.nx-card b{display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:600}
+/* Names wrap; they are never cut or pushed off the screen. */
+.nx-card b{overflow-wrap:anywhere;min-width:0;display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:600}
 .nx-card b svg{width:17px;height:17px;stroke:var(--accent);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .nx-card .n{font:500 22px/1 "IBM Plex Mono",monospace}
 .nx-card .n.bad{color:var(--neg)}.nx-card .n.warn{color:var(--warn)}.nx-card .n.ok{color:var(--accent)}
@@ -3445,11 +3451,12 @@ button.nx-card{appearance:none}
 .nx-list{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
 .nx-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto;gap:4px 16px;align-items:center;min-height:52px;padding:8px 6px 8px 0;border-bottom:1px solid var(--rule-soft)}
 .nx-row.lit{background:linear-gradient(90deg,transparent,var(--accent-soft) 12%);box-shadow:inset 3px 0 0 var(--accent);padding-left:12px}
-.nx-row .nm{display:flex;align-items:center;gap:8px;min-width:0;font-weight:600}
+/* Names wrap; they are never cut or pushed off the screen. */
+.nx-row .nm{overflow-wrap:anywhere;display:flex;align-items:center;gap:8px;min-width:0;font-weight:600}
 .nx-row .nm > span:last-child{white-space:normal;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .nx-row .nm > svg{width:17px;height:17px;flex:none;stroke:var(--ink-3);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .nx-card b .hood{margin-right:-2px}
-.nx-row .st{font-size:13px;color:var(--ink-2)}
+.nx-row .st{overflow-wrap:anywhere;min-width:0;font-size:13px;color:var(--ink-2)}
 .nx-row .st b{color:var(--ink);font-weight:600}
 .nx-row .st .bad{color:var(--neg)}.nx-row .st .warn{color:var(--warn)}
 .nx-row .ac{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
