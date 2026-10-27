@@ -3,8 +3,8 @@ const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
 const {chromium} = require('playwright');
+const {loadShell} = require('./_shell.cjs');
 const root = path.join(__dirname, '..');
 const app = fs.readFileSync(path.join(root, 'web/app.js'), 'utf8');
 let browser, html;
@@ -111,17 +111,17 @@ test('dashboard motion wakes for new balls and scrolling, and pauses while hidde
 });
 
 test('folder timer and visibility wake cannot overlap an unfinished scan', async () => {
-  const source = require('./_slice.cjs').between(app, '  async function checkFolder()', '  function armWatch()');
   let release, scans = 0;
   const gate = new Promise(resolve => { release = resolve; });
-  const context = vm.createContext({
-    document:{hidden:false}, dirHandle:{async queryPermission(){return 'granted';}},
-    attempt:null, readerError:null, watchChecking:false, sourceGen:0,
+  // web/app.js run whole (tests/_shell.cjs): checkFolder() through
+  // BigCopilotShell.scope, with a folder that scans when the test says.
+  const {scope: context} = loadShell();
+  Object.assign(context, {
+    dirHandle:{async queryPermission(){return 'granted';}},
     async scanHandle(){scans++; await gate; return [];},
     async refreshSaveMenu(){return '';}, chooseFrom(){return {};},
-    stopWatch(){}, syncWatchBtn(){}, lastCheck:null,
+    stopWatch(){}, syncWatchBtn(){},
   });
-  vm.runInContext(source, context);
   const first = context.checkFolder();
   await new Promise(resolve => setImmediate(resolve));
   const second = context.checkFolder();

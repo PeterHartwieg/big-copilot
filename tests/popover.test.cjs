@@ -1,22 +1,24 @@
 // bodyPopover() and popFit() in template/board.js, on their own: the lifecycle
 // every body-level popover shares (#demCellPop, #pcPop, #fvDiffPop, #alertPop)
-// and the list placement #pcPop and #gnPop share. The two functions are sliced
-// out of the board script and run on a bare page in Chromium, with real events
-// and real layout; each popover's own behaviour on the board is in its suite
-// (finder_layout, plan_extra, open_factory, fold_views, search,
-// businesses_expansion). Browser test: install Playwright and its Chromium
-// browser to run; NODE_PATH may point at an existing Playwright installation.
+// and the list placement #pcPop and #gnPop share. The two functions come from
+// the board script loaded whole (tests/_board.cjs) and run on a bare page in
+// Chromium, with real events and real layout; each popover's own behaviour on
+// the board is in its suite (finder_layout, plan_extra, open_factory,
+// fold_views, search, businesses_expansion). Browser test: install Playwright
+// and its Chromium browser to run; NODE_PATH may point at an existing
+// Playwright installation.
 'use strict';
 
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const {chromium} = require('playwright');
-const {between} = require('./_slice.cjs');
+const {loadBoard} = require('./_board.cjs');
 
-const BOARD = fs.readFileSync(path.join(__dirname, '..', 'template', 'board.js'), 'utf8');
-const HELPER = between(BOARD, 'function bodyPopover(', '/* tooltips: one element at body level');
+// The real functions, as the board script defines them. Each reaches only the
+// page's document and window and the board's hideTip(), which the page below
+// stands in for.
+const board = loadBoard();
+const HELPER = [board.bodyPopover, board.popFit].map(String).join('\n');
 
 const PAGE = `<!doctype html><meta charset="utf-8">
 <style>

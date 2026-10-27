@@ -4,6 +4,9 @@
 // set on it and answers the calls it makes at load; DOMContentLoaded never
 // fires, so nothing of the landing or the board starts. web/i18n.js runs
 // first, as on the page, for tt().
+// The tests of startup, the game's text and the game link drive app.js's own
+// names, which it hands over as BigCopilotShell.scope: `scope` reads and sets
+// them by name, and run() runs a test's code among them.
 // Not a test file itself: the leading underscore keeps it out of the
 // tests/*.test.cjs glob.
 'use strict';
@@ -33,11 +36,22 @@ function element(tag = 'div') {
   };
 }
 
-/* Returns {shell, context}. `globals` go into the VM before app.js runs
-   (navigator, localStorage, ...); `byId(id)` stands in for
+const named = (key) => typeof key === 'string';
+function refuse(key) {
+  throw new TypeError(`web/app.js hands ${key} to the tests to read only (BigCopilotShell.scope)`);
+}
+
+/* Returns {shell, context, scope, run}. `globals` go into the VM before
+   app.js runs (navigator, localStorage, ...); `byId(id)` stands in for
    document.getElementById, a fresh element per id when not given. The
    context is app.js's global scope: a test may swap what its helpers reach
-   for there (document.createElement, URL) once it has loaded. */
+   for there (document.createElement, URL) once it has loaded.
+   `scope` is the context as app.js's own code sees it: a name app.js hands
+   over (BigCopilotShell.scope) reads and sets its binding, so setting a
+   function stands in for it everywhere app.js calls it; any other name is the
+   context's. run(code) runs code in the context with the same names in
+   reach and returns its last value. Setting a name app.js hands over to
+   read only throws. */
 function loadShell({globals = {}, byId = null} = {}) {
   const ids = new Map();
   const context = vm.createContext({
@@ -63,7 +77,29 @@ function loadShell({globals = {}, byId = null} = {}) {
   context.window = context;
   vm.runInContext(i18n, context);
   vm.runInContext(app, context, {filename: 'web/app.js'});
-  return {shell: context.BigCopilotShell, context};
+  const shell = context.BigCopilotShell;
+  const own = shell.scope;
+  const scope = new Proxy(context, {
+    has: (g, key) => (named(key) && key in own) || key in g,
+    get: (g, key) => (named(key) && key in own ? own[key] : g[key]),
+    set(g, key, value) {
+      if (!(named(key) && key in own)) g[key] = value;
+      else if (!Reflect.set(own, key, value)) refuse(key);
+      return true;
+    },
+  });
+  // The object a `with` statement reads names through: app.js's own first,
+  // then the context's globals, as a script inside app.js would.
+  context.__appScope = new Proxy(own, {
+    has: (o, key) => named(key) && key in o,
+    get: (o, key) => (named(key) ? o[key] : undefined),
+    set(o, key, value) {
+      if (!Reflect.set(o, key, value)) refuse(key);
+      return true;
+    },
+  });
+  const run = (code) => vm.runInContext(`with (__appScope) {\n${code}\n}`, context);
+  return {shell, context, scope, run};
 }
 
-module.exports = {loadShell};
+module.exports = {loadShell, element};

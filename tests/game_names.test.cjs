@@ -3,8 +3,9 @@
 // one-time offer, sorting, search, and the two tight places a longer or wider
 // name would overflow. The payload and the German table come out of the real
 // Python (tests/game_names_fixture.py); the Japanese is the committed
-// web/names/ja.json. The seam's own tests run its source in a vm; the rest runs
-// in Playwright against web/index.html, the page that carries the picker.
+// web/names/ja.json. The seam's own tests run the board script in a vm
+// (tests/_board.cjs); the rest runs in Playwright against web/index.html, the
+// page that carries the picker.
 // Install Playwright and its Chromium browser to run; NODE_PATH may point at an
 // existing Playwright installation.
 const {test, before, after} = require('node:test');
@@ -15,9 +16,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
+const {loadBoard} = require('./_board.cjs');
+
 const ROOT = path.join(__dirname, '..');
 const WEB = path.join(ROOT, 'web');
-const SOURCE = fs.readFileSync(path.join(ROOT, 'template', 'board.js'), 'utf8').replace(/\r\n/g, '\n');
 
 let FIX;
 before(() => {
@@ -28,13 +30,14 @@ before(() => {
 });
 
 /* --- the seam, in a vm ----------------------------------------------------
-   Its source, from the board script: gameName() to gnLangAttr(). */
-function seamSource(){
-  const from = SOURCE.indexOf('const gameName = key =>');
-  const last = SOURCE.indexOf('const gnLangAttr = ');
-  assert.ok(from > 0 && last > from, 'the seam moved: update the anchors in tests/game_names.test.cjs');
-  return SOURCE.slice(from, SOURCE.indexOf('\n', last) + 1);
-}
+   The whole board script (tests/_board.cjs), with no source to read from
+   (SOURCE is {}), the redraw and what takeData() tells the rest of the board
+   stood in for, and the footer's picker on a stand-in document. D and the
+   seam's other `let`s are reached with run(). */
+const inert = new Proxy(function(){}, {
+  get: (_, k) => k === Symbol.toPrimitive ? () => 0 : k === Symbol.iterator ? function*(){} : k === 'length' ? 0 : inert,
+  apply: () => inert, construct: () => inert, set: () => true,
+});
 const LANGS = ['en', 'cs', 'da', 'de', 'es', 'fr', 'it', 'lt', 'hu', 'nl', 'pl', 'pt', 'ro', 'fi', 'tr',
   'el', 'ru', 'uk', 'ja', 'ko', 'zh-cn', 'zh-tw'];
 /* The footer's list: the languages the whole page comes in, then the rest. */
@@ -45,21 +48,15 @@ function seam({table = null, lang = 'de'} = {}){
   const picker = {dataset: {value: 'en'}, querySelectorAll: sel => sel === '.gn-opts [data-value]' ? opts : [],
     querySelector: () => null, addEventListener(){}};
   const drawn = [];
-  const context = vm.createContext({
-    D: null, HOOD_NAMES: {}, page: 'today', console,
-    SOURCE: {}, gwLink: () => null, gwOpen: null, gwOpenState: () => null, odSiteDrawn: null,
-    prettySlug: s => s.replace(/^ba:[a-z]+_/, ''),
-    spEsc: s => String(s), attr: s => String(s),
-    hasData: () => !!context.D,
+  const context = loadBoard({window: new Proxy({}, {get: (_, k) => k === 'LEDGER_SOURCE' ? {} : inert[k]})});
+  Object.assign(context, {
     renderCalm(lazy){ drawn.push(['calm', lazy]); },
     /* What takeData() tells the rest of the board of a new board. */
     sbBoard(){}, pgBoard(){}, szAdopt(){},
     document: {querySelectorAll: sel => sel === '[data-gn-pick]' ? [picker] : [], querySelector: () => null},
     localStorage: {getItem: () => null, setItem(){}},
-    navigator: {languages: ['en-US']}, window: {}, fetch: async () => { throw new Error('offline'); },
-    Intl, Symbol,
+    navigator: {languages: ['en-US']}, fetch: async () => { throw new Error('offline'); },
   });
-  vm.runInContext(seamSource(), context);
   const run = code => vm.runInContext(code, context);
   if(table){ context.__table = table; run(`gnTable = __table; gnLang = ${JSON.stringify(lang)};`); }
   return {context, run, drawn};
@@ -71,7 +68,7 @@ test('the German table swaps every game name the board shows, and nothing the pl
   const en = clone(FIX.payload);
   context.__raw = en;
   run('takeData(__raw)');
-  const D = context.D, EN = en.names, de = FIX.de;
+  const D = run('D'), EN = en.names, de = FIX.de;
   const want = key => de[key] || EN[key];
   assert.ok(D.businesses.length >= 3);
   D.businesses.forEach((b, i) => {
@@ -133,12 +130,12 @@ test('a name reads alike wherever it appears, so a join inside the payload still
     if(Array.isArray(en)) return en.forEach((x, i) => walk(x, loc[i], at));
     Object.keys(en).forEach(k => walk(en[k], loc[k], k === 'names' || k === 'skillNames' ? 'names' : at));
   };
-  walk(FIX.payload, context.D, '');
+  walk(FIX.payload, run('D'), '');
   assert.ok(seen.size > 20, `only ${seen.size} names in the fixture`);
   const split = [...seen].filter(([, s]) => s.size > 1).map(([en, s]) => `${en}: ${[...s].join(' | ')}`);
   assert.deepEqual(split, []);
   // The join the site panel's crew makes: a role with no uniform.
-  context.D.businesses.forEach((b, i) => {
+  run('D').businesses.forEach((b, i) => {
     const was = FIX.payload.businesses[i];
     (was.people || []).forEach((p, k) =>
       assert.equal((b.uniformGaps || []).includes(b.people[k].role), (was.uniformGaps || []).includes(p.role)));
@@ -150,16 +147,16 @@ test('English is the identity, and a swapped board goes back to English whole', 
   context.__raw = clone(FIX.payload);
   run('takeData(__raw)');
   // Python's tokens read as the English Python wrote, and nothing else moves.
-  assert.deepEqual(clone(context.D), FIX.english);
+  assert.deepEqual(clone(run('D')), FIX.english);
   assert.deepEqual(clone(run('dataEn()')), FIX.payload);
   context.__table = FIX.de;
   run('gnTable = __table; gnLang = "de"; D = localiseNames(D);');
-  assert.equal(context.D.businesses[0].type, 'Geschenkeladen');
+  assert.equal(run('D').businesses[0].type, 'Geschenkeladen');
   // Swapping a swapped board starts from its English, never from the German.
   run('D = localiseNames(D);');
-  assert.equal(context.D.businesses[0].type, 'Geschenkeladen');
+  assert.equal(run('D').businesses[0].type, 'Geschenkeladen');
   run('gnTable = null; gnLang = "en"; D = localiseNames(D);');
-  assert.deepEqual(clone(context.D), FIX.english);
+  assert.deepEqual(clone(run('D')), FIX.english);
 });
 
 test('a name two keys share stays English where it comes without its key', () => {
@@ -172,7 +169,7 @@ test('a name two keys share stays English where it comes without its key', () =>
   context.__raw = {names: FIX.payload.names, rows: [
     {item: 'Bag of Lettuce', slug: 'ba:itemname_lettuce'}, {item: 'Bag of Lettuce', slug: 'ba:itemname_rawlettuce'}]};
   run('takeData(__raw)');
-  assert.deepEqual(context.D.rows.map(r => r.item), ['Beutel mit Salat', 'Beutel Salat']);
+  assert.deepEqual(run('D').rows.map(r => r.item), ['Beutel mit Salat', 'Beutel Salat']);
 });
 
 test('a table of codes keyed by game key keeps its codes, whatever the language', () => {
@@ -185,11 +182,11 @@ test('a table of codes keyed by game key keeps its codes, whatever the language'
     skillNames: {'ba:jobdemand_fulltime': 'Full-time'},
     grid: [{skill: 'ba:jobdemand_fulltime', role: 'ba:jobdemand_fulltime|ba:itemname_x'}]};
   run('takeData(__raw)');
-  assert.equal(context.D.hiring.demandKinds['ba:jobdemand_fulltime'], 'schedule');
-  assert.equal(context.D.hiring.company['ba:jobdemand_fulltime'], 'plan');
-  assert.equal(context.D.grid[0].role, 'ba:jobdemand_fulltime|ba:itemname_x');
+  assert.equal(run('D').hiring.demandKinds['ba:jobdemand_fulltime'], 'schedule');
+  assert.equal(run('D').hiring.company['ba:jobdemand_fulltime'], 'plan');
+  assert.equal(run('D').grid[0].role, 'ba:jobdemand_fulltime|ba:itemname_x');
   // A table of names beside it is still swapped.
-  assert.equal(context.D.skillNames['ba:jobdemand_fulltime'], 'Vollzeit');
+  assert.equal(run('D').skillNames['ba:jobdemand_fulltime'], 'Vollzeit');
 });
 
 test('a name written into a sentence as a token reads in the language on screen', () => {
@@ -200,10 +197,10 @@ test('a name written into a sentence as a token reads in the language on screen'
   context.__raw = {names: FIX.payload.names, alerts: [{text: said}, {text: own}]};
   run('takeData(__raw)');
   // Pins the wording: the fixture sentence must replace its game-name token and retain surrounding text.
-  assert.equal(context.D.alerts[0].text, '2 Kundendienst short at HART. Gifts');
-  assert.equal(context.D.alerts[1].text, 'fills Widget');
+  assert.equal(run('D').alerts[0].text, '2 Kundendienst short at HART. Gifts');
+  assert.equal(run('D').alerts[1].text, 'fills Widget');
   run('gnTable = null; gnLang = "en"; D = localiseNames(D);');
-  assert.equal(context.D.alerts[0].text, '2 Customer Service short at HART. Gifts');
+  assert.equal(run('D').alerts[0].text, '2 Customer Service short at HART. Gifts');
   assert.equal(run('dataEn()').alerts[0].text, said);
   // The payload's own findings, from the real Python, name things this way.
   const tokens = JSON.stringify(FIX.payload).match(/⟦ba:[a-z]+_[^|⟧]+\|[^⟧]+⟧/g) || [];
