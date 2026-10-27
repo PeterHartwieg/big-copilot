@@ -157,13 +157,24 @@ function board({saved = {}, data = {}, extraView = null} = {}) {
 
 test('a new canonical view derives its common tables without sibling table edits', () => {
   const b = board({extraView: {route: 'businesses/example', host: ['company', 'example'],
-    section: 'secExample', also: ['secExampleMore']}});
+    section: 'secExample', also: ['secExampleMore'], needs: ['products']}});
   const derived = vm.runInContext(`({route: ROUTES["businesses/example"],
     section: SEC_PAGE.secExample, also: SEC_PAGE.secExampleMore, item: SUBS.company.items.find(i => i[0] === "example"),
     areas: AREAS.find(a => a.id === "businesses").views,
-    defaultRoute: HOST_ROUTES["company/example"], label: routeViewLabel("businesses/example")})`, b.context);
+    defaultRoute: HOST_ROUTES["company/example"], label: routeViewLabel("businesses/example"),
+    rowNeeds: rowNeeds("company/example"),
+    search: (e => e && {t: e.t, p: e.p, ic: e.ic, syn: e.syn})(SS_VIEWS.find(e => e.id === "businesses/example"))})`, b.context);
   const result = JSON.parse(JSON.stringify(derived));
-  assert.deepEqual(result.route, {host: ['company', 'example'], needs: []});
+  assert.deepEqual(result.route, {host: ['company', 'example'], needs: ['products']});
+  // A draw row tagged with the view reads what the view declares.
+  assert.deepEqual(result.rowNeeds, ['products']);
+  // Search finds it under its own label, where it is and its area's icon, and Enter opens it.
+  assert.deepEqual(result.search, {t: 'Example', p: en('nav.path', {area: en('nav.area.businesses'), view: 'Example'}),
+    ic: 'company', syn: []});
+  const opened = [];
+  b.context.openRoute = (...a) => opened.push(a);
+  vm.runInContext('SS_VIEWS.find(e => e.id === "businesses/example").go()', b.context);
+  assert.deepEqual(opened, [['businesses/example']]);
   assert.deepEqual(result.section, ['company', 'example']);
   assert.deepEqual(result.also, ['company', 'example']);
   assert.equal(result.item[0], 'example');
@@ -204,10 +215,13 @@ test('shared view identity supplies navigation, primary sections, route hosts an
     for (const host of v.alsoHosts) assert.deepEqual(host, v.host, v.route);
     if (v.defaultHost !== false) assert.equal(v.defaultRoute, v.route);
   }
-  /* A route's sections are its host's draw rows' tags; VIEW_META's own `needs`
-     is kept for what no row declares, which today is only the finder's. */
-  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(VIEW_META.filter(v => v.needs).map(v => [v.route, v.needs]))', b.context)),
-    [['expansion/finder', ['premises']]]);
+  /* A route's sections are declared once, on its VIEW_META record. The draw
+     rows of its host view read them, unless a row says it reads none ([]);
+     no row reads a section its views do not declare. */
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(Object.fromEntries(VIEW_META.filter(v => v.needs).map(v => [v.route, v.needs])))', b.context)),
+    Object.fromEntries(Object.entries(ROUTE_NEEDS).filter(([, n]) => n.length)));
+  for (const [tags, reads, declared] of JSON.parse(vm.runInContext('JSON.stringify(PAGE_DRAWS.map(r => [r[0], r[3], rowNeeds(r[0])]))', b.context)))
+    assert.ok(reads.every(n => declared.includes(n)), `the row for "${tags}" reads ${reads.join(', ')}; its views declare ${declared.join(', ') || 'none'}`);
   /* Every old section in SEC_MOVED opens the view of the section that replaced it. */
   const moved = JSON.parse(vm.runInContext('JSON.stringify(Object.entries(SEC_MOVED).map(([was, now]) => [was, SEC_PAGE[was], SEC_PAGE[now]]))', b.context));
   for (const [was, host, now] of moved) assert.deepEqual(host, now, was);
