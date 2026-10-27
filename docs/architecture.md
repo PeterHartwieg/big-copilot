@@ -1043,11 +1043,15 @@ without its `.git`) or inside any other git work tree.
 ## Template placeholders
 
 The board's page is `template/board.html`, a file of its own beside `ba_dashboard.py`, and
-its script is `template/board.js` beside it. The calculation cores are
+its script is `template/board.js` beside it. Parts of the board script live in files of
+their own and go back into `board.js` at a placeholder line where they were taken out:
+`template/board-write.js` (writing to the game, the `gw*` names) at `/*__BOARD_WRITE__*/`.
+The calculation cores are
 `template/open-store-model.js` and `template/open-factory-model.js`, with the public
 companion arithmetic in `template/mod-economy-model.js` and `template/mod-demand-model.js`. `render()` reads these files through
 `load_template()`, once per process and never at import time: the Pyodide worker imports
-`ba_dashboard` without the files and never renders. `load_template()` first splices
+`ba_dashboard` without the files and never renders. `load_template()` first puts each part
+back into `board.js` at its line, then splices
 the mod economy and demand helpers, `open-store-model.js`, `open-factory-model.js`,
 the Street Food helper, then `board.js` into the line `/*__BOARD_SCRIPT__*/`, the whole body of the page's last
 `<script>` block, so `render()` sees the page as one string and fills the placeholders in
@@ -1057,6 +1061,16 @@ not a second authored section registry. All these sources are in
 `build_web.STAMP_INPUTS`, so an edit to any changes the build stamp. The calculation
 source stays inline in the existing script block for both standalone `file://` output
 and the hosted build, requiring neither npm nor a network import for Python rendering.
+
+A part lands exactly where its text was, never before or after `board.js`. The board
+script runs top to bottom, and a top-level `const` or `let` read before its line throws,
+so the page must run the same text in the same order. `tests/_board.cjs` splices the
+parts the same way (its `BOARD_PARTS`), and every list that names the board's files
+names the part too: `STAMP_INPUTS` in `build_web.py`, `calls()` in `tools/i18n.py` (its
+`tt()` keys), `tests/global_names.test.cjs`, and the scans in
+`tests/number_locale.test.cjs` and `tests/feature_badges.test.cjs`. A new part is a block
+between two `/* --- ` banners moved whole, with its own placeholder line and a row in
+`load_template()` and `BOARD_PARTS`.
 
 `OpenStoreModel.create({facts, company})` is the Open a store arithmetic boundary.
 `facts` is the `openStore` payload; `company` contains businesses (provider checks and
@@ -1172,7 +1186,9 @@ What `page_html()` produces, top of the file down:
 4. `BEFORE_SCRIPT`, filled in by `page_html()` with the stamp, the release JSON and the
    inlined `web/update.js`, in its slot just ahead of the board's own script:
    `window.LEDGER_RELEASE`, `update.js`, `app.js?v=<stamp>`, `community.js?v=<stamp>`.
-5. The board script, `template/board.js`, in the last `<script>` block of the template.
+5. The board script, `template/board.js` with its parts (`template/board-write.js`) back
+   at their placeholder lines, in the last `<script>` block of the template, after the
+   calculation models.
 
 Before any of that, `main()` refreshes `web/wiki-data.json`, copies the files `PY_CODE`
 and `PY_DATA` name (all but `gametext.json`: `PY_COPIED`) into `web/py/`, stripping
@@ -1636,7 +1652,9 @@ the payload table, the private build tokens, the finding groups, and the
 above its declaration (`tests/test_doc_registries.py`). The other covering tests check the entries that exist
 today, so extend them for the new entry. Rows marked
 *only if* apply to some entries, not all. All anchors are in `ba_dashboard.py` unless a row
-says otherwise; "board script" means `template/board.js`, the last `<script>` block of the page.
+says otherwise; "board script" means `template/board.js` with its parts spliced back in
+(`template/board-write.js`, [Template placeholders](#template-placeholders)), the last
+`<script>` block of the page.
 
 ### A finding kind
 

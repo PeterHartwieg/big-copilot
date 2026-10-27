@@ -24446,7 +24446,8 @@ def render(
 
 
 # The board's HTML and CSS (template/board.html) and its script
-# (template/board.js and the open-store/open-factory calculation models), beside this file. They are read on the first render(),
+# (template/board.js, the parts of it kept in files of their own, and the
+# open-store/open-factory calculation models), beside this file. They are read on the first render(),
 # never at import: the Pyodide worker imports this module with only its
 # fetched files on disk and never renders.
 _template = None
@@ -24455,11 +24456,14 @@ _template = None
 BOARD_SCRIPT_SLOT = "/*__BOARD_SCRIPT__*/\n"
 
 
-def splice_board_script(page: str, script: str) -> str:
-    """board.html with board.js in its slot: the page as one string again."""
-    if page.count(BOARD_SCRIPT_SLOT) != 1:
-        raise ValueError("template/board.html must carry %r once" % BOARD_SCRIPT_SLOT.strip())
-    return page.replace(BOARD_SCRIPT_SLOT, script, 1)
+def splice_board_script(page: str, script: str, slot: str = BOARD_SCRIPT_SLOT,
+                        where: str = "template/board.html") -> str:
+    """`page` with `script` in its slot, a line of its own that `where` carries
+    once: board.html with the board script in it, or board.js with one of its
+    parts back where it was taken from."""
+    if page.count(slot) != 1:
+        raise ValueError("%s must carry %r once" % (where, slot.strip()))
+    return page.replace(slot, script, 1)
 
 
 def load_template() -> str:
@@ -24469,13 +24473,21 @@ def load_template() -> str:
     global _template
     if _template is None:
         folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "template")
-        with open(os.path.join(folder, "board.html"), encoding="utf-8") as fh:
-            page = fh.read()
-        scripts = []
-        for name in ("mod-economy-model.js", "mod-demand-model.js", "open-store-model.js", "open-factory-model.js", "street-food-model.js", "board.js"):
+
+        def read(name: str) -> str:
             with open(os.path.join(folder, name), encoding="utf-8") as fh:
-                scripts.append(fh.read())
-        _template = splice_board_script(page, "\n".join(scripts))
+                return fh.read()
+
+        # The board script's parts that live in files of their own, each put
+        # back at its placeholder line in board.js: the same text in the same
+        # order as one file, so every top-level declaration is reached when it
+        # was before (a const read before its line throws).
+        board = read("board.js")
+        for slot, name in (("/*__BOARD_WRITE__*/\n", "board-write.js"),):
+            board = splice_board_script(board, read(name), slot, "template/board.js")
+        scripts = [read(name) for name in ("mod-economy-model.js", "mod-demand-model.js", "open-store-model.js",
+                                          "open-factory-model.js", "street-food-model.js")]
+        _template = splice_board_script(read("board.html"), "\n".join(scripts + [board]))
     return _template
 
 

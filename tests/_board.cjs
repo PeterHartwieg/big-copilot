@@ -1,5 +1,6 @@
-// The board script, template/board.js, loaded whole into a VM, for tests of
-// its pure functions: no slicing, so no anchors to keep in step with the code.
+// The board script, template/board.js with its parts spliced back in
+// (BOARD_PARTS), loaded whole into a VM, for tests of its pure functions: no
+// slicing, so no anchors to keep in step with the code.
 // What it touches at load (document, window, storage, observers) is one inert
 // stub that answers every property and call with itself, so the boot code runs
 // and does nothing. A test that runs a draw and reads what it wrote passes
@@ -27,13 +28,27 @@ const ROOT = path.join(__dirname, '..');
 const SECTION_META = execFileSync(selectPython(),
   ['-c', 'import json, ba_dashboard; print(json.dumps(ba_dashboard.section_metadata()))'],
   {cwd: ROOT, encoding: 'utf8'}).trim();
-const SOURCE = fs.readFileSync(path.join(ROOT, 'template', 'mod-economy-model.js'), 'utf8') + '\n'
-  + fs.readFileSync(path.join(ROOT, 'template', 'mod-demand-model.js'), 'utf8') + '\n'
-  + fs.readFileSync(path.join(ROOT, 'template', 'open-store-model.js'), 'utf8') + '\n'
-  + fs.readFileSync(path.join(ROOT, 'template', 'open-factory-model.js'), 'utf8') + '\n'
-  + fs.readFileSync(path.join(ROOT, 'template', 'street-food-model.js'), 'utf8') + '\n'
-  + fs.readFileSync(path.join(ROOT, 'template', 'board.js'), 'utf8').replace('/*__SECTION_META__*/{}',
-    SECTION_META);
+const template = name => fs.readFileSync(path.join(ROOT, 'template', name), 'utf8');
+/* The board script's parts kept in files of their own, each put back at its
+   placeholder line in board.js, as load_template() in ba_dashboard.py does:
+   the same text in the same order as one file. */
+const BOARD_PARTS = [['/*__BOARD_WRITE__*/', 'board-write.js']];
+function boardScript(){
+  let board = template('board.js');
+  for (const [slot, name] of BOARD_PARTS) {
+    const parts = board.split(new RegExp(slot.replace(/[*/]/g, '\\$&') + '\\r?\\n'));
+    if (parts.length !== 2) throw new Error(`template/board.js must carry ${slot} once`);
+    // Joined, not .replace()d: a replacement string would read the part's own "$&" and "$$".
+    board = parts[0] + template(name) + parts[1];
+  }
+  return board;
+}
+const SOURCE = template('mod-economy-model.js') + '\n'
+  + template('mod-demand-model.js') + '\n'
+  + template('open-store-model.js') + '\n'
+  + template('open-factory-model.js') + '\n'
+  + template('street-food-model.js') + '\n'
+  + boardScript().replace('/*__SECTION_META__*/{}', () => SECTION_META);
 const I18N = fs.readFileSync(path.join(ROOT, 'web', 'i18n.js'), 'utf8');
 
 const inert = new Proxy(function(){}, {
@@ -97,4 +112,4 @@ function recordingDocument(){
   return {document, element};
 }
 
-module.exports = {loadBoard, recordingDocument, SOURCE};
+module.exports = {loadBoard, recordingDocument, SOURCE, BOARD_PARTS};
