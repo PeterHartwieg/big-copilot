@@ -192,6 +192,24 @@ public static class BclCompatibilityTests
         RealLifeOverhaul.Companion.Failed = true;
         Check(((WriteAnswer)Call("ModOwnership", "Legacy", game, "hire", hire)).Json.Contains("ownership_unknown"), "Stale saved report cannot authorize old hire");
         RealLifeOverhaul.Companion.Failed = false;
+        ExerciseBuilds();
+    }
+    static int[] Remember(int live, int stamped, int held, int running)
+    {
+        return (int[])Call("HealthState", "RememberBuild", live, stamped, held, running);
+    }
+    static void ExerciseBuilds()
+    {
+        var stamped = Remember(0, 3670, 0, 0);
+        Check(stamped[0] == 3670 && stamped[1] == 0, "A save stamp fills the best-known build and is not the running game");
+        var live = Remember(3682, 3670, stamped[0], stamped[1]);
+        Check(live[0] == 3682 && live[1] == 3682, "A later GameVersion replaces the save-stamp fallback");
+        var kept = Remember(0, 3670, live[0], live[1]);
+        Check(kept[0] == 3682 && kept[1] == 3682, "A later miss does not put the save stamp back");
+        var none = Remember(0, 0, 0, 0);
+        Check(none[0] == 0 && none[1] == 0, "Nothing known stays unknown");
+        var first = Remember(3682, 0, 0, 0);
+        Check(first[0] == 3682 && first[1] == 3682, "A running build needs no save stamp");
     }
     static void OtherBuilders()
     {

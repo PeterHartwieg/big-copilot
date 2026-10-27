@@ -122,9 +122,10 @@ test('a failed read attaches the save by default and the traceback only when tic
   assert.deepEqual(Object.keys(parts).sort(), ['details', 'report', 'save']);
   assert.deepEqual(parts.save, SAVE, 'the bytes the page read, kept from the failed build');
   const report = JSON.parse(parts.report);
-  assert.deepEqual(Object.keys(report).sort(), ['browser', 'error', 'gameBuild', 'siteBuild', 'source', 'text']);
+  assert.deepEqual(Object.keys(report).sort(), ['browser', 'error', 'gameBuild', 'runningBuild', 'siteBuild', 'source', 'text']);
   assert.equal(report.source, 'file');
   assert.equal(report.gameBuild, 3682);
+  assert.equal(report.runningBuild, null, 'a save file has no running game');
   assert.equal(report.siteBuild, await page.evaluate(() => window.LEDGER_BUILD));
   assert.equal(report.error, 'KeyError in _staffing (ba_dashboard.py line 4120)', 'the class and the place, never the message');
   assert.doesNotMatch(parts.report, /Alice|Smith|private-trace-sentinel/);

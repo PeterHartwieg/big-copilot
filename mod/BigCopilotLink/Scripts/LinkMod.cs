@@ -22,9 +22,14 @@ namespace BigCopilotLink
     [ModEntryOnCityLoad]
     public class LinkMod : IModBigAmbitions
     {
-        public const string Version = "0.8.1";
+        public const string Version = "0.8.2";
 
-        /// <summary>docs/game-link-api.md. Bump on any contract change.</summary>
+        /// <summary>
+        /// docs/game-link-api.md. Bump when a client must refuse a mod that does
+        /// not speak the new contract. runningBuild on /health is optional, so
+        /// schema 5 stays: an older page ignores the field, and a newer page
+        /// treats a mod that omits it as an unknown running build.
+        /// </summary>
         public const int SchemaVersion = 5;
 
         /// <summary>8321 is Peter's MCP bridge and 8765 the Companion mod, so neither is offered.</summary>

@@ -223,11 +223,16 @@ class Link:
                  hire_gone: list | None = None, myemployees: bool = False,
                  screen_open: list | None = None, agency_open: list | None = None,
                  agency_closed: list | None = None, no_contact: list | None = None,
-                 features: list | None = list(FEATURES)):
+                 features: list | None = list(FEATURES),
+                 running_build: int | None | bool = None):
         self.path = path
         self.character, self.company = character, company
         self._loaded = (character, company)  # what a reset puts back
         self.day, self.hour, self.cash, self.build = day, hour, cash, build
+        # None: this mock has one executable, so the running build is `build`.
+        # False: omit the field, as a mod before 0.8.2 does. An int is the
+        # running game, which can differ from the save stamp in `build`.
+        self.running_build = self.build if running_build is None else running_build
         self._clock = (day, hour)  # what a reset puts back
         self.schema, self.throttle, self.refuse = schema, throttle, refuse
         # Approving a browser: how the mock's player answers, the open
@@ -365,6 +370,8 @@ class Link:
                 "cash": self.cash, "stamp": self.stamp, "busy": self.busy,
                 "size": len(self.data), "refreshedAt": self.refreshed_at,
             }
+            if self.running_build is not False:
+                body["runningBuild"] = int(self.running_build or 0)
             if self.writes is not None:
                 body["writes"] = list(self.writes)
                 body["features"] = list(self.features)

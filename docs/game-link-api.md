@@ -8,12 +8,14 @@ from a save file on disk, so the clients can be developed and tested without the
 Schema version **5**. Current clients also accept versions 1, 2, 3 and 4.
 Version 5 (mod 0.8.1) adds independent marketing capability validation, registered
 vehicle prices and conservative HMP/RLO economy observations in paired facts.
+Mod 0.8.2 adds optional `runningBuild` on `/health` without a new schema version.
 Version 4 (mod 0.8.0) adds reviewed Street Food route writes (`streetFoodRoute`, capability `streetFood.routes`).
 Version 3 adds wholesale orders (`wholesale`, mod 0.7.0) and guarded same-day undo.
 Version 2 adds the paired building-facts snapshot and marketing prediction guard below.
-Bump it on any contract change and update the mod, the mock, the
-two clients and this file in the same commit. A client refuses a mod whose
-`schemaVersion` it does not know and says which version it needs.
+Bump it when a client must refuse a mod that does not speak the new contract,
+and update the mod, the mock, the two clients and this file in the same commit.
+An optional field an older client ignores does not bump it. A client refuses a
+mod whose `schemaVersion` it does not know and says which version it needs.
 
 ## Reviewed Street Food route writes
 
@@ -399,6 +401,7 @@ state from the listener's threads.
   "modVersion": "0.1.0",
   "source": "game",
   "build": 3680,
+  "runningBuild": 3682,
   "character": "58e6a328-…",
   "company": "HART. YT",
   "day": 34,
@@ -416,8 +419,17 @@ state from the listener's threads.
 ```
 
 - `source` is `"game"` from the mod and `"mock"` from the mock.
-- `build` is the game's build number; `character` the loaded character's id (the
-  save folder's name); `company` is `GameInstance.SaveGameName`.
+- `build` is the best-known build number: the running game once `GameVersion`
+  answers, otherwise the loaded save's `buildNumberAtLastSave`. A mod before
+  0.8.2 can keep the save stamp for the whole session if that stamp was read
+  before `GameVersion` answered. Clients from before 0.8.2 still read this field.
+  `character` is the loaded character's id (the save folder's name); `company`
+  is `GameInstance.SaveGameName`.
+- `runningBuild` (mod 0.8.2) is `GameVersion.buildNumber` only. It is `0` until
+  that answers, and it is never the save stamp. A mod before 0.8.2 omits the
+  key. A client treats a missing or non-positive value as an unknown running
+  build and does not promote `build` into it. Additive: `schemaVersion` stays 5,
+  so a page opened before this field still talks to the new mod.
 - `stamp` is `""`, `size` is `0` and `refreshedAt` is `null` until the first refresh
   has finished.
 - `busy` is true while a refresh is in flight.

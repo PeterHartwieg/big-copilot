@@ -129,7 +129,10 @@
       // writes each as six bytes, which could push the part past its cap.
       text: String(choice.text || "").replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "").trim().slice(0, BR_TEXT_MAX),
       siteBuild: brSiteBuild(ctx.siteBuild),
+      // gameBuild is the save's stamp. runningBuild is the executable, and
+      // null when the mod did not send one (an older mod, or no link).
       gameBuild: brBuild(choice.gameBuild),
+      runningBuild: brBuild(choice.runningBuild),
       browser: brBrowser(env.nav),
       source: BR_SOURCES.includes(ctx.source) ? ctx.source : "none",
     };
@@ -153,8 +156,9 @@
   let brEls = null;
   let brCtx = null;
   let brBytes = null;   // promise of the save's bytes, or null when none is held
-  let brGame = null;    // promise of the game build
-  let brKnown = {bytes: undefined, build: undefined};
+  let brGame = null;    // promise of the save's build
+  let brRunning = null; // promise of the running game's build
+  let brKnown = {bytes: undefined, build: undefined, running: undefined};
   let brSent = null;    // {number, url} once this open has filed its issue
   let brBusy = false;
   let brSeq = 0;
@@ -307,15 +311,25 @@
     : tt("br.src.none", "No save loaded");
   const brBrowserWords = {chrome: "Chrome", edge: "Edge", firefox: "Firefox", safari: "Safari"};
 
+  // The public build line, as the issue will show it. One sentence each,
+  // so a translation is never a fragment dropped into another sentence.
+  function brBuildLine() {
+    if (brKnown.build === undefined || brKnown.running === undefined) return tt("br.pv.build.wait", "Game build: reading…");
+    const game = brKnown.running, save = brKnown.build;
+    if (game == null && save == null) return tt("br.pv.build.none", "Game build: unknown");
+    if (game == null) return tt("br.pv.build.save", "Game build: game unknown, save {save}", {save});
+    if (save == null) return tt("br.pv.build.game", "Game build: game {game}, save unknown", {game});
+    return tt("br.pv.build.both", "Game build: game {game}, save {save}", {game, save});
+  }
+
   // The public part, as the issue will show it (the text aside).
   function brPreview() {
     if (!brEls || !brCtx) return;
     const e = brEls;
-    const game = brKnown.build === undefined ? tt("br.pv.reading", "reading…") : brKnown.build === null ? tt("br.pv.unknown", "unknown") : String(brKnown.build);
     const browser = brBrowser(navigator);
     const lines = [
       tt("br.pv.site", "Site build: {build}", {build: brSiteBuild(brCtx.siteBuild)}),
-      tt("br.pv.game", "Game build: {build}", {build: game}),
+      brBuildLine(),
       tt("br.pv.browser", "Browser: {name}", {name: brBrowserWords[browser] || tt("br.pv.other", "other")}),
       tt("br.pv.source", "Source: {source}", {source: brSourceWords(brCtx.source)}),
       e.save.input.checked ? tt("br.pv.save.yes", "Save attached: yes, kept privately") : tt("br.pv.save.no", "Save attached: no"),
@@ -361,7 +375,7 @@
     brCtx = Object.assign({siteBuild: "dev", source: "none", error: "", trace: "", errorName: ""}, ctx || {});
     brSent = null;
     brBusy = false;
-    brKnown = {bytes: undefined, build: undefined};
+    brKnown = {bytes: undefined, build: undefined, running: undefined};
     const e = brEls;
     e.save.input.checked = true;
     e.details.input.checked = false;
@@ -377,8 +391,10 @@
     // the build may need the reader to parse the save again.
     brBytes = Promise.resolve(typeof brCtx.bytes === "function" ? brCtx.bytes() : null).catch(() => null);
     brGame = Promise.resolve(typeof brCtx.gameBuild === "function" ? brCtx.gameBuild() : brCtx.gameBuild).catch(() => null);
+    brRunning = Promise.resolve(typeof brCtx.runningBuild === "function" ? brCtx.runningBuild() : brCtx.runningBuild).catch(() => null);
     brBytes.then((bytes) => { if (seq === brSeq) { brKnown.bytes = bytes && bytes.byteLength ? bytes : null; brSaveHint(); brPreview(); } });
     brGame.then((build) => { if (seq === brSeq) { brKnown.build = brBuild(build); brPreview(); } });
+    brRunning.then((build) => { if (seq === brSeq) { brKnown.running = brBuild(build); brPreview(); } });
   }
 
   // A closed form lets go of the save, the traceback and the pending lookups,
@@ -387,8 +403,8 @@
   function brRelease() {
     brSeq++;
     brCtx = null;
-    brBytes = brGame = null;
-    brKnown = {bytes: undefined, build: undefined};
+    brBytes = brGame = brRunning = null;
+    brKnown = {bytes: undefined, build: undefined, running: undefined};
   }
 
   async function brSend() {
@@ -400,13 +416,13 @@
     const seq = brSeq;
     // What this send is, taken now, so nothing a later open holds can join it.
     const ctx = brCtx, saveOn = e.save.input.checked, detailsOn = e.details.input.checked;
-    const bytesSoon = saveOn ? brBytes : null, buildSoon = brGame;
+    const bytesSoon = saveOn ? brBytes : null, buildSoon = brGame, runningSoon = brRunning;
     brLock(true);
     brStatus(tt("br.sending", "Sending…"));
     let res = null;
     try {
-      const [bytes, gameBuild] = await Promise.all([bytesSoon, buildSoon]);
-      const parts = brParts(ctx, {text, save: saveOn, details: detailsOn, bytes, gameBuild}, brEnv());
+      const [bytes, gameBuild, runningBuild] = await Promise.all([bytesSoon, buildSoon, runningSoon]);
+      const parts = brParts(ctx, {text, save: saveOn, details: detailsOn, bytes, gameBuild, runningBuild}, brEnv());
       const form = new FormData();
       for (const [name, value, file] of parts) { if (file) form.append(name, value, file); else form.append(name, value); }
       res = await fetch(BR_API, {method: "POST", body: form, cache: "no-store"});

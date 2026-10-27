@@ -786,6 +786,10 @@
   // The /health body read with the newest bytes, for the strip; after a
   // failed build it names the failed bytes' game, not the board's.
   let linkHealth = null;
+  // GameVersion.buildNumber from a mod that sends runningBuild (0.8.2).
+  // Null when the mod omits it, or until the game answers. Never copied
+  // from health.build: that number can stay on the save's stamp.
+  let linkRunning = null;
   // The game's clock ({day, hour, minute}) at the newest /health of that same
   // game, read by any caller: it moves on every read, new bytes or not, so
   // what the board judges by the hour (a marketing agency open now, the import
@@ -800,6 +804,19 @@
   const LINK_SCHEMA = 5;
   let linkSchema = LINK_SCHEMA;
   const linkVersionKnown = v => v === 1 || v === 2 || v === 3 || v === 4 || v === LINK_SCHEMA;
+  // A build number the report and the footer may show. Anything else is unknown.
+  const linkBuildNumber = (v) => (Number.isInteger(v) && v > 0 && v < 1000000 ? v : null);
+  // The running game, from a health object that carries the field. An older
+  // mod leaves it out; that is unknown, not health.build.
+  function noteRunningBuild(health) {
+    const next = health && Object.prototype.hasOwnProperty.call(health, "runningBuild")
+      ? linkBuildNumber(health.runningBuild) : null;
+    if (next === linkRunning) return;
+    linkRunning = next;
+    if (handlers && handlers.runningBuild) {
+      try { handlers.runningBuild(); } catch (e) {}
+    }
+  }
   const linkSpeaks = () => linkVersionKnown(linkSchema);
   let linkGone = false;   // the watcher has said the game went away
   let linkNotReady = 0;   // /health answers in a row that were never health, any caller
@@ -1066,6 +1083,7 @@
     linkUrl = null;
     lastLinkStamp = "";
     linkHealth = null;
+    linkRunning = null;
     linkNow = null;
     linkSchema = LINK_SCHEMA;
     linkGone = false;
@@ -1149,6 +1167,7 @@
     linkSchema = body.schemaVersion;
     if (spoke !== linkSpeaks()) linkMoved();
     tickClock(body);
+    if (linkVersionKnown(body.schemaVersion)) noteRunningBuild(body);
     return body;
   }
   // The game's clock from a health answer of the game behind the board (same
@@ -2030,7 +2049,12 @@
       heldFailure = {name: file.name, error: String(err.message || ""), trace: err.trace || String(err.stack || ""),
         kind: err.trace ? "" : String(err.name || ""),
         bytes: err.bytes || null, facts: err.facts || null, held: !!built || err.held === true,
-        build: builtOn !== null ? builtOn : file.linkStamp && linkHealth && Number.isInteger(linkHealth.build) ? linkHealth.build : null};
+        // The reader's stamp when it parsed one. A link whose mod does not
+        // say the running build may still name health.build, which is the
+        // only number an older mod has. Once runningBuild is known, health.build
+        // is not the save stamp.
+        build: builtOn !== null ? builtOn
+          : (!linkRunning && file.linkStamp && linkHealth && linkBuildNumber(linkHealth.build) ? linkHealth.build : null)};
       state("bad", () => tt("app.build.failed", "Could not read the save"),
         () => tt("app.build.attempted", "{name} · attempted {when}", {name: file.name, when: fmtTime(at)}));
       const rewritten = err.name === "NotReadableError";
@@ -2759,6 +2783,9 @@
         const h = await readerHeld(true);
         return h && h.name === failed.name ? h.build : null;
       },
+      // The running executable, when the mod sends it. A folder or an older
+      // mod has none. Not a second read of the save.
+      runningBuild: () => linkRunning,
     };
   }
   async function openReport(from) {
@@ -2803,7 +2830,8 @@
     link: () => (linkUrl && linkHealth ? {writes: linkWrites(), features: linkFeatures(), character: linkHealth.character || "",
       company: linkHealth.company || "", day: linkTime().day, hour: linkTime().hour, minute: linkTime().minute,
       mod: typeof linkHealth.modVersion === "string" ? linkHealth.modVersion : "",
-      approved: !!approvalToken(linkUrl), stamp: lastLinkStamp, source: sourceGen} : null),
+      approved: !!approvalToken(linkUrl), stamp: lastLinkStamp, source: sourceGen,
+      runningBuild: linkRunning} : null),
     // Resolves to {status, error, body}; see gameWrite().
     write: (kind, body, opts) => gameWrite(kind, body, opts),
     // Update, for a board that learns the game has moved on.
