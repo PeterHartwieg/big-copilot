@@ -20914,6 +20914,15 @@ function footRunning(){
   const game = link && link.runningBuild;
   return Number.isInteger(game) && game > 0 ? game : null;
 }
+/* What the footer last painted for the link: "" when this board is not
+   linked, "link" when the running build is unknown, "link:N" when it is
+   known. A source reset repaints only when this changes. */
+let shownFootLink = "";
+function footLinkKey(){
+  if(typeof SOURCE === "undefined" || !SOURCE.link || !SOURCE.link()) return "";
+  const game = footRunning();
+  return game == null ? "link" : `link:${game}`;
+}
 /* The footer's build line. A folder or a file has only the save's stamp.
    A link names the running game and the save, and says which half is unknown. */
 function footGameLine(m){
@@ -20934,6 +20943,7 @@ function drawFooter(){
     f.dataset.tip = tt("foot.file.tip", "Board built {when}", {when: m.generated});
   }
   $("footBuild").textContent = footGameLine(m);
+  shownFootLink = footLinkKey();
   /* At 1500 px and under, where the masthead has no room to spare, the
      difficulty chip stands beside the game build instead; the stylesheet shows
      one or the other. */
@@ -28598,6 +28608,25 @@ window.BigCopilotBoard = {
    as each autosave of a game in play is. Anything else is a new board. */
 const sameCompany = (a, b) => !!(a && b && a.meta && b.meta)
   && a.meta.character === b.meta.character && a.meta.save === b.meta.save;
+/* The footer and the unchecked flag, without a new board. drawMast builds
+   the live dot afresh, so the one on screen is put back as it was. "just"
+   is a short flash: its timeout still names the node just replaced, and
+   copying that class would leave the new dot lit. */
+function paintLinkedBuild(){
+  if(typeof D === "undefined" || !D || !D.meta) return;
+  const live = $("live");
+  const cls = live ? live.className : "";
+  const word = live && live.querySelector("em") ? live.querySelector("em").textContent : "";
+  const title = live ? live.title : "";
+  drawMast();
+  drawFooter();
+  const again = $("live");
+  if(!again || !cls) return;
+  again.className = cls.split(/\s+/).filter(c => c && c !== "just").join(" ");
+  again.title = title;
+  const em = again.querySelector("em");
+  if(em) em.textContent = word;
+}
 /* The save on disk only changes when the game writes one, so this polls a
    cheap stamp and pulls fresh numbers only when that stamp moves. */
 function startWatching(){
@@ -28633,29 +28662,20 @@ function startWatching(){
     /* Another source, with no new board yet: an undo's gate closes again. */
     /* A section left loading for the build just cancelled will not come for
        this board either: it says so (odSourceFailed()), and a new board asks anew. */
-    linkChanged: () => { odThens = odThens.filter(t => odSameScope(t.scope, odScope())); gwGate(false, true); odSourceFailed(tt("app.reader.superseded", "Save selection changed")); },
+    linkChanged: () => {
+      odThens = odThens.filter(t => odSameScope(t.scope, odScope()));
+      gwGate(false, true);
+      odSourceFailed(tt("app.reader.superseded", "Save selection changed"));
+      /* The link may have gone with no new board. The footer and the
+         unchecked flag still name the old game until they are painted again. */
+      if(footLinkKey() !== shownFootLink) paintLinkedBuild();
+    },
     /* The game's clock moved with no new board: the marketing gates follow it. */
     linkClock: () => gwMkTick(),
     /* The running build arrived, or dropped off, with no new save bytes.
        Repaint the footer and the unchecked flag, and put the live dot back
        as it was: drawMast builds that span afresh. */
-    runningBuild(){
-      if(typeof D === "undefined" || !D || !D.meta) return;
-      const live = $("live");
-      const cls = live ? live.className : "";
-      const word = live && live.querySelector("em") ? live.querySelector("em").textContent : "";
-      const title = live ? live.title : "";
-      drawMast();
-      drawFooter();
-      const again = $("live");
-      if(!again || !cls) return;
-      /* "just" is a short flash. Its timeout still names the node drawMast
-         just replaced, so copying the class would leave the new dot lit. */
-      again.className = cls.split(/\s+/).filter(c => c && c !== "just").join(" ");
-      again.title = title;
-      const em = again.querySelector("em");
-      if(em) em.textContent = word;
-    },
+    runningBuild(){ paintLinkedBuild(); },
     lost(){
       const dot = $("live");
       /* "Not live" replaces a Stale mark: nothing repaints an off dot. */

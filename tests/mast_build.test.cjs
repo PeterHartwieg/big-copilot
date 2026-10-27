@@ -22,7 +22,7 @@ function paint(link, meta, {live = false} = {}){
   let handlers = null;
   const window = new Proxy({
     LEDGER_SOURCE: {
-      link: () => link,
+      link: () => (typeof link === 'function' ? link() : link),
       watch(h){ handlers = h; },
     },
     addEventListener(){},
@@ -81,6 +81,32 @@ test('a folder names only the save stamp', () => {
   const quiet = paint(null, {build: 3670});
   assert.doesNotMatch(quiet.html, /UNCHECKED/);
   assert.equal(quiet.foot, en('foot.build', {n: 3670}));
+});
+
+test('clearing the link, or a file read that fails, drops the running build and keeps Stale', () => {
+  const box = {link: {runningBuild: 3690}};
+  const drawn = paint(() => box.link, {build: 3670}, {live: true});
+  assert.ok(drawn.html.includes(en('nav.mast.unchecked.text', {b: 3690})));
+  assert.equal(drawn.foot, en('foot.build.both', {game: 3690, save: 3670}));
+  const live = drawn.element('live');
+  live.className = 'live stale';
+  live.title = 'Could not read the save';
+
+  // The source resets before the link is cleared. This game is still the one
+  // on screen, so the footer and the warning stay.
+  drawn.handlers.linkChanged();
+  assert.equal(drawn.element('footBuild').textContent, en('foot.build.both', {game: 3690, save: 3670}));
+  assert.ok(drawn.element('clock').innerHTML.includes(en('nav.mast.unchecked.text', {b: 3690})));
+  assert.equal(live.className, 'live stale');
+
+  // dropLink, or a replacement .hsg whose read fails: no new board arrives.
+  // The stale board stays; the running build does not.
+  box.link = null;
+  drawn.handlers.linkChanged();
+  assert.equal(drawn.element('footBuild').textContent, en('foot.build', {n: 3670}));
+  assert.doesNotMatch(drawn.element('clock').innerHTML, /UNCHECKED/);
+  assert.equal(live.className, 'live stale');
+  assert.equal(live.title, 'Could not read the save');
 });
 
 test('a running-build repaint drops the live flash and keeps Stale', () => {
