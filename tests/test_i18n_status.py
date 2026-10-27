@@ -16,18 +16,32 @@ def _call(key, en, params=frozenset()):
 
 
 class Files:
-    """i18n/'s three files per language, in memory."""
+    """One language's share of i18n/, in memory: its table, the English each
+    key was made from and its draft marks (load(), drafted() and save()).
+    tests/test_i18n_store.py covers the files themselves."""
 
-    def __init__(self, **files):
-        self.files = {name: dict(data) for name, data in files.items()}
+    def __init__(self, table, base=None, marks=None, spare=()):
+        self.files = {"table": dict(table), "base": dict(base or {}), "marks": dict(marks or {})}
+        # Keys whose shared English no language takes (unused()), until tidy().
+        self.spare = list(spare)
+
+    def _tidy(self, root=None):
+        spare, self.spare = self.spare, []
+        return spare
+
+    def _save(self, lang, table=None, base=None, marks=None, root=None):
+        for kind, data in (("table", table), ("base", base), ("marks", marks)):
+            if data is not None:
+                self.files[kind] = dict(data)
 
     def patch(self):
         return mock.patch.multiple(
             i18n,
-            load=lambda lang, root=i18n.ROOT: (dict(self.files.get(f"{lang}.json", {})),
-                                                dict(self.files.get(f"{lang}.base.json", {}))),
-            drafted=lambda lang, root=i18n.ROOT: dict(self.files.get(f"{lang}{i18n.AI_SUFFIX}", {})),
-            _write=lambda name, data: self.files.__setitem__(name, dict(data)),
+            load=lambda lang, root=i18n.ROOT: (dict(self.files["table"]), dict(self.files["base"])),
+            drafted=lambda lang, root=i18n.ROOT: dict(self.files["marks"]),
+            save=self._save,
+            unused=lambda root=i18n.ROOT: list(self.spare),
+            tidy=self._tidy,
             languages=lambda root=i18n.ROOT: ["de"])
 
 
@@ -45,30 +59,30 @@ def _status(files, *flags):
 
 class PruneTests(unittest.TestCase):
     def files(self):
-        return Files(**{
-            "de.json": {"f.a": "Verlust {w:$}", "f.m_one": "ein Automat", "f.m_other": "{n} Automaten",
-                        "f.gone": "Weg", "f.gone_other": "{n} weg"},
-            "de.base.json": {"f.a": "Lost {w:$}", "f.m_one": "{n} machine", "f.m_other": "{n} machines",
-                             "f.gone": "Gone", "f.gone_other": "{n} gone", "f.never": "Never translated"},
-            "de.ai.json": {"f.a": "gpt", "f.gone": "gpt", "f.b": "gpt"}})
+        return Files(
+            {"f.a": "Verlust {w:$}", "f.m_one": "ein Automat", "f.m_other": "{n} Automaten",
+             "f.gone": "Weg", "f.gone_other": "{n} weg"},
+            {"f.a": "Lost {w:$}", "f.m_one": "{n} machine", "f.m_other": "{n} machines",
+             "f.gone": "Gone", "f.gone_other": "{n} gone", "f.never": "Never translated"},
+            {"f.a": "gpt", "f.gone": "gpt", "f.b": "gpt"})
 
-    def test_prune_drops_orphans_from_all_three_files_and_nothing_live(self):
+    def test_prune_drops_orphans_with_their_base_and_marks_and_nothing_live(self):
         files = self.files()
         english = i18n.catalogue(FOUND)
         with files.patch():
             dry = i18n.prune("de", english, write=False)
-            self.assertIn("f.gone", files.files["de.json"], "a dry run writes nothing")
+            self.assertIn("f.gone", files.files["table"], "a dry run writes nothing")
             dropped = i18n.prune("de", english)
             again = i18n.prune("de", english)
         self.assertEqual(dry, dropped)
-        self.assertEqual(dropped, {"de.json": ["f.gone", "f.gone_other"],
-                                   "de.base.json": ["f.gone", "f.gone_other", "f.never"],
-                                   "de.ai.json": ["f.b", "f.gone"]})
+        self.assertEqual(dropped, {"table": ["f.gone", "f.gone_other"],
+                                   "base": ["f.gone", "f.gone_other", "f.never"],
+                                   "marks": ["f.b", "f.gone"]})
         self.assertEqual(again, {})
-        self.assertEqual(files.files["de.json"],
+        self.assertEqual(files.files["table"],
                          {"f.a": "Verlust {w:$}", "f.m_one": "ein Automat", "f.m_other": "{n} Automaten"})
-        self.assertEqual(sorted(files.files["de.base.json"]), ["f.a", "f.m_one", "f.m_other"])
-        self.assertEqual(files.files["de.ai.json"], {"f.a": "gpt"})
+        self.assertEqual(sorted(files.files["base"]), ["f.a", "f.m_one", "f.m_other"])
+        self.assertEqual(files.files["marks"], {"f.a": "gpt"})
 
     def test_strict_fails_on_orphans_and_leftover_marks_until_pruned(self):
         files = self.files()
@@ -87,14 +101,25 @@ class PruneTests(unittest.TestCase):
         self.assertEqual(_status(files)[0], 0)
 
     def test_strict_fails_on_a_mark_left_for_a_key_nobody_translated(self):
-        files = Files(**{"de.json": {"f.b": "Niemand"}, "de.base.json": {"f.b": "No staff"},
-                         "de.ai.json": {"f.b": "gpt", "f.a": "gpt"}})
+        files = Files({"f.b": "Niemand"}, {"f.b": "No staff"}, {"f.b": "gpt", "f.a": "gpt"})
         code, text = _status(files, "--strict")
         self.assertEqual(code, 1, text)
-        self.assertIn("1 left in i18n/de.ai.json", text)
+        self.assertIn("1 left in de's draft marks in i18n/base.json", text)
+
+    def test_strict_fails_on_an_english_no_language_takes_until_pruned(self):
+        files = Files({"f.b": "Niemand"}, {"f.b": "No staff"}, spare=["f.x"])
+        code, text = _status(files, "--strict")
+        self.assertEqual(code, 1, text)
+        self.assertIn("1 left in i18n/base.json for keys no language translates", text)
+        self.assertEqual(_status(files, "--strict", "de")[0], 0, "a named language is not held to it")
+        with files.patch(), mock.patch.object(i18n, "calls", lambda: FOUND), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(i18n.main(["prune"]), 0)
+        self.assertIn("i18n/base.json: 1 dropped for keys no language translates", out.getvalue())
+        self.assertEqual(_status(files, "--strict")[0], 0)
 
     def test_strict_fails_on_a_mismatch(self):
-        files = Files(**{"de.json": {"f.a": "Verlust {x}"}, "de.base.json": {"f.a": "Lost {w:$}"}})
+        files = Files({"f.a": "Verlust {x}"}, {"f.a": "Lost {w:$}"})
         code, text = _status(files, "--strict")
         self.assertEqual(code, 1, text)
         self.assertIn("mismatch: f.a", text)

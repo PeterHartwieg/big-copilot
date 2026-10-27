@@ -162,18 +162,37 @@ test("the Wiki guides' labels are keyed from guideUi, one wiki.ui key per entry,
 /* The translations: flat JSON of strings, and every key that is translated
    carries the placeholders and plural forms of the English it came from. */
 const LANGS = fs.readdirSync(path.join(ROOT, 'i18n'))
-  .filter(n => n.endsWith('.json') && !n.endsWith('.base.json') && !n.endsWith('.ai.json'))
+  .filter(n => n.endsWith('.json') && n !== 'base.json')
   .map(n => n.slice(0, -5));
+const STORE = JSON.parse(fs.readFileSync(path.join(ROOT, 'i18n', 'base.json'), 'utf8'));
+const readTable = lang => JSON.parse(fs.readFileSync(path.join(ROOT, 'i18n', `${lang}.json`), 'utf8'));
+/* One language's base out of i18n/base.json, as load() in tools/i18n.py reads
+   it: {key: the English it was made from}, its own under `was`, else the
+   shared `en` for a key it translates. */
+function baseOf(lang, table){
+  const base = {};
+  for(const [k, e] of Object.entries(STORE)){
+    const was = e.was || {};
+    const text = Object.hasOwn(was, lang) ? was[lang] : Object.hasOwn(table, k) ? e.en : undefined;
+    if(typeof text === 'string') base[k] = text;
+  }
+  return base;
+}
 
-test('i18n/ holds German, as flat JSON of strings beside its base', () => {
+test('i18n/ holds German, as flat JSON of strings beside one base of every language', () => {
   assert.ok(LANGS.includes('de'));
   for(const lang of LANGS){
-    for(const name of [`${lang}.json`, `${lang}.base.json`]){
-      const data = JSON.parse(fs.readFileSync(path.join(ROOT, 'i18n', name), 'utf8'));
-      assert.equal(typeof data, 'object', name);
-      assert.ok(!Array.isArray(data), name);
-      for(const [k, v] of Object.entries(data)) assert.equal(typeof v, 'string', `${name} ${k}`);
-    }
+    const data = readTable(lang);
+    assert.equal(typeof data, 'object', lang);
+    assert.ok(!Array.isArray(data), lang);
+    for(const [k, v] of Object.entries(data)) assert.equal(typeof v, 'string', `${lang}.json ${k}`);
+  }
+  const strings = (o, nullable) => o === undefined || (typeof o === 'object' && o && !Array.isArray(o)
+    && Object.values(o).every(v => typeof v === 'string' || (nullable && v === null)));
+  for(const [k, e] of Object.entries(STORE)){
+    assert.ok(e && typeof e === 'object' && Object.keys(e).every(f => ['en', 'was', 'ai'].includes(f)), `base.json ${k}`);
+    assert.ok(e.en === undefined || typeof e.en === 'string', `base.json ${k}`);
+    assert.ok(strings(e.was, true) && strings(e.ai, false), `base.json ${k}`);
   }
 });
 
@@ -242,8 +261,8 @@ function mismatches(lang, table, base, passed = {}){
 
 test('every translated key records the English it was made from', () => {
   for(const lang of LANGS){
-    const table = JSON.parse(fs.readFileSync(path.join(ROOT, 'i18n', `${lang}.json`), 'utf8'));
-    const base = JSON.parse(fs.readFileSync(path.join(ROOT, 'i18n', `${lang}.base.json`), 'utf8'));
+    const table = readTable(lang);
+    const base = baseOf(lang, table);
     assert.deepEqual(Object.keys(table).filter(k => !(k in base)), [],
       `${lang}: run python tools/i18n.py accept ${lang} <key> after translating`);
   }
@@ -251,9 +270,8 @@ test('every translated key records the English it was made from', () => {
 
 test('every translation carries the placeholders and plural forms of the English it was made from', () => {
   for(const lang of LANGS){
-    const table = JSON.parse(fs.readFileSync(path.join(ROOT, 'i18n', `${lang}.json`), 'utf8'));
-    const base = JSON.parse(fs.readFileSync(path.join(ROOT, 'i18n', `${lang}.base.json`), 'utf8'));
-    assert.deepEqual(mismatches(lang, table, base, PASSED()), [], lang);
+    const table = readTable(lang);
+    assert.deepEqual(mismatches(lang, table, baseOf(lang, table), PASSED()), [], lang);
   }
 });
 
@@ -378,11 +396,16 @@ from tools import i18n
 english = {"f.a": "Lost {w:$}", "f.b": "No staff", "f.c": "Fresh", "f.d": "Closed",
            "f.m_one": "{n} machine", "f.m_other": "{n} machines", "f.p_one": "{n} pallet", "f.p_other": "{n} pallets",
            "f.q_one": "{n} crate", "f.q_other": "{n} crates"}
-files = {"de.json": {"f.b": "Niemand", "f.c": "Frisch (alt)"},
-         "de.base.json": {"f.b": "No staff", "f.c": "Fresh before"}, "de.ai.json": {}}
-i18n.load = lambda lang, root=i18n.ROOT: (dict(files[lang + ".json"]), dict(files[lang + ".base.json"]))
-i18n.drafted = lambda lang, root=i18n.ROOT: dict(files[lang + ".ai.json"])
-i18n._write = lambda name, data: files.__setitem__(name, dict(data))
+# German's share of i18n/: its table, base and draft marks (load(), drafted(), save()).
+files = {"table": {"f.b": "Niemand", "f.c": "Frisch (alt)"},
+         "base": {"f.b": "No staff", "f.c": "Fresh before"}, "marks": {}}
+i18n.load = lambda lang, root=i18n.ROOT: (dict(files["table"]), dict(files["base"]))
+i18n.drafted = lambda lang, root=i18n.ROOT: dict(files["marks"])
+def save(lang, table=None, base=None, marks=None, root=None):
+    for kind, data in (("table", table), ("base", base), ("marks", marks)):
+        if data is not None:
+            files[kind] = dict(data)
+i18n.save = save
 draft = {"f.a": "Verlust {w:$}", "f.b": "Kein Personal", "f.c": "Frisch", "f.d": "Zu {x}",
          "f.m_one": "{n} Automat", "f.m_other": "{n} Automaten",
          "f.m_many": "{n} Automaten", "f.gone": "Weg", "f.p_other": "{n} Paletten",
@@ -392,12 +415,12 @@ after_import = json.loads(json.dumps(files))
 i18n.reviewed("de", ["f.a"], english)
 after_review = json.loads(json.dumps(files))
 # A person fixes f.c and accepts it: the mark goes, and a new draft leaves it alone.
-files["de.json"]["f.c"] = "Frisch!"
+files["table"]["f.c"] = "Frisch!"
 del english["f.m_one"], english["f.m_other"]
 i18n.accept("de", ["f.c"], english)
 # Only f.p_other's English changes: a draft of that one form is enough.
-files["de.json"].update({"f.p_one": "{n} Palette", "f.p_other": "{n} Paletten"})
-files["de.base.json"].update({"f.p_one": "{n} pallet", "f.p_other": "{n} pallet(s)"})
+files["table"].update({"f.p_one": "{n} Palette", "f.p_other": "{n} Paletten"})
+files["base"].update({"f.p_one": "{n} pallet", "f.p_other": "{n} pallet(s)"})
 again = i18n.import_draft("de", {"f.c": "Frisch (v2)", "f.p_other": "{n} Paletten!"}, "gpt-6-sol", english, {})
 print(json.dumps([got, after_import, after_review, files, again]))`);
   assert.equal(out.status, 0, out.stderr);
@@ -408,19 +431,19 @@ print(json.dumps([got, after_import, after_review, files, again]))`);
   // f.q_one breaks a placeholder, so f.q_other goes with it: a plural comes whole.
   assert.deepEqual(Object.keys(got.refused).sort(), ['f.d', 'f.gone', 'f.m_many', 'f.p_other', 'f.q_one', 'f.q_other']);
   assert.match(got.refused['f.p_other'], /lacks the plural forms one/);
-  assert.equal(drafted['de.json']['f.b'], 'Niemand');
-  assert.equal(drafted['de.base.json']['f.c'], 'Fresh');
-  assert.equal(drafted['de.base.json']['f.m_one'], '{n} machine');
-  assert.deepEqual(Object.keys(drafted['de.ai.json']).sort(), got.taken);
-  assert.equal(drafted['de.ai.json']['f.a'], 'gpt-6-luna');
+  assert.equal(drafted.table['f.b'], 'Niemand');
+  assert.equal(drafted.base['f.c'], 'Fresh');
+  assert.equal(drafted.base['f.m_one'], '{n} machine');
+  assert.deepEqual(Object.keys(drafted.marks).sort(), got.taken);
+  assert.equal(drafted.marks['f.a'], 'gpt-6-luna');
   // Reviewing f.a drops its mark and nothing else.
-  assert.deepEqual(Object.keys(reviewed['de.ai.json']).sort(), got.taken.filter(k => k !== 'f.a'));
-  assert.equal(reviewed['de.json']['f.a'], 'Verlust {w:$}');
+  assert.deepEqual(Object.keys(reviewed.marks).sort(), got.taken.filter(k => k !== 'f.a'));
+  assert.equal(reviewed.table['f.a'], 'Verlust {w:$}');
   // accept dropped f.c's mark and those of f.m, whose English went; only the redrafted f.p_other is marked.
-  assert.deepEqual(Object.keys(accepted['de.ai.json']), ['f.p_other']);
+  assert.deepEqual(Object.keys(accepted.marks), ['f.p_other']);
   assert.deepEqual(again.kept, ['f.c']);
   assert.deepEqual(again.taken, ['f.p_other']);
-  assert.equal(accepted['de.json']['f.c'], 'Frisch!');
+  assert.equal(accepted.table['f.c'], 'Frisch!');
 });
 
 test("a translation may write a game name's token its calls pass beside the English, and nothing they do not", () => {
