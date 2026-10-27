@@ -1050,11 +1050,15 @@ without its `.git`) or inside any other git work tree.
 ## Template placeholders
 
 The board's page is `template/board.html`, a file of its own beside `ba_dashboard.py`, and
-its script is `template/board.js` beside it. The calculation cores are
+its script is `template/board.js` beside it. Parts of the board script live in files of
+their own and go back into `board.js` at a placeholder line where they were taken out:
+`template/board-write.js` (writing to the game, the `gw*` names) at `/*__BOARD_WRITE__*/`.
+The calculation cores are
 `template/open-store-model.js` and `template/open-factory-model.js`, with the public
 companion arithmetic in `template/mod-economy-model.js` and `template/mod-demand-model.js`. `render()` reads these files through
 `load_template()`, once per process and never at import time: the Pyodide worker imports
-`ba_dashboard` without the files and never renders. `load_template()` first splices
+`ba_dashboard` without the files and never renders. `load_template()` first puts each part
+back into `board.js` at its line, then splices
 the mod economy and demand helpers, `open-store-model.js`, `open-factory-model.js`,
 the Street Food helper, then `board.js` into the line `/*__BOARD_SCRIPT__*/`, the whole body of the page's last
 `<script>` block, so `render()` sees the page as one string and fills the placeholders in
@@ -1064,6 +1068,16 @@ not a second authored section registry. All these sources are in
 `build_web.STAMP_INPUTS`, so an edit to any changes the build stamp. The calculation
 source stays inline in the existing script block for both standalone `file://` output
 and the hosted build, requiring neither npm nor a network import for Python rendering.
+
+A part lands exactly where its text was, never before or after `board.js`. The board
+script runs top to bottom, and a top-level `const` or `let` read before its line throws,
+so the page must run the same text in the same order. `tests/_board.cjs` splices the
+parts the same way (its `BOARD_PARTS`), and every list that names the board's files
+names the part too: `STAMP_INPUTS` in `build_web.py`, `calls()` in `tools/i18n.py` (its
+`tt()` keys), `tests/global_names.test.cjs`, and the scans in
+`tests/number_locale.test.cjs` and `tests/feature_badges.test.cjs`. A new part is a block
+between two `/* --- ` banners moved whole, with its own placeholder line and a row in
+`load_template()` and `BOARD_PARTS`.
 
 `OpenStoreModel.create({facts, company})` is the Open a store arithmetic boundary.
 `facts` is the `openStore` payload; `company` contains businesses (provider checks and
@@ -1179,7 +1193,9 @@ What `page_html()` produces, top of the file down:
 4. `BEFORE_SCRIPT`, filled in by `page_html()` with the stamp, the release JSON and the
    inlined `web/update.js`, in its slot just ahead of the board's own script:
    `window.LEDGER_RELEASE`, `update.js`, `app.js?v=<stamp>`, `community.js?v=<stamp>`.
-5. The board script, `template/board.js`, in the last `<script>` block of the template.
+5. The board script, `template/board.js` with its parts (`template/board-write.js`) back
+   at their placeholder lines, in the last `<script>` block of the template, after the
+   calculation models.
 
 Before any of that, `main()` refreshes `web/wiki-data.json`, copies the files `PY_CODE`
 and `PY_DATA` name (all but `gametext.json`: `PY_COPIED`) into `web/py/`, stripping
@@ -1415,12 +1431,14 @@ Stale until that row draws or the next board arrives. Another company or save dr
 every row so hidden markup cannot retain the previous company's content.
 
 Adding a page means: a `div.page` in the markup, an entry in `PAGES` (with `newFeature` if
-it deserves a badge, dated in `NEW_SINCE` — see [contributing.md](contributing.md)) and in `ICON`, an `SS_VIEWS`
-entry so search finds it, and a `PAGE_DRAWS` row for its draw function. Author a new
+it deserves a badge, dated in `NEW_SINCE` — see [contributing.md](contributing.md)) and in `ICON`,
+and a `PAGE_DRAWS` row for its draw function. Author a new
 canonical view in `VIEW_META`: it generates its navigation item, every `SEC_PAGE` row
 (its `section`, the sections `also` on it, and the old ones `SEC_MOVED` points at it),
-area view, route identity, route needs (from its `PAGE_DRAWS` tags), label and default
-host route; route hooks stay in `ROUTE_BEHAVIOR`. The full checklist,
+area view, route identity, the sections it reads (its `needs`, declared there and nowhere
+else: the route's, and its draw rows' unless a row reads none), its search entry (its label,
+where it is and its area's icon, until an `SS_VIEWS` entry gives search's own words), label
+and default host route; route hooks stay in `ROUTE_BEHAVIOR`. The full checklist,
 with the test that guards each table, is under [Registries](#registries). Tag the row with every
 view whose DOM it writes; if other code reads state it computes from another page, tag it
 `""` so it is drawn on every refresh. A wrong tag shows old numbers until the next full
@@ -1643,7 +1661,9 @@ the payload table, the private build tokens, the finding groups, and the
 above its declaration (`tests/test_doc_registries.py`). The other covering tests check the entries that exist
 today, so extend them for the new entry. Rows marked
 *only if* apply to some entries, not all. All anchors are in `ba_dashboard.py` unless a row
-says otherwise; "board script" means `template/board.js`, the last `<script>` block of the page.
+says otherwise; "board script" means `template/board.js` with its parts spliced back in
+(`template/board-write.js`, [Template placeholders](#template-placeholders)), the last
+`<script>` block of the page.
 
 ### A finding kind
 
@@ -1663,7 +1683,7 @@ and above `FINDING_KINDS` in `template/board.js`.
 | `ALERT_UNITS = {` | *Only if* its `worth` is money: the unit, such as `"/day rent"`. Otherwise the kind goes on `NOT_MONEY` in `tests/alert_kinds.test.cjs` | `tests/alert_kinds.test.cjs`, "every finding kind has an ALERT_UNITS unit or is listed as carrying no money" |
 | `SUMMARIES = {`, and `WORST_FIRST =` for mixed severities | *Only if* three or more at one site should merge into one counted line | none; a missing entry just stops the merge |
 | `def _condense(` | *Only if* the kind merges and a field of its own must survive the merge. A merged row is built fresh: it keeps `group`, the key the rows were merged on; from the worst row it keeps `level`, `site`, `siteKey`, `detail` (that row's `text`) and `ev` when present; `text` is the `SUMMARIES` line, `worth` the sum of the rows' non-null worths (or `None` when there are none), `unit` from `ALERT_UNITS`, `id` a new `_alert_id("summary", …)`, `amt` the count of rows it stands for (`orders` for `order`, else `findings`), and `always` is true if any row's is. Every other field is dropped. Every row, merged or not, also loses `rank` and `subject`, and `always` once the materiality gate has used it | none |
-| `const FINDING_KINDS = [` (board script) | One record per kind, in the order the kinds panel lists them: `{id, label, note, on, link, route, evidence}` and the *only if* fields below. `label` and `note` stay literal getters round `tt()` (a copy or a spread freezes one language); keep a noisy kind `on: false`. `link` is where a click lands, `{sec, view?, site?, port?}`, where `view` is a Supply view (`imports`, `deliveries`, `production`) or `"route"` for the view of the finding's route (`findingRoute()`); without it `goToAlert()` does nothing. `route` is its route and the action's words, `{route, act, pick?}`, `pick(a)` returning another `{route, act}` for some of its findings (a route-fed shortfall is a delivery, a staff finding at a factory is Production); `link` is the landing inside it. `evidence` is the site panel block it lights, `{block, hit?}`; a kind with no site panel has none and goes on `NO_EVIDENCE` in `tests/alert_kinds.test.cjs`. *Only if*: `sitePick` (the kind is company-wide, with no site of its own), `landsOnRow` (the finding is about one shelf, stock or input row), `evidenceAt` (a depot or factory keeps it in another block), `evidenceHit` (the hit depends on the site), `syn` (players have words for it, for search). The board reads it through tables derived from it (`ALERT_GROUPS`, `ALERT_LINKS`, `FINDING_ROUTES`, `ALERT_EVIDENCE`, `ALERT_SITE_PICK`, `ALERT_LANDS_ON_ROW`, `SP_EVIDENCE_KIND`, `SP_EVIDENCE_HIT`, `SS_KIND_SYN`); never add to those. The settings panel, `kindLabel`, `kindCounts`, search and the map's `kindOff` read `ALERT_GROUPS` | `tests/alert_kinds.test.cjs`, "At capacity is on by default", the per-kind tests, "every finding kind has an ALERT_LINKS entry …", "every finding kind with a site panel has an ALERT_EVIDENCE entry" and "the supply kinds land on the Supply view of their route"; `tests/test_doc_registries.py`, "test_every_alert_group_is_a_group_the_findings_emit"; `tests/shell_routes.test.cjs`, "every finding kind names a real route, and every route is a view of its area" (a new kind also bumps the kind count it pins); `tests/job_demands.test.cjs`, "both demand findings can be filtered and link somewhere"; `tests/site_panel.test.cjs`, "the findings here are the ones about this site, and each lights its block"; `tests/search.test.cjs`, "the index holds every group …" |
+| `const FINDING_KINDS = [` (board script) | One record per kind, in the order the kinds panel lists them: `{id, label, note, on, link, route, evidence}` and the *only if* fields below. `label` and `note` stay literal getters round `tt()` (a copy or a spread freezes one language); keep a noisy kind `on: false`. `link` is where a click lands, `{sec, view?, site?, port?}`, where `view` is a Supply view (`imports`, `deliveries`, `production`) or `"route"` for the view of the finding's route (`findingRoute()`); without it `goToAlert()` does nothing. `route` is its route and the action's words, `{route, act, pick?}`, `pick(a)` returning another `{route, act}` for some of its findings (a route-fed shortfall is a delivery, a staff finding at a factory is Production); `link` is the landing inside it. `evidence` is the site panel block it lights, `{block, hit?}`; a kind with no site panel has none and goes on `NO_EVIDENCE` in `tests/alert_kinds.test.cjs`. *Only if*: `sitePick` (the kind is company-wide, with no site of its own), `landsOnRow` (the finding is about one shelf, stock or input row), `evidenceAt` (a depot or factory keeps it in another block), `evidenceHit` (the hit depends on the site), `syn` (players have words for it, for search). The board reads it through tables derived from it (`ALERT_GROUPS`, `ALERT_LINKS`, `FINDING_ROUTES`, `ALERT_EVIDENCE`, `ALERT_SITE_PICK`, `ALERT_LANDS_ON_ROW`, `SP_EVIDENCE_KIND`, `SP_EVIDENCE_HIT`, `SS_KIND_SYN`); never add to those. The settings panel, `kindLabel`, `kindCounts`, search and the map's `kindOff` read `ALERT_GROUPS` | `tests/alert_kinds.test.cjs`, "At capacity is on by default", the per-kind tests, "every finding kind has an ALERT_LINKS entry …", "every finding kind with a site panel has an ALERT_EVIDENCE entry" and "the supply kinds land on the Supply view of their route"; `tests/test_doc_registries.py`, "test_every_alert_group_is_a_group_the_findings_emit"; `tests/shell_routes.test.cjs`, "every finding kind names a real route, and every route is a view of its area" (it reads every `FINDING_KINDS` id, so a new kind needs no number changed); `tests/job_demands.test.cjs`, "both demand findings can be filtered and link somewhere"; `tests/site_panel.test.cjs`, "the findings here are the ones about this site, and each lights its block"; `tests/search.test.cjs`, "the index holds every group …" |
 | `const ALERT_DEFAULTS_V1 =` (board script) | Never add to it: it is the frozen migration of old settings | `tests/alert_kinds.test.cjs`, "a stored whole map keeps only …" |
 | `amt=` on its `note(` or `_finding(` (`_amt()`), and `amtUnit()` in the board script for a new unit | *Only if* its `worth` is not money and its sentence has a figure worth showing in the amount column; without it the column is empty | `tests/alert_kinds.test.cjs`, "the amount column shows a finding's amt"; `tests/test_payload_snapshot.py` |
 | `function ssKindLands(` (board script) | *Only if* the kind's `link` has no `site`, no `tab` and no `port`, and its `sec` is not `secMarket` or `secPortfolio` (a finding that lands on Payroll or Milestones, say); every other kind already lands where it should | none |
@@ -1684,14 +1704,14 @@ all three.
 | The markup (`template/board.html`): `<div class="page" id="page…">` for a page, or `<section class="sec rv" id="sec…" data-sub="…">` inside its page for a view; a page with views also gets its `<nav class="seg" id="…Nav">` | The host element | the navigation tests, indirectly |
 | `const PAGES = [` (board script) | *Only for a page*: `{id, label, host, newFeature?}`; a `newFeature` id also gets its ship date in `NEW_SINCE` | `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, Real estate, then City map and Wiki"; `tests/feature_badges.test.cjs`, "every badge id has a ship date, and every date belongs to a badge" |
 | `const ICON = {` (board script) | *Only for a page*: its nav icon, keyed by page id | none |
-| `const VIEW_META = [` (board script) | One record per view or route: `{route, host, section?, also?, needs?, defaultHost?, label}`. `section` is the view's main section; `also` lists the other sections on it that a finding, a search or an old link reveals; `label` is a callback around `tt()`, so language changes remain live. Everything below marked *derived* comes from it: the view's item in `SUBS` (`navItems()`), its `SEC_PAGE` rows, its place in its area's `AREAS` views (`areaViews()`), its `ROUTES` entry with its `needs` (`routeNeeds()`: the sections its host's `PAGE_DRAWS` rows declare; `needs` here only for one no row declares, as the finder's `premises`), `HOST_ROUTES` and `routeViewLabel()`. Set `defaultHost: false` for a second mode sharing a host (the finder on Map) | `tests/navigation.test.cjs`, "a new canonical view derives its common tables without sibling table edits", "shared view identity supplies navigation, primary sections, route hosts and labels", "every view in SUBS has its SEC_PAGE row …" and "every Company section deep link opens the view that holds it"; `tests/alert_kinds.test.cjs`, "the supply kinds land on the Supply view of their route"; `tests/shell_routes.test.cjs`, "every finding kind names a real route, and every route is a view of its area" |
-| `const PAGE_DRAWS = [` (board script) | `["page/view", () => drawX(), null, ["section"]]`, tagged with every view whose markup it writes; the fourth element names the sections the row reads, and is also where its route's `needs` come from | `tests/calm_refresh.test.cjs`, "a refresh on Today draws Today …"; `tests/navigation.test.cjs`, "every PAGE_DRAWS tag names a real page or view" and the SUBS test above; `tests/on_demand.test.cjs`, "every row and route declares sections …" |
+| `const VIEW_META = [` (board script) | One record per view or route: `{route, host, section?, also?, needs?, defaultHost?, label}`. `section` is the view's main section; `also` lists the other sections on it that a finding, a search or an old link reveals; `needs` is every payload section the view reads (the one place they are declared); `label` is a callback around `tt()`, so language changes remain live. Everything below marked *derived* comes from it: the view's item in `SUBS` (`navItems()`), its `SEC_PAGE` rows, its place in its area's `AREAS` views (`areaViews()`), its `ROUTES` entry with its `needs` (`routeNeeds()`), the sections of its host's `PAGE_DRAWS` rows (`rowNeeds()`), its default search entry (`ssViewEntry()`), `HOST_ROUTES` and `routeViewLabel()`. Set `defaultHost: false` for a second mode sharing a host (the finder on Map, whose `premises` its host's rows do not read) | `tests/navigation.test.cjs`, "a new canonical view derives its common tables without sibling table edits", "shared view identity supplies navigation, primary sections, route hosts and labels", "every view in SUBS has its SEC_PAGE row …" and "every Company section deep link opens the view that holds it"; `tests/on_demand.test.cjs`, "every row and route declares sections …"; `tests/alert_kinds.test.cjs`, "the supply kinds land on the Supply view of their route"; `tests/shell_routes.test.cjs`, "every finding kind names a real route, and every route is a view of its area" |
+| `const PAGE_DRAWS = [` (board script) | `["page/view", () => drawX()]`, tagged with every view whose markup it writes. The row reads the sections its views declare in `VIEW_META` (*derived*, `rowNeeds()`); a fourth element of `[]` is a row that reads none of them, drawn from the core alone and redrawn at once on a refresh while they load. The third element names a row other code marks stale (`hrStale()`, `nxSchedStale()`) | `tests/calm_refresh.test.cjs`, "a refresh on Today draws Today …"; `tests/navigation.test.cjs`, "every PAGE_DRAWS tag names a real page or view" and the SUBS test above; `tests/on_demand.test.cjs`, "every row and route declares sections …" |
 | `const ROUTE_BEHAVIOR = {` (board script) | *Only if* the route does something of its own as it opens: `enter`, `after` or `into` | `tests/shell_routes.test.cjs`; the route's own tests |
 | `const SUBS = {` (board script) | *Only for a new host with views*: its DOM host/nav ids, storage key, default view and optional shown hook; its items are derived | `tests/navigation.test.cjs`, "Businesses carries Results, Products & prices, Standards and Milestones; Staffing its three views" |
 | `const AREAS = [` (board script) | *Only for a new area*: `{id, icon, label, views: areaViews(id), start}`; its views are derived | `tests/navigation.test.cjs`, "the sidebar is Overview, Businesses, Supply, Staffing, Expansion, Real estate, then City map and Wiki" |
 | `SEC_PAGE`, `ROUTES`, `HOST_ROUTES` (board script) | *Derived*: never add to them | the `VIEW_META` tests above |
 | `const ROUTE_ALIASES =` (board script) | *Only when* an old page or view name becomes a route | `tests/navigation.test.cjs`, "the old #payroll hash, #secPayroll and a remembered Payroll open Staffing › Payroll" and "the #staff hash, #secStaff and a remembered Staff open Staffing › Staff needs" |
-| `const SS_VIEWS = [` (board script) | `{id, t, p, ic, syn, go}`, so search can open it. Kept by hand: an entry carries search's own title, line and the words players use, and several are not views at all | `tests/search.test.cjs`, "the index holds every group …" |
+| `const SS_VIEWS = ssViews([` (board script) | *Only if* search's words differ from the view's, or the entry is not a view at all. Every `VIEW_META` view has a default entry (*derived*, `ssViewEntry()`: its label, its area › view path, its area's icon, Enter opens the route). A hand entry `{id, route?, t, p, ic?, syn, go?}` naming the view's `route` is laid over that default and gives only what differs: search's own title and line, the words players use, another icon or way in; an entry with no `route` (a block, a sheet, the changelog) stands alone | `tests/search.test.cjs`, "the index holds every group …"; `tests/navigation.test.cjs`, "a new canonical view derives its common tables without sibling table edits" |
 | `function showPage(` (board script) | *Only if* the page loads or draws when shown, as the Map does | none |
 | `const SB_VIEWS =`, `const SB_SEC =` (board script) | *Only for* a new Supply view: its section, keyed by the view id. Also its single `VIEW_META` record, any distinct `ROUTE_BEHAVIOR` hooks, and its drawer in `drawSupplyView()`'s dispatch map (a missing view draws Changes) and its `PAGE_DRAWS` row; `sbViewOf()`, which puts a kind of change on a view, and the view-keyed objects in `sbData()` (`byView`), `sbUpdateStrip()` (`sbLeft`), `sbMode` and `sbScope` | `tests/navigation.test.cjs`, "Supply is six task views …"; `tests/import_routes.test.cjs`; `tests/progress.test.cjs` |
 | `const PAGE_ALIASES =`, `const SEC_MOVED =` (board script) | *Only when* renaming or moving an old page or section: `SEC_MOVED` maps the old section to the one that replaced it, and its `SEC_PAGE` row follows | `tests/navigation.test.cjs` |
@@ -1731,7 +1751,7 @@ the panel and fullscreen map.
 | --- | --- | --- |
 | `const finderDefaults = () =>` | The key and its "no limit" default. `finderPick`, `saveFinder`, `resetCharacter` and `savedKey` follow it | "the defaults are visibly chosen on first open …" |
 | `setFinder(preset = {}){` | The key in the reset literal | "a preset lands on the column its category ranks by …" |
-| `loadFinder(){` | Usually nothing; a retired key goes on its `delete this.fs.` line | "the filters come back with the character …" |
+| `const FINDER_KEPT = {` and `loadFinder(){` | Usually nothing: the stored filters are an open record over `finderDefaults()` (`keptRecord()` in the board script), so a stored key comes back as it was. A key whose stored value needs checking gets a rule in `FINDER_KEPT`; a retired key gets `() => undefined` there | "the filters come back with the character …"; `tests/remembered.test.cjs`, "the finder's filters read back over the defaults …" |
 | `finderPanel(){` and `const MAP_WORDS = {` | A `row('rowLabel', …)` control with `data-f="<key>"`; its words are `MAP_WORDS` getters over `tt("map.…")`, which a language switch writes again in place | "the switch is in the map window; every filter lives in the panel" |
 | `wireFinder(){`, `paintControls(){` | Nothing for a numeric chip; a new kind of control needs its handler and read-back here | "floor area is a column that sorts, and a filter on every list" |
 | `finderRows(){` and `saleRows(){` | The predicate; `const finderFits = (v, lo, hi) =>` for a range | "a type filter re-scores every row …", "the for-sale list answers to the filters still on screen" |
