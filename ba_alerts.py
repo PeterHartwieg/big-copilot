@@ -18,7 +18,7 @@ from __future__ import annotations
 import collections
 import hashlib
 
-from ba_msg import WEEKDAYS, _half_away, msg, plain, tok
+from ba_msg import WEEKDAYS, Msg, _half_away, msg, plain, tok
 
 # --------------------------------------------------------------------- alerts
 # What the number in a finding's "worth" is counted in, for the page to print
