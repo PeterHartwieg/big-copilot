@@ -1832,6 +1832,54 @@ for (const spec of [
   });
 }
 
+// The watcher and Update share one source, so the generation does not tell
+// their /health replies apart. An older reply must not replace the running
+// build a later read already published. Update does not wait for the watcher.
+for (const [label, staleRunning] of [
+  ['an older zero', 0],
+  ['an omitted field', undefined],
+  ['an older positive build', 3670],
+]) {
+  test(`an older health reply does not replace a newer running build (${label})`, async () => {
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const fresh = {...HEALTH, schemaVersion: 5, stamp: 's1', runningBuild: 3682};
+    const stale = {...HEALTH, schemaVersion: 5, stamp: 's1'};
+    if (staleRunning === undefined) delete stale.runningBuild;
+    else stale.runningBuild = staleRunning;
+    const h = harness();
+    const published = [];
+    let healths = 0, refreshes = 0;
+    h.context.handlers = {runningBuild() { published.push(h.run('linkRunning')); }};
+    h.context.fetch = async (url) => {
+      const path = new URL(url).pathname;
+      if (path === '/health') {
+        healths++;
+        return reply(200, healths === 1 ? await gate : fresh);
+      }
+      if (path === '/refresh') {
+        refreshes++;
+        return refreshes === 1 ? reply(429, {error: 'throttled', retryAfter: 1}) : reply(409, {reason: 'saving'});
+      }
+      throw new TypeError('Failed to fetch');
+    };
+    h.run(`linkUrl = "http://127.0.0.1:8322"; lastLinkStamp = "s1"; strip.tone = "ok"; linkHealth = ${JSON.stringify(HEALTH)}`);
+    const watching = h.run('checkFolder()');
+    for (let i = 0; i < 20 && healths < 1; i++) await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(healths, 1, 'the watcher is held on /health');
+    const updating = h.run('update()');
+    for (let i = 0; i < 20 && published.length < 1; i++) await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(published, [3682], 'Update published the running build before the watcher replied');
+    release(stale);
+    await watching;
+    await updating;
+    assert.equal(refreshes, 2, 'the throttled refresh was asked again and refused');
+    assert.match(h.seen.notes.at(-1)[1], enRe('app.link.refuse.saving'));
+    assert.deepEqual(published, [3682]);
+    assert.equal(h.run('reportContext().runningBuild()'), 3682);
+  });
+}
+
 test('schema 5 and every supported older game link can still load saves', async () => {
   for (const schemaVersion of [1, 2, 3, 4, 5]) {
     const h = harness({routes: {health: {...HEALTH, schemaVersion}, save: reply(200)}});

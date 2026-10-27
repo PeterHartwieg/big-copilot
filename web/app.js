@@ -810,6 +810,13 @@
   const linkVersionKnown = v => v === 1 || v === 2 || v === 3 || v === 4 || v === LINK_SCHEMA;
   // A build number the report and the footer may show. Anything else is unknown.
   const linkBuildNumber = (v) => (Number.isInteger(v) && v > 0 && v < 1000000 ? v : null);
+  // /health reads of one source overlap: the watcher can be in flight while
+  // Update reads again. Each read takes a number when it starts. A reply
+  // publishes only when no later read of this page has published already, so
+  // an older answer cannot replace a newer running build. A reply from
+  // another source is dropped before this, by its generation and address.
+  let healthReads = 0;
+  let healthPublished = 0;
   // The running game, from a health object that carries the field. An older
   // mod leaves it out; that is unknown, not health.build.
   function noteRunningBuild(health) {
@@ -1163,6 +1170,7 @@
     // after either publishes nothing.
     const gen = sourceGen;
     const url = linkUrl;
+    const seq = ++healthReads;
     const res = await linkFetch("/health", {link: url});
     if (gen !== sourceGen || url !== linkUrl) return NOT_READY;
     if (res.status !== 200) return NOT_READY;
@@ -1170,6 +1178,10 @@
     try { body = await res.json(); } catch (e) {}
     if (gen !== sourceGen || url !== linkUrl) return NOT_READY;
     if (!(body && typeof body === "object" && !Array.isArray(body))) return NOT_READY;
+    // The caller still hears its own answer. Shared state stays with the
+    // later read when this one started first and landed second.
+    if (seq < healthPublished) return body;
+    healthPublished = seq;
     // An object, from whichever caller: the run of never-health is over. What
     // the watcher said stands until a health answer of this version.
     linkNotReady = 0;
