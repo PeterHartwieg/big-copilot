@@ -97,8 +97,19 @@ test('cancelling the wait sends nothing more, and the next ask picks the open qu
   assert.equal(await scene.evaluate((el) => getComputedStyle(el).pointerEvents), 'none');
   assert.equal(await scene.evaluate((el) => getComputedStyle(el).cursor), 'default');
   assert.equal(await scene.getByRole('button').count(), 0);
+  assert.equal(await scene.getAttribute('role'), 'img');
+  assert.equal(await scene.getAttribute('aria-labelledby'), 'gwSceneCap');
+  assert.equal(await scene.getAttribute('aria-describedby'), 'gwSceneNote');
+  assert.equal(await scene.getAttribute('aria-hidden'), null);
+  assert.equal(await scene.locator('.gw-pop').getAttribute('aria-hidden'), 'true');
   await pair(page).getByText(en('nav.dlg.waiting.where')).waitFor();
   await pair(page).getByText(en('nav.dlg.scene')).waitFor();
+  // The caption sits on the trailing edge of the picture's title bar.
+  assert.equal(await scene.evaluate(el => {
+    const cap = el.querySelector('.gw-cap');
+    const bar = el.querySelector('.gw-sbar');
+    return bar.getBoundingClientRect().right - cap.getBoundingClientRect().right < 12;
+  }), true);
   // This fixture's save has no build stamp. The link still names the running
   // game, and a stamp painted onto the board is shown beside it.
   const health = await (await fetch(H.mockUrl + '/health')).json();

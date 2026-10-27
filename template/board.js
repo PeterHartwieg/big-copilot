@@ -26894,9 +26894,9 @@ const gwReread = done => done
 /* A picture of the game's screen, not a control. Allow is clicked in the
    game window. The words inside the picture are the game's own. */
 function gwScene(){
-  return `<div class="gw-scene" aria-hidden="true"><div class="gw-sbar"><i></i><i></i><i></i><span>BIG AMBITIONS</span><span class="gw-cap">${
+  return `<div class="gw-scene" role="img" aria-labelledby="gwSceneCap" aria-describedby="gwSceneNote"><div class="gw-sbar"><i></i><i></i><i></i><span>BIG AMBITIONS</span><span class="gw-cap" id="gwSceneCap">${
     tt("nav.dlg.scene", "Illustration")}</span></div><div class="city">${
-    [26, 40, 18, 48, 30, 22, 44, 34, 20, 38, 28].map(h => `<i style="height:${h}px"></i>`).join("")}</div><div class="gw-pop"><b><i></i>Allow Big Copilot to change your game?</b><div class="bt"><span>Deny</span><span class="y">Allow</span></div></div>${
+    [26, 40, 18, 48, 30, 22, 44, 34, 20, 38, 28].map(h => `<i style="height:${h}px"></i>`).join("")}</div><div class="gw-pop" aria-hidden="true"><b><i></i>Allow Big Copilot to change your game?</b><div class="bt"><span>Deny</span><span class="y">Allow</span></div></div>${
     gwSvg("cursor", "gw-cursor")}</div>`;
 }
 
@@ -27046,14 +27046,15 @@ function gwAsking(dlg, state, info){
   if(state === "retry") return gwPaint(dlg, {phase: "approval", wire: "busy", say: `<b>${tt("nav.dlg.say.question", "The game is busy with a question")}</b>`,
     body: `<p class="gw-said">${tt("nav.dlg.retry.text", "The game is still answering an earlier request. Asking again in {n} s…", {n: Number(info.wait) || 1})}</p>`, hint, buttons: [cancel]});
   const where = () => tt("nav.dlg.waiting.where", "Allow is a button in the game window, not on this picture. The game closes that question after about 60 seconds.");
+  const note = () => `<p class="gw-lead" id="gwSceneNote">${where()}</p>`;
   if(state !== "waiting") return gwPaint(dlg, {phase: "approval", wire: "ask", say: `<b>${tt("nav.dlg.say.asking", "Asking the game…")}</b>`,
-    body: `${gwScene()}<p class="gw-lead">${tt("nav.dlg.about.text", "The game is about to ask you, on its own screen, whether this browser may change it.")}</p><p class="gw-lead">${where()}</p>`, hint, buttons: [cancel]});
+    body: `${gwScene()}<p class="gw-lead">${tt("nav.dlg.about.text", "The game is about to ask you, on its own screen, whether this browser may change it.")}</p>${note()}`, hint, buttons: [cancel]});
   const since = info.since || Date.now();
   const clock = () => { const s = Math.max(0, Math.floor((Date.now() - since) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
   const waiting = () => gwPaint(dlg, {phase: "approval", wire: "wait", say: `<b>${tt("nav.dlg.say.waiting", "Waiting for you in the game")}</b>`, meta: clock(),
     body: `${gwScene()}<p class="gw-lead">${info.resumed ? tt("nav.dlg.waiting.open", "The question is still open in the game.") + " " : ""}${
       tt("nav.dlg.waiting.text", "The game is asking you on its screen.")} <b>${tt("nav.dlg.waiting.do", "Switch to Big Ambitions and choose Allow.")}</b> ${
-      tt("nav.dlg.waiting.once", "It asks once for this browser.")}</p><p class="gw-lead">${where()}</p>`,
+      tt("nav.dlg.waiting.once", "It asks once for this browser.")}</p>${note()}`,
     hint, buttons: [cancel]});
   /* The game closes its question after about 60 seconds; halfway, the dialog
      asks whether the game is where the player can see it. The clock keeps going. */
@@ -28648,7 +28649,9 @@ function startWatching(){
       drawFooter();
       const again = $("live");
       if(!again || !cls) return;
-      again.className = cls;
+      /* "just" is a short flash. Its timeout still names the node drawMast
+         just replaced, so copying the class would leave the new dot lit. */
+      again.className = cls.split(/\s+/).filter(c => c && c !== "just").join(" ");
       again.title = title;
       const em = again.querySelector("em");
       if(em) em.textContent = word;

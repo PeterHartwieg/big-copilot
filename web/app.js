@@ -354,7 +354,12 @@
     supersede();
     if (linked) heldFailure = {name: linked.name, file: linked, facts: linked.linkFacts,
       error: String(err.message || ""), trace: String(err.stack || ""), kind: String(err.name || ""),
-      bytes: null, held: false, build: Number.isInteger(linked.linkBuild) ? linked.linkBuild : null};
+      bytes: null, held: false,
+      // linkBuild is health.build. Once GameVersion has answered, that number
+      // is the running game, not the save stamp. Use it as the stamp only
+      // while the running build is still unknown, as a parse that died before
+      // meta.build does. Otherwise the save is unknown.
+      build: !linkRunning && linkBuildNumber(linked.linkBuild) ? linked.linkBuild : null};
     if (worker) worker.terminate();
     note("");
     state("bad", () => tt("app.reader.failed", "The reader could not finish loading"), errWords(err));
@@ -1340,6 +1345,8 @@
         // The name is the eventual download's. Internally this File holds
         // only gzip bytes; the portable Base64 envelope is created on demand.
         file.linkFacts = factsText;
+        // Best known (health.build), not a confirmed save stamp. failReader
+        // may report it as the stamp only while runningBuild is unknown.
         file.linkBuild = health.build;
         // buildFrom() takes the stamp only once the board has taken the bytes;
         // a build that failed keeps its own reason, and the stamp behind the
