@@ -9,10 +9,10 @@
 // Playwright installation.
 'use strict';
 
-const {test, before, after} = require('node:test');
+const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const {chromium} = require('playwright');
 const {loadBoard} = require('./_board.cjs');
+const {suiteBrowser, openPage} = require('./_page.cjs');
 
 // The real functions, as the board script defines them. Each reaches only the
 // page's document and window and the board's hideTip(), which the page below
@@ -48,16 +48,12 @@ const PAGE = `<!doctype html><meta charset="utf-8">
   };
 </script>`;
 
-let browser;
-before(async () => { browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL}); });
-after(async () => { await browser?.close(); });
+const browser = suiteBrowser();
 
+/* The bare page in a context of its own (tests/_page.cjs), with its script
+   errors asserted empty when the test ends. */
 async function page(t, viewport = {width: 800, height: 600}){
-  const p = await browser.newPage({viewport});
-  t.after(() => p.close());
-  const errors = [];
-  p.on('pageerror', e => errors.push(String(e)));
-  t.after(() => assert.deepEqual(errors, [], 'no script error on the page'));
+  const {page: p} = await openPage(t, await browser(), {viewport});
   await p.setContent(PAGE);
   return p;
 }

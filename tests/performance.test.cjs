@@ -1,22 +1,20 @@
-const {boardHtml} = require('./_page.cjs');
-const {test, before, after} = require('node:test');
+const {boardHtml, suiteBrowser, openPage} = require('./_page.cjs');
+const {test, before} = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const {chromium} = require('playwright');
 const {loadShell} = require('./_shell.cjs');
 const root = path.join(__dirname, '..');
 const app = fs.readFileSync(path.join(root, 'web/app.js'), 'utf8');
-let browser, html;
-before(async () => {
-  html = boardHtml();
-  browser = await chromium.launch({headless:true, channel:process.env.PLAYWRIGHT_CHANNEL});
-});
-after(async () => { await browser?.close(); });
+const browser = suiteBrowser();
+let html;
+before(() => { html = boardHtml(); });
 
+/* A page in a context of its own (tests/_page.cjs), its script errors
+   asserted empty when the test ends, serving the board (or the landing) and
+   app.js from http://performance.test/ and an empty body for anything else. */
 async function fixture(t, landing = false, reducedMotion = 'no-preference', width = 1600) {
-  const context = await browser.newContext({viewport:{width, height:1000}, reducedMotion});
-  t.after(() => context.close());
+  const {page, context} = await openPage(t, await browser(), {viewport:{width, height:1000}, reducedMotion});
   await context.addInitScript(() => {
     const raf = window.requestAnimationFrame.bind(window);
     window.animationCalls = 0;
@@ -30,10 +28,6 @@ async function fixture(t, landing = false, reducedMotion = 'no-preference', widt
       : url.pathname === '/app.js' ? app : '';
     return route.fulfill({contentType:url.pathname === '/' ? 'text/html' : 'application/javascript', body:content});
   });
-  const page = await context.newPage();
-  const errors = [];
-  page.on('pageerror', error => errors.push(error.message));
-  t.after(() => assert.deepEqual(errors, []));
   await page.goto('http://performance.test/');
   if (!landing) await page.evaluate(() => { $('title').textContent = 'Test company'; wireSphere(); });
   return page;

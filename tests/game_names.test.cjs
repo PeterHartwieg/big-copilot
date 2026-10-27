@@ -8,7 +8,7 @@
 // page that carries the picker.
 // Install Playwright and its Chromium browser to run; NODE_PATH may point at an
 // existing Playwright installation.
-const {test, before, after} = require('node:test');
+const {test, before} = require('node:test');
 const assert = require('node:assert/strict');
 const {en, enRe, UI_LANGS} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
@@ -17,6 +17,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const {loadBoard} = require('./_board.cjs');
+const {suiteBrowser, openPage, collectErrors, serveWeb, loadPayload} = require('./_page.cjs');
 
 const ROOT = path.join(__dirname, '..');
 const WEB = path.join(ROOT, 'web');
@@ -234,40 +235,33 @@ test('the browser language picks the game language the offer names', () => {
 });
 
 /* --- the page -------------------------------------------------------------- */
-let chromium;
-let browser;
-before(async () => {
-  ({chromium} = require('playwright'));
-  browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
-});
-after(async () => { await browser?.close(); });
+const browser = suiteBrowser();
 
-/* web/index.html served from web/, with the synthetic German table in place of
-   the committed one. `fetched` records every names/ request. */
+/* web/index.html served from web/ (tests/_page.cjs), with the synthetic German
+   table in place of the committed one. `fetched` records every names/
+   request. A test asserts the script errors itself; `context` opens a second
+   page in a context the test already has, with its storage. */
 async function site(t, {locale = 'en-US', width = 1280, height = 900, context: given} = {}){
-  const context = given || await browser.newContext({viewport: {width, height}, locale, reducedMotion: 'reduce'});
-  if(!given) t.after(() => context.close());
-  const page = await context.newPage();
-  const errors = [], fetched = [];
-  page.on('pageerror', e => errors.push(e.message));
-  await page.route('**/*', route => {
+  let page, context, errors;
+  if(given){
+    context = given;
+    page = await context.newPage();
+    errors = collectErrors(page);
+  } else {
+    ({page, context, errors} = await openPage(t, await browser(),
+      {viewport: {width, height}, reducedMotion: 'reduce', context: {locale}, allowErrors: true}));
+  }
+  const fetched = [];
+  await serveWeb(page, {host: 'names.test', files: {'/names/de.json': JSON.stringify(FIX.de)}});
+  await page.route('**/names/**', route => {
     const url = new URL(route.request().url());
-    if(url.hostname !== 'names.test') return route.abort();
-    const name = url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname);
-    if(name.startsWith('/names/')) fetched.push(url.pathname + url.search);
-    if(name === '/names/de.json') return route.fulfill({contentType: 'application/json', body: JSON.stringify(FIX.de)});
-    const file = path.join(WEB, name);
-    if(!fs.existsSync(file)) return route.fulfill({status: 404, body: ''});
-    return route.fulfill({path: file});
+    if(url.hostname === 'names.test') fetched.push(url.pathname + url.search);
+    return route.fallback();
   });
   await page.goto('http://names.test/');
   return {page, errors, fetched, context};
 }
-const boardOn = (page, payload = FIX.payload) => page.evaluate(raw => {
-  document.body.classList.add('has-board');
-  takeData(raw);
-  boot();
-}, payload);
+const boardOn = (page, payload = FIX.payload) => loadPayload(page, payload);
 
 test('the offer shows once, in the language the browser prefers, and a No is kept', async t => {
   const {page, errors, context} = await site(t, {locale: 'de-DE'});
