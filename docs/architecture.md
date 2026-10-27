@@ -21,7 +21,7 @@ flowchart TD
     extract --> payload["the payload dict"]
     payload --> renderL["render(data)"]
     renderL --> out(["dashboard.html"])
-    extract -.->|"--watch"| watch["watch() · Board + BoardHandler"]
+    extract -.->|"--watch"| watch["ba_cli.py watch() · Board + BoardHandler"]
     watch --> routes["GET /data.json · GET /stamp · POST /name"]
   end
 
@@ -47,7 +47,7 @@ flowchart TD
 
 Both doors run the same `build_core()` and the same sections (`SECTIONS`, see
 [Sections](#sections)), and the same template, `template/board.html` with the board script
-`template/board.js`. Only the wrapper differs: locally `main()` calls `load_save()`,
+`template/board.js`. Only the wrapper differs: locally `ba_cli.main()` calls `load_save()`,
 `extract()` (the core and every section, `materialize_all()`) and `render(data)`; in the
 browser `web/worker.js` calls `browser_build()`, which builds the core on Pyodide's virtual
 filesystem and returns it as JSON, and `browser_section()` when a page asks for a section. A third source feeds either door: the Big Copilot Link mod serves the running
@@ -672,10 +672,12 @@ rendered targets and a new registry entry without any browser-table edit.
   row, `renderAll()` sets `odHidden` while it draws a view that is not on screen: an
   `odNeed()` there asks nothing and leaves the row out of date (`pageStale`), so it asks when
   its view opens (`drawStale()`).
-- A `PAGE_DRAWS` row's fourth element names the sections the row reads (Staffing ›
-  Schedules and Staff needs: `hiring`; Supply › Production: `factoryStaffing`; Today: `staffing`).
-  A route's `needs` (`ROUTES`, `routeNeeds()`) are its host view's rows' sections, plus
-  what its `VIEW_META` record adds where no row declares it (Find a location: `premises`).
+- A view's `VIEW_META` record names the sections it reads, its `needs` (Staffing ›
+  Schedules and Staff needs: `hiring`; Supply › Production: `factoryStaffing`; Today:
+  `staffing`; Find a location: `premises`). Its route's `needs` (`ROUTES`, `routeNeeds()`)
+  are that list, and each `PAGE_DRAWS` row tagged with the view reads it too
+  (`rowNeeds()`), unless the row's fourth element is `[]` because it draws from the core
+  alone and is redrawn at once on a refresh.
   `odWantView()` asks for them as the view opens (`drawStale()`) and as a board arrives on
   it (`renderAll()`). First boot resolves the URL or remembered route's host before
   drawing. It paints with `odBooting` set until ordinary navigation restores the route,
@@ -918,7 +920,8 @@ source notes are not labels and stay English.
 ### Python's sentences
 
 `msg(key, en, **p)` returns a `Msg`: a `str` whose value is the English sentence Python
-always wrote, carrying `.key` and `.p`. Every Python reader and test sees the English as
+always wrote, carrying `.key` and `.p`. Both live in `ba_msg.py`, which imports nothing of
+the board's, and `ba_dashboard` re-exports them. Every Python reader and test sees the English as
 before. At the end of `extract()`, `_wire_msgs()` walks the payload once and, for every
 field holding a `Msg`, adds `row["i18n"][field] = [key, params]` (numbers raw, names as
 tokens, a nested `Msg` as `{"m": [key, params, english]}`).
@@ -1671,13 +1674,14 @@ A kind needs its group (from `note()`, a `_finding()` call or `AMENITY_DEMANDS`)
 Python side, and on the board one record in `FINDING_KINDS`; then `ALERT_UNITS` if its
 worth is money (else `NOT_MONEY` in `tests/alert_kinds.test.cjs`), and its player-facing
 line under "What counts as a finding" in `docs/dashboard-reference.md`. Every other row is
-*only if*. The same summary sits above `ALERT_UNITS` and `_alerts()` in `ba_dashboard.py`
-and above `FINDING_KINDS` in `template/board.js`.
+*only if*. The same summary sits above `ALERT_UNITS` and `_alerts()` in `ba_alerts.py`, where
+every finding anchor below lives (`def _alerts(`, `_finding(`, the `_*_notes` helpers,
+`SUMMARIES`, `WORST_FIRST`, `def _condense(`), and above `FINDING_KINDS` in `template/board.js`.
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
 | The inputs of `def _alerts(` (called once in `extract()` with both sizing modes): `businesses`, `supply`, `trends`, `hype`, `hours`, `grids`; it also takes `chains` but never reads it | *Only if* it needs a new figure: where the finding's numbers come from. A business's single fields (`revenue`, `profit`, `theft`) are its last day only; its `series`, built in the `series.append(` loop of `def _business(`, holds up to 30 days, and `_site_trends()` shows how to sum a week from it. A new per-day figure goes into that loop | the kind's own Python test |
-| `note(` in `def _alerts(`, or `_finding(` in one of the `_*_notes` helpers (`_shelf_notes`, `_import_notes`, `_idle_notes`, `_feed_notes`, `_staff_notes`, `_unnamed_notes`) | The finding itself, with its group id: a string literal, or a literal tuple a `for` loop runs over, which is what the registry test can read | the kind's own Python test, such as `tests/test_routed_supply.py`; `tests/test_doc_registries.py` holds the groups emitted equal to `ALERT_GROUPS` |
+| `note(` in one of the helpers `_alerts()` runs (`_not_trading_notes`, `_site_notes`, `_job_demand_notes`, `_company_demand_notes`, `_promotion_notes`, `_hype_notes`, `_trend_notes`, `_atcap_notes`, `_idlestaff_notes`), or `_finding(` in one of the supply helpers (`_shelf_notes`, `_import_notes`, `_idle_notes`, `_feed_notes`, `_staff_notes`, `_unnamed_notes`), all in `ba_alerts.py` | The finding itself, with its group id: a string literal, or a literal tuple a `for` loop runs over, which is what the registry test can read | the kind's own Python test, such as `tests/test_routed_supply.py`; `tests/test_doc_registries.py` holds the groups emitted equal to `ALERT_GROUPS` |
 | The hand-built business dicts the tests pass to `_alerts()`: `def stub(` in `tests/test_site_panel_fields.py` (shared with `tests/test_hype_alerts.py`); `def business(` in `tests/test_idle_week.py` (reused by `tests/idle_week_fixture.py` for `tests/site_panel.test.cjs`); `def businesses(self)` on `Company` in `tests/test_supply_facts.py`; `ImportRoutesTests.build()` in `tests/test_import_routes.py`, whose businesses `tests/test_smart_delivery.py` passes on; and the `business()` inside `depot_supply()` in `tests/test_routed_supply.py`, wrapped in `SupplyOnly`, which a `for b in businesses` loop sees as empty but an index `businesses[s]` still reaches. None has `series`; only businesses built by the real `_business()` do | *Only if* the kind reads a new business field: read it with `.get()` and a default, or add it to every one of these, or those tests break | `tests/test_site_panel_fields.py`, `tests/test_hype_alerts.py`, `tests/test_idle_week.py`, `tests/site_panel.test.cjs`, `tests/test_supply_facts.py`, `tests/test_import_routes.py`, `tests/test_smart_delivery.py`, `tests/test_routed_supply.py` |
 | `AMENITY_DEMANDS = {` | *Only if* it is an amenity kind: `slug: (group, text)` | `tests/test_uniform_alerts.py`, "test_an_empty_cache_means_every_demand_failed" |
 | `ALERT_UNITS = {` | *Only if* its `worth` is money: the unit, such as `"/day rent"`. Otherwise the kind goes on `NOT_MONEY` in `tests/alert_kinds.test.cjs` | `tests/alert_kinds.test.cjs`, "every finding kind has an ALERT_UNITS unit or is listed as carrying no money" |
