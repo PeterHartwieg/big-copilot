@@ -209,6 +209,50 @@ def _alerts(
     # Real estate first (_estate_owned()): the company-wide rent line leads the
     # opportunities and, on tax eve, the buildings to buy lead the warnings.
     found = _estate_notes(estate)
+    trading, silent = _not_trading_notes(businesses, supply, day)
+    found += trading
+    found += _site_notes(businesses, silent)
+    found += _job_demand_notes(businesses)
+    found += _company_demand_notes(businesses)
+    found += _promotion_notes(businesses, silent, agencies)
+    found += _hype_notes(hype, grids)
+    found += _trend_notes(businesses, trends, hype, day)
+
+    # The supply findings that depend on the mode go in between these and the
+    # hour grid's below (by_mode()).
+    head = found
+    middle = _atcap_notes(hours, silent) + _idlestaff_notes(hours, silent)
+    factories = supply.get("factories", {})
+    if supply.get("streetFoodRestricted"):
+        factories = dict(factories, sites=[site for site in factories.get("sites", [])
+                                         if not site.get("streetFoodRestricted")])
+
+    def by_mode(mode: str) -> dict:
+        # _condense() pops fields off the rows it is given, so each mode gets
+        # its own copies of the shared findings.
+        rows = [dict(f) for f in head]
+        # A shop only runs dry if a day of selling outruns the morning top-up.
+        rows.extend(_shelf_notes(businesses, supply, silent, mode))
+        # A depot only runs dry if it cannot reach the next delivery by more than a
+        # few hours, and an order is only wrong if it cannot cover the week it has to
+        # cover.
+        rows.extend(_import_notes(businesses, supply, silent, mode))
+        rows.extend(dict(f) for f in middle)
+        rows.extend(_idle_notes(businesses, supply["idle"], silent, mode))
+        rows.extend(_feed_notes(businesses, factories, silent, mode))
+        rows.extend(_staff_notes(businesses, factories, silent, mode))
+        rows.extend(_unnamed_notes(businesses, factories, silent))
+        return _condense(rows, gate)
+
+    if isinstance(mode, str):
+        return by_mode(mode)
+    return [by_mode(m) for m in mode]
+
+
+def _notes() -> tuple:
+    """A list of findings, and the note() that adds one to it: _finding() with
+    note()'s defaults, which also takes `rank` and `subject` by position."""
+    found = []
 
     def note(level, site, group, text, rank=0.0, subject="", worth=None, always=False,
              key=None, ev=None, named=None, amt=None):
@@ -217,6 +261,15 @@ def _alerts(
                      worth=worth, always=always, ev=ev, named=named, amt=amt)
         )
 
+    return found, note
+
+
+def _not_trading_notes(businesses: list, supply: dict, day: int) -> tuple:
+    """Each site that opened in the last NEW_SITE_DAYS and has not traded yet,
+    as one finding, and the set of their keys: the findings after this one
+    leave a silent site out. Writes the checks it failed on the business, as
+    `notTrading`, for the site panel."""
+    found, note = _notes()
     # A delivery plan: a route or an import into the site, or a repeating
     # wholesale contract to it.
     planned = {link["to"] for link in supply["graph"]["links"]}
@@ -279,7 +332,13 @@ def _alerts(
             always=True,
             key=b["key"],
         )
+    return found, silent
 
+
+def _site_notes(businesses: list, silent: set) -> list:
+    """The vacant leases as one line, and each trading site's own findings: a
+    loss, no staff, low satisfaction, uniforms and missing amenities."""
+    found, note = _notes()
     vacant = [b for b in businesses if b["status"] == "vacant"]
     if vacant:
         rent = sum(b["rent"] for b in vacant)
@@ -331,7 +390,13 @@ def _alerts(
         for slug in b["missingAmenities"]:
             group, text = AMENITY_DEMANDS[slug]
             note("warn", b["name"], group, text, always=True, key=b["key"])
+    return found
 
+
+def _job_demand_notes(businesses: list) -> list:
+    """The staff demands each site could meet itself and does not, one line
+    per site."""
+    found, note = _notes()
     # --- what staff ask for and do not get. A site that has not started trading
     # still has staff whose satisfaction is moving, so it is not folded away here.
     for b in businesses:
@@ -372,7 +437,12 @@ def _alerts(
             "critical" if quitting else "warn", b["name"], "jobdemand", text,
             always=True, key=b["key"], amt=_amt(count, "staff"),
         )
+    return found
 
+
+def _company_demand_notes(businesses: list) -> list:
+    """The staff demands only the company can meet, one line for all sites."""
+    found, note = _notes()
     # --- the staff demands no single site can settle: health insurance comes
     # through an HR manager's plan, a happy boss is the owner's own happiness.
     company, lacking = collections.OrderedDict(), 0
@@ -402,7 +472,13 @@ def _alerts(
                 n=lacking, demands=demands),
             always=True, amt=_amt(lacking, "staff"),
         )
+    return found
 
+
+def _promotion_notes(businesses: list, silent: set, agencies) -> list:
+    """The campaign mixes that would raise a site's promotion or save money,
+    and the agency visits a plan waits on."""
+    found, note = _notes()
     # --- the promotion cap, which is reached with campaigns or not at all
     # Promotion is the foot traffic the address comes with plus whatever the
     # marketing campaigns add, held at 100. Each shop's and office's plan
@@ -512,7 +588,12 @@ def _alerts(
                 agencies=agencies_of(capped), sites=_msg_list([b["name"] for b in capped])),
             subject="visit-more", always=True, key=capped[0]["key"] if one else None,
         )
+    return found
 
+
+def _hype_notes(hype: list, grids: list) -> list:
+    """One line per shop a hype wave carries: the revenue that rides on it."""
+    found, note = _notes()
     # --- what a hype wave is carrying, and what the day it ends costs
     grid_of = {g["key"]: g for g in grids}
 
@@ -635,7 +716,12 @@ def _alerts(
                 key=top["key"],
                 amt=_amt(_shown(top["revenue"]), "/day under hype", sign="$"),
             )
+    return found
 
+
+def _trend_notes(businesses: list, trends: list, hype: list, day: int) -> list:
+    """The shops and offices whose revenue moved TREND_MOVE or more week on week."""
+    found, note = _notes()
     # --- a site whose week moved, against the week before it
     riding = {w["top"] for w in hype}
     for row in trends:
@@ -665,13 +751,13 @@ def _alerts(
             worth=abs(row["last7"] - row["prev7"]) / 7,
             key=b["key"],
         )
+    return found
 
-    # The supply findings that depend on the mode go in here, between the
-    # findings above and those below (by_mode()). note() appends to whatever
-    # `found` is bound to when it is called, so rebinding `found` here sends
-    # every note() below into the second half while `head` keeps the first.
-    head, found = found, []
 
+def _atcap_notes(hours: list, silent: set) -> list:
+    """The hours a site's stations or staff hold it at their limit, one line
+    for the sites that share the limit and its fix."""
+    found, note = _notes()
     # --- what the hour-by-hour grid says that a daily total cannot
     # Five shops hitting the same 30/h ceiling in the same hours is one finding
     # about five shops, not five findings. Offices group only with offices, and
@@ -758,7 +844,12 @@ def _alerts(
             "warn", where, "atcap", text, subject=plain(limit), named=limit, worth=worth,
             key=group[0]["key"] if len(group) == 1 else None,
         )
+    return found
 
+
+def _idlestaff_notes(hours: list, silent: set) -> list:
+    """The staffed hours a site's customers do not need, one line per site."""
+    found, note = _notes()
     # --- overstaffing: one line per site, the whole week of it. The hour grid
     # keeps every idle run of the site's roles under "week"; a finding written
     # before that existed carries its one run and is read as a week of one.
@@ -792,33 +883,7 @@ def _alerts(
             worth=week["worth"],
             key=finding["key"],
         )
-
-    middle = found
-    factories = supply.get("factories", {})
-    if supply.get("streetFoodRestricted"):
-        factories = dict(factories, sites=[site for site in factories.get("sites", [])
-                                         if not site.get("streetFoodRestricted")])
-
-    def by_mode(mode: str) -> dict:
-        # _condense() pops fields off the rows it is given, so each mode gets
-        # its own copies of the shared findings.
-        rows = [dict(f) for f in head]
-        # A shop only runs dry if a day of selling outruns the morning top-up.
-        rows.extend(_shelf_notes(businesses, supply, silent, mode))
-        # A depot only runs dry if it cannot reach the next delivery by more than a
-        # few hours, and an order is only wrong if it cannot cover the week it has to
-        # cover.
-        rows.extend(_import_notes(businesses, supply, silent, mode))
-        rows.extend(dict(f) for f in middle)
-        rows.extend(_idle_notes(businesses, supply["idle"], silent, mode))
-        rows.extend(_feed_notes(businesses, factories, silent, mode))
-        rows.extend(_staff_notes(businesses, factories, silent, mode))
-        rows.extend(_unnamed_notes(businesses, factories, silent))
-        return _condense(rows, gate)
-
-    if isinstance(mode, str):
-        return by_mode(mode)
-    return [by_mode(m) for m in mode]
+    return found
 
 
 def _fact_labels(businesses: list, supply: dict) -> dict:
