@@ -11,7 +11,7 @@ const {en} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
-const {chromium} = require('playwright');
+const H = require('./_page.cjs');
 
 const root = path.join(__dirname, '..');
 const web = path.join(root, 'web');
@@ -39,7 +39,7 @@ print(json.dumps(ba_dashboard.extract(load_save(path), Names(save_fixtures.data_
   payload = JSON.parse(made.stdout.toString());
   assert.ok(payload.factoryStaffing.cap.length, 'the company has a factory to staff');
   assert.ok(payload.hiring.sites.length, 'and sites to hire for');
-  browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
+  browser = await H.launch();
 });
 after(async () => { await browser?.close(); });
 
@@ -429,7 +429,7 @@ for(const kind of ['schedule', 'hire']){
 
 }
 
-test('an older dry run approval callback cannot repaint a refreshed review', async t => {
+test('approval from a dry run superseded before its question opened cannot repaint a refreshed review', async t => {
   const page = await open(t, {hash: '#staffing/needs'});
   await page.evaluate(() => window.release());
   await page.waitForFunction(() => odReady('hiring'));
@@ -438,9 +438,10 @@ test('an older dry run approval callback cannot repaint a refreshed review', asy
     SOURCE.write = (kind, body, o) => new Promise(resolve => reviewRuns.push({approval: o.approval, resolve}));
     gwConfirm({kind: 'hire', icon: 'hire', title: 'Review', needs: ['hiring'], scope: odScope(),
       body: () => ({}), applyLabel: () => 'Apply', verdict: () => 'Ready', draw: () => '<p>Current plan</p>'});
-    reviewRuns[0].approval('waiting', {});
   });
-  await page.locator('.gw-dlg[data-phase="approval"]').waitFor();
+  // No question is open yet. Refresh can supersede this request; its late
+  // callbacks must still be ignored. Already-visible approval is kept (#524).
+  await page.locator('.gw-dlg[data-phase="asking"]').waitFor();
   await nextBoard(page);
   const waiting = await page.locator('.gw-dlg').innerHTML();
   await page.evaluate(() => {
