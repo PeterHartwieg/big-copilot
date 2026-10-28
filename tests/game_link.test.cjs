@@ -1,27 +1,14 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {en, enRe} = require('./_i18n.cjs');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
 
-const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
-const {between} = require('./_slice.cjs');
-// The game-link section, plus the two functions it drives: update()'s first
-// branch hands it the refresh, checkFolder() hands it the watch.
-// The page's tt(), which app.js writes every word through.
-const i18n = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
-// How app.js hands the strip its words: say(), failure() and errWords(),
-// from web/app.js run whole.
-const {shell} = require('./_shell.cjs').loadShell();
+// web/app.js run whole (tests/_shell.cjs): the game-link section, the two
+// functions that drive it (update()'s first branch hands it the refresh,
+// checkFolder() hands it the watch), the page's attempt (one read at a time,
+// per source, and a build in it ends it itself) and the folder loader it
+// falls back to, all reached through BigCopilotShell.scope.
+const {loadShell, element} = require('./_shell.cjs');
 const words = (v) => (typeof v === 'function' ? v() : v);
-const section = between(source, '  /* --- the game link (docs/game-link-api.md)', '  /* --- building');
-const updater = between(source, '  async function update()', '  /* --- watching the folder');
-const watcher = between(source, '  async function checkFolder()', '  function armWatch()');
-const reporting = between(source, '  const reportSource = () =>', '  async function openReport(');
-// The page's attempt, as app.js keeps it: one read at a time, per source,
-// and a build in it ends it itself.
-const attempts = between(source, '  function finishAttempt(gen)', '  // Cancel ownership');
 
 const HEALTH = {
   ok: true, schemaVersion: 1, modVersion: '0.1.0', source: 'mock', build: 3680,
@@ -39,23 +26,26 @@ const reply = (status, body, headers = {}) => ({
 
 // The section runs against a loopback that never sleeps: timers are stubs,
 // the clock moves only when the swapped-in linkWait advances it, and every
-// answer comes from the routes a test hands over.
-function harness({routes = {}} = {}) {
+// answer comes from the routes a test hands over. `context` is app.js's
+// scope (tests/_shell.cjs): its own names read and set its bindings, setting
+// a function stands in for it, and any other name is a global of the VM.
+// `canHandle` false is a browser without the File System Access API, which
+// app.js tells once, as it loads; `h.onBoard` false is the landing.
+function harness({routes = {}, canHandle = true} = {}) {
   const clock = {now: Date.parse('2026-09-22T15:00:00Z')};
   class Clock extends Date {}
   Clock.now = () => clock.now;
   const els = new Map();
   const el = (id) => {
-    if (!els.has(id)) els.set(id, {id, hidden: false, title: '', textContent: '', className: ''});
+    if (!els.has(id)) els.set(id, Object.assign(element(), {id}));
     return els.get(id);
   };
   const seen = {states: [], notes: [], builds: [], calls: []};
-  const strip = {tone: 'ok', head: '', meta: ''};
   const remembered = {};
   const waits = [];
-  const context = vm.createContext({
-    setTimeout: () => 0, clearTimeout: () => {}, AbortController, URL,
-    console, crypto: require("node:crypto").webcrypto, TextEncoder, TextDecoder,
+  const {scope: context, run} = loadShell({byId: el, globals: {
+    AbortController, URL,
+    crypto: require("node:crypto").webcrypto, TextEncoder, TextDecoder,
     btoa: value => Buffer.from(value, "binary").toString("base64"),
     Date: Clock,
     File: class {
@@ -63,34 +53,46 @@ function harness({routes = {}} = {}) {
     },
     __waits: waits,
     __advance: (ms) => { clock.now += ms; },
-    document: {hidden: false},
-    window: {LEDGER_BUILD: 'test'},
+    LEDGER_BUILD: 'test',
     location: {hash: ''},
     localStorage: {getItem: () => null, setItem() {}, removeItem(key) { delete remembered[key]; }},
-    // the app helpers the section is allowed to touch
-    $: el, strip,
-    say: shell.say, failure: shell.failure, errWords: shell.errWords,
-    company: 'Costy Co', sourceGen: 1, attempt: null, readerError: null, handlers: null,
-    canHandle: true, dirHandle: null, handles: {get: async () => null, set() {}},
-    sourceActivity: 0, directoryPickPending: 0,
-    watchTimer: 1,  // watching the game; null is the player's pause
-    lastGood: {}, lastCheck: null, lastEntries: null, watchChecking: false,
-    savePicker: {hidden: false},
+    ...(canHandle ? {showDirectoryPicker() {}} : {}),
+    async fetch(url, init) {
+      seen.calls.push([String(url), init]);
+      let give = routes[['health', 'save', 'facts', 'refresh'].find((r) => new URL(url).pathname === '/' + r)];
+      if (!give) throw new TypeError('Failed to fetch');
+      if (typeof give === 'function') give = give(seen.calls.length);
+      return 'status' in give ? give : reply(200, give);
+    },
+  }});
+  // Only the app's answer at load was wanted: a test that opens the picker
+  // hands over a window that has one.
+  delete context.showDirectoryPicker;
+  const h = {context, seen, els, routes, remembered, waits, run, onBoard: true};
+  context.document.body.classList.contains = (name) => name === 'has-board' && h.onBoard;
+  // the app's state the section starts from
+  run('company = "Costy Co"; sourceGen = 1; lastGood = {};');
+  context.watchTimer = 1;  // watching the game; null is the player's pause
+  Object.assign(context.strip, {tone: 'ok', head: '', meta: ''});
+  context.savePicker.hidden = false;
+  context.handles.get = async () => null;
+  context.handles.set = () => {};
+  context.stored.get = (key) => remembered[key] || '';
+  context.stored.set = (key, value) => { remembered[key] = value; return true; };
+  // and the stand-ins for what the section hands on
+  Object.assign(context, {
     // app.js hands state() and note() its words as text or as a function
     // that writes them; the stand-ins write them out, as the real ones do.
-    state(tone, head, meta) { seen.states.push([tone, words(head), words(meta)]); strip.tone = tone; },
-    noted: {tone: '', text: '', sub: ''},
+    state(tone, head, meta) { seen.states.push([tone, words(head), words(meta)]); context.strip.tone = tone; },
     note(...given) {
       const args = given.map((a, i) => (i === 1 || i === 2 ? words(a) : a));
       seen.notes.push(args); context.noted.tone = args[0] || ''; context.noted.text = args[1] || ''; context.noted.sub = args[2] || '';
       context.noted.words = [given[1], given[2]]; context.noted.recover = !!given[3];
     },
-    stored: {get: (key) => remembered[key] || '', set: (key, value) => { remembered[key] = value; return true; }},
-    onBoard: () => true,
     supersede: () => { context.finishAttempt(context.sourceGen); return ++context.sourceGen; },
     closeSavePicker() {}, place() {}, armWatch() {}, stopWatch() {}, syncWatchBtn() {}, linkMoved() {},
     pickedOnce() {},
-    idleState() { seen.states.push(['idle']); strip.tone = 'ready'; },
+    idleState() { seen.states.push(['idle']); context.strip.tone = 'ready'; },
     // A build ends the attempt whether the board takes the bytes or not.
     async buildFrom(file, dir, gen) {
       seen.builds.push(file);
@@ -104,25 +106,12 @@ function harness({routes = {}} = {}) {
     async scanHandle() { return []; },
     async refreshSaveMenu() { return ''; },
     chooseFrom: () => ({}),
-    async fetch(url, init) {
-      seen.calls.push([String(url), init]);
-      let give = routes[['health', 'save', 'facts', 'refresh'].find((r) => new URL(url).pathname === '/' + r)];
-      if (!give) throw new TypeError('Failed to fetch');
-      if (typeof give === 'function') give = give(seen.calls.length);
-      return 'status' in give ? give : reply(200, give);
-    },
   });
-  vm.runInContext(i18n, context);
-  vm.runInContext(attempts + '\n' + section + '\n' + updater + '\n' + watcher + '\n' + reporting, context);
-  vm.runInContext('heldFailure = null; sectionFailure = null; builtGen = null; snapshot = ""; lastFile = null;', context);
-  vm.runInContext('linkWait = (ms) => { __waits.push(ms); __advance(ms); return Promise.resolve(); };', context);
+  run('linkWait = (ms) => { __waits.push(ms); __advance(ms); return Promise.resolve(); };');
   // linkFetch only ever reaches an address on this computer; the tests that
   // call it directly talk to the default one.
-  vm.runInContext('linkUrl = "http://127.0.0.1:8322";', context);
-  return {
-    context, seen, els, routes, remembered, waits,
-    run: (expr) => vm.runInContext(expr, context),
-  };
+  run('linkUrl = "http://127.0.0.1:8322";');
+  return h;
 }
 
 test('linkFetch reaches only an address on this computer', async () => {
@@ -1143,8 +1132,8 @@ function withFallback(h, permission = 'granted') {
     return [{file: local, dir: 'character'}];
   };
   h.context.chooseFrom = entries => entries[0] || {};
-  h.context.onScreen = () => false;
-  h.context.fileLine = file => file.name;
+  // The stand-in build below never sets lastFile, so app.js's own onScreen()
+  // finds no board of this save on screen, and the local save is built.
   h.context.sayStoreTrouble = () => false;
   h.context.armWatch = () => { h.seen.folderWatch = true; };
   // The strip as the real buildFrom() leaves it after a board took the bytes:
@@ -1164,13 +1153,12 @@ function withFallback(h, permission = 'granted') {
     if (!h.context.sayStoreTrouble()) h.context.note('');
     h.context.state('ok', 'Up to date');
   };
-  vm.runInContext(between(source, '  async function loadFromEntries(', '  async function takeHandle('), h.context);
   return {handle, local};
 }
 
 test('a failed initial link opens the remembered local folder and keeps Link for the next visit', async () => {
   const h = harness();
-  h.context.onBoard = () => false;
+  h.onBoard = false;
   const {handle, local} = withFallback(h);
   await h.run('loadFromLink("Opening the game link", sourceGen)');
   assert.deepEqual(h.seen.builds, [local]);
@@ -1230,8 +1218,7 @@ test('a folder handle kept in this tab works when browser storage is unavailable
 
 test('no remembered folder, unsupported browsers and unavailable permission checks keep link recovery usable', async () => {
   for (const mode of ['missing', 'unsupported', 'permission-error']) {
-    const h = harness();
-    if (mode === 'unsupported') h.context.canHandle = false;
+    const h = harness({canHandle: mode !== 'unsupported'});
     if (mode === 'permission-error') h.context.handles.get = async () => ({queryPermission: async () => { throw Error('Unavailable'); }});
     await h.run('loadFromLink("Opening", sourceGen)');
     assert.equal(h.run('linkUrl'), 'http://127.0.0.1:8322', mode);
@@ -1458,7 +1445,6 @@ test('an open directory picker takes precedence over fallback and its accepted f
   h.context.window = {showDirectoryPicker: () => new Promise(resolve => { accept = resolve; })};
   h.context.handles.set = async () => {};
   h.context.scanHandle = async handle => { assert.equal(handle, chosen); return [{file, dir:'.'}]; };
-  vm.runInContext(between(source, '  async function takeHandle(', '  // What this tab picked once'), h.context);
   const picking = h.run('pickFolder()');
   await h.run('checkLink()');
   assert.equal(h.context.directoryPickPending, 1);
@@ -1478,7 +1464,6 @@ test('a picker opened during fallback permission checking suppresses the pending
   let permission, dismiss;
   handle.queryPermission = () => new Promise(resolve => { permission = resolve; });
   h.context.window = {showDirectoryPicker: () => new Promise((resolve, reject) => { dismiss = reject; })};
-  vm.runInContext(between(source, '  async function takeHandle(', '  // What this tab picked once'), h.context);
   const checking = h.run('checkLink()');
   await new Promise(resolve => setImmediate(resolve));
   const picking = h.run('pickFolder()');
@@ -1505,7 +1490,6 @@ for (const state of ['hidden', 'paused', 'pause-resume']) {
     if (state === 'hidden') h.context.document.hidden = true;
     else {
       h.context.stopWatch = () => { h.context.watchTimer = null; };
-      vm.runInContext(between(source, '  async function toggleWatch()', "  /* --- the game's text"), h.context);
       await h.run('toggleWatch()');
       if (state === 'pause-resume') h.context.watchTimer = 1;
     }
@@ -1527,7 +1511,6 @@ for (const operation of ['load', 'update']) {
     if (operation === 'load') h.run('readHealth = () => __foreground');
     else h.run('linkFetch = () => __foreground');
     h.context.window = {showDirectoryPicker: () => new Promise((resolve, reject) => { dismiss = reject; })};
-    vm.runInContext(between(source, '  async function takeHandle(', '  // What this tab picked once'), h.context);
     const loading = h.run(operation === 'load' ? 'loadFromLink("Opening", sourceGen)' : 'update()');
     const picking = h.run('pickFolder()');
     rejectLink(new Error('Game closed'));
