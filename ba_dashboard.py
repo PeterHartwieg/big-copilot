@@ -18296,7 +18296,8 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
         # plan a shop's Staffing block may write -- the demand plan, full
         # cover, and the open-hours plan it writes for a new shop or one
         # without complete data -- which the page picks between as that block
-        # does (spPlanOf()); an office's office default.
+        # does (spPlanOf()); an office's office default and, where it has
+        # saved open hours, its opt-in Every open hour plan (`openCover`).
         unstaffed = {}
         base = shops.get(business["key"]) if kind == "shop" else offices.get(business["key"]) if kind == "office" else None
         if base and not base.get("failed"):

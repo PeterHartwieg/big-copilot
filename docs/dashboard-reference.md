@@ -974,7 +974,6 @@ the chosen plan. With no saved open hours, the alternative is unavailable. Like
 the retail open-hours option, it covers installed stations rather than limiting
 their count to building capacity; it is not a demand forecast.
 
-
 ### The rules every planned week keeps
 
 Every week the board plans or writes, for a shop, an office or a factory, keeps the game's
