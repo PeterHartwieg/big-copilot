@@ -43,6 +43,14 @@ test('unavailable alternative falls back to the original plan', () => {
   assert.equal(c.gwRosterPlan(key).variant, undefined);
 });
 
+test('office idle-hours summaries follow the selection even without hiring plans', () => {
+  const c = board(), office = {hours: 12}, open = {hours: 24};
+  const S = {key, site: {kind: 'office', unstaffed: {office, open}}};
+  assert.equal(c.hrUnstaffedOf(S), office);
+  choose(c);
+  assert.equal(c.hrUnstaffedOf(S), open);
+});
+
 test('schedule request writes the selected week, preserves other duties and never extends opening', () => {
   const c = board(); choose(c);
   run(c, 'var spec; gwConfirm = s => { spec = s; }; gwSchedule(D.businesses[0].key)');

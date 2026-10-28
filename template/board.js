@@ -16981,7 +16981,7 @@ function hrNoHoursHtml(){
 /* The plan the site's Staffing block shows and writes (spPlanOf()): its gap of people with no hours, or undefined. */
 function hrUnstaffedOf(S){
   const u = S.site.unstaffed || {};
-  return S.site.kind === "office" ? u[hrVariant(S.site)] : u[spPlanOf(spRosterRow(S.key)) || "demand"];
+  return S.site.kind === "office" ? u[spOfficePlanOf(S.key)] : u[spPlanOf(spRosterRow(S.key)) || "demand"];
 }
 function hrIdleHtml(m){
   const of = hrUnstaffedOf;
