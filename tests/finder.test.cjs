@@ -7,7 +7,7 @@
 const {test} = require('node:test');
 const H = require('./_finder.cjs');
 const {UI_LANGS} = require('./_i18n.cjs');
-const {assert, en, enRe, fs, path, root, geometry, at, HK, MT, COFFEE, HK_NAME, HK_HOOD, MT_HOOD, site, PREMISES, fixture, openMap, chip, turnOn, pick, rowKeys, facts, saved, plan} = H;
+const {assert, en, enRe, fs, path, root, geometry, at, HK, MT, COFFEE, HK_NAME, HK_HOOD, MT_HOOD, site, PREMISES, fixture, openMap, chip, turnOn, pick, rowKeys, facts, saved} = H;
 
 test('ordinary map facts retain deposit estimates and unknown deposits for player premises', async () => {
   const {page} = await fixture();

@@ -7,7 +7,6 @@ const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
 const {en, enRe} = require('./_i18n.cjs');
 const {spawnSync} = require('node:child_process');
-const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require('playwright');
 

@@ -7,22 +7,31 @@ Cloudflare Worker API adds the community features.
 
 ## Where changes go
 
-The board's main files are `ba_dashboard.py` (the Python), `template/board.html` (the page
-`render()` fills in: markup, CSS and the small head scripts) and `template/board.js` (the
-board script), with planner arithmetic in `template/open-store-model.js` and `template/open-factory-model.js`.
-The fifth file in `template/`, `translate.html`, is the translation page (below).
+The board's main files are `ba_dashboard.py` (the Python, with the findings in
+`ba_alerts.py`, the sentences in `ba_msg.py` and the command line in `ba_cli.py`),
+`template/board.html` (the page `render()` fills in: markup, CSS and the small head scripts)
+and `template/board.js` (the board script, with the game writes in `template/board-write.js`).
+The calculation models beside them, `template/open-store-model.js`,
+`template/open-factory-model.js`, `template/mod-economy-model.js`,
+`template/mod-demand-model.js` and `template/street-food-model.js`, are explicit-input
+arithmetic that `load_template()` embeds ahead of the board script. The ninth file in
+`template/`, `translate.html`, is the translation page (below).
 Find each part by its anchor, never by line number — the files are long and
 the numbers drift.
 
 | Part | Anchor |
 | --- | --- |
-| Extraction (save → numbers) | `def build_core(` (the core), `SECTIONS` (the sections) and the `_` helpers before `def render(`, in `ba_dashboard.py`; `def extract(` is both |
+| Extraction (save → numbers) | `def build_core(` (the core), `SECTIONS` (the sections) and the `_` helpers before `def render(`, in `ba_dashboard.py`; `def extract(` is both. The findings are `ba_alerts.py`'s (below) |
+| The findings (save numbers → what to act on) | `ba_alerts.py`: `ALERT_UNITS` and `def _finding(` at the top, `def _alerts(` (the coordinator) with the helpers it runs, then `SUMMARIES` and `def _condense(` |
+| Big Copilot's own sentences and game-name tokens | `ba_msg.py`: `def msg(`, `class Msg`, `def tok(`, `def plain(`, `def _wire_msgs(`; `ba_dashboard` re-exports them |
 | The board's HTML and CSS | `template/board.html`, read on the first `render()` by `load_template()` |
-| The board script | `template/board.js`, which `load_template()` splices into `/*__BOARD_SCRIPT__*/`, the body of the page's last `<script>` block, before any other placeholder is filled. A branch from before the split (1 Oct 2026), with the script still inline in `board.html`, needs the retired tool and its `--resolve` from history: `git show ecabe57c:tools/split_board_script.py` |
+| The board script | `template/board.js`, which `load_template()` splices into `/*__BOARD_SCRIPT__*/`, the body of the page's last `<script>` block, before any other placeholder is filled. Parts of it live in files of their own and go back in at a placeholder line where they were taken out (below). A branch from before the split (1 Oct 2026), with the script still inline in `board.html`, needs the retired tool and its `--resolve` from history: `git show ecabe57c:tools/split_board_script.py` |
+| Company › Staff (the `hr*` names: hiring for every site, Quick hire, Change picks, the hire review, Payroll) | `template/board-staff.js`, a part of the board script that `load_template()` splices back into `template/board.js` at its `/*__BOARD_STAFF__*/` line, where the block was |
+| Writing to the game (the `gw*` names: each write's dialog, imports, schedules, the checks a week passes) | `template/board-write.js`, a part of the board script that `load_template()` splices back into `template/board.js` at its `/*__BOARD_WRITE__*/` line, where the block was. A new part is a block between two `/* --- ` banners moved whole, with its own placeholder line, a row in `load_template()` and in `BOARD_PARTS` in `tests/_board.cjs`, and the lists in docs/architecture.md, "Template placeholders" |
 | Open a store calculations | `template/open-store-model.js`: an explicit-input calculation module, embedded before the board script by `load_template()` and imported directly by its arithmetic tests and `check_profit_model.py` |
 | Plan a factory calculations | `template/open-factory-model.js`: explicit-input prices, storage, investment and running costs; the board owns plan selection and persistence |
 | Where `web/map.js` and `web/wiki.js` are spliced in | `/*__MAP_SCRIPT__*/`, `/*__WIKI_SCRIPT__*/` in `template/board.js` |
-| CLI, save catalogue and watch server | `def main(` and the functions around it, in `ba_dashboard.py` |
+| CLI, save catalogue, watch server and game-link client | `ba_cli.py`: `def main(` and the functions around it. `python ba_dashboard.py` runs it from the `if __name__ == "__main__":` block at the end of `ba_dashboard.py` |
 
 Everything else:
 
@@ -35,7 +44,18 @@ Everything else:
 - runtime building facts, portable `.bcsave` snapshots and the Alcware renovation adapter:
   `ba_facts.py`; the table is resolved per Save through `load_buildings(save)`
 - mod adapters (which mods a save carries, the `mods` payload key, the Alcware Seasons
-  calendar and sales-ratio factors): `ba_mods.py`
+  calendar and sales-ratio factors): `ba_mods.py`; the planners ask them through
+  `ModRules` in `ba_dashboard.py` (`class ModRules`, `Build.mod_rules`), so a new mod
+  answer goes there, not into a planner
+- linters: `ruff.toml` (Ruff, pyflakes rules only) and `eslint.config.mjs` (ESLint, with
+  the page scripts' shared global scope built from their top-level declarations); the
+  `lint` stage of `tools/verify.mjs` runs both
+- remembered records (the Open a store, Plan a factory and Street Food plans, the finder's
+  filters): `keptRecord()`, `rememberedRecord()` and the `KEEP` rules beside the storage
+  functions at the top of `template/board.js`; each reader's field table sits beside it
+  (`OS_RECORD`, `OF_RECORD`, `SF_RECORD`, and `FINDER_KEPT` in `web/map.js`). A field
+  with a coercion of its own takes a rule of its own. `ALERT_DEFAULTS_V1` is a frozen
+  migration with its own reader
 - web build: `build_web.py`; deploy: `npm run deploy` (`tools/deploy.mjs`), which assembles
   `web/` and runs `wrangler deploy`
 - landing screen markup and CSS, the news strip included: `BANNER` in `build_web.py`;
@@ -86,7 +106,9 @@ Everything else:
   repo (`docs/contributing.md`, "Supporters list")
 - changelog: `web/changelog.json`
 - UI text in other languages: `tt()` and the loader in `web/i18n.js`, `msg()` in
-  `ba_dashboard.py`, the catalogue tool `tools/i18n.py`, the translations in `i18n/`.
+  `ba_msg.py` (re-exported by `ba_dashboard`), the catalogue tool `tools/i18n.py`, the
+  translations in `i18n/` (`<lang>.json` each, and `base.json`, every language's English
+  and draft marks in one file).
   The languages themselves (code, number locale, plural categories, drafted) are one
   table, `UI_LANGUAGES` in `ba_dashboard.py`; `tests/test_i18n_languages.py` holds
   `web/i18n.js`, `i18n/` and Intl to it, and the Node tests read `UI_LANGS` from
@@ -95,7 +117,7 @@ Everything else:
 - game link: the wire contract is `docs/game-link-api.md`; the mod is `mod/BigCopilotLink/`
   (C#, built only inside the modding SDK's Unity project, never here); the mock that
   serves the contract from a save on disk is `tools/game_link_mock.py`; the clients are
-  the third source in `web/app.js` and `--game` in `ba_dashboard.py`
+  the third source in `web/app.js` and `GameLink` with `--game` in `ba_cli.py`
 
 Searching:
 
@@ -104,7 +126,9 @@ Searching:
   the design canvases. `rg -uu` searches them too.
 - `rg -n --sort path "^# ---|^/\* (---|=====)|^</?style>" ba_dashboard.py template/` lists
   the section banners and sub-banners, a table of contents: the Python, then the board's
-  CSS between `<style>` and `</style>`, then the board script.
+  CSS between `<style>` and `</style>`, then the board script. `template/board-write.js`
+  sorts ahead of `board.html` and `board.js`, so its banners print first; they run at the
+  `/*__BOARD_WRITE__*/` line of `board.js`.
 
 ## Names on screen and in code
 
@@ -151,7 +175,7 @@ side and running `--assemble`.
 | --- | --- |
 | `web/index.html`, `web/version.json`, and in `web/py/` the files `PY_CODE` and `PY_DATA` in `build_web.py` name, all but `gametext.json` | `python build_web.py --assemble`, which needs no game (`python build_web.py` writes them too); the `ba_dashboard.py` copy has no comments or docstrings but keeps every line; gitignored |
 | `web/assets/` | `python build_web.py --assemble` writes the content-hashed worker, the Python and data files `PY_CODE` and `PY_DATA` name, and the manifest; `node tools/optimize_web.mjs` adds the hosted board JS/CSS after optimization; gitignored |
-| `web/i18n/<lang>.json` | `python build_web.py --assemble`, from `i18n/<lang>.json` (`python tools/i18n.py ship` alone); no game needed; gitignored |
+| `web/i18n/<lang>.json` | `python build_web.py --assemble`, from `i18n/<lang>.json` and `i18n/base.json` (`python tools/i18n.py ship` alone); no game needed; gitignored |
 | `web/translations/<lang>.json`, `web/translations/<lang>.manifest.json`, `web/translate/index.html` | `python build_web.py --assemble`, the catalogues through `tools/translation_catalogue.py` and the page from `template/translate.html`; no game needed; gitignored |
 | `web/py/gametext.json`, `web/wiki-data.json` | `python build_web.py`, which needs the installed game. `--assemble` carries `tools/wiki_topics.json` (the hand-written articles) into the committed `web/wiki-data.json` without it |
 | `web/names/<lang>.json`, the game names in each other language the game ships | `python build_web.py`, which needs the installed game; the language list is `GAME_NAME_LANGS` in `ba_dashboard.py`, and the build stops when the game's `locale.json` disagrees with it |
@@ -173,7 +197,8 @@ side and running `--assemble`.
 
 CI is the test gate. `.github/workflows/tests.yml` runs the Python suite, the Node suites
 (Chromium on Linux), `npm run check:worker` and `python build_web.py --check` on every pull
-request and push to main, each after `python build_web.py --assemble`. Push the branch, open
+request and push to main, each after `python build_web.py --assemble`; a Lint job runs
+`npm run lint` once the freshness job frees its runner. Push the branch, open
 the PR and let CI run the full suites; read its result, and reproduce a failure locally only
 to fix it.
 
@@ -185,7 +210,7 @@ checks in the table (`tools/payload_diff.py`, `check_profit_model.py`,
 CI, so run them locally when a row asks for them.
 
 To reproduce a CI failure, `npm run verify` runs the same gate locally through
-`tools/verify.mjs` after dependency and browser setup: assembly, Python, Node (concurrency 2),
+`tools/verify.mjs` after dependency and browser setup: assembly, lint (Ruff, then ESLint), Python, Node (concurrency 2),
 optimized hosted-page tests, the Worker dry run and the freshness check. It needs no
 installed game, production credentials or clean working tree.
 `npm test` runs the assembled Node suite; `npm test -- tests/name.test.cjs` selects a suite
@@ -205,7 +230,13 @@ stale one fails them.
 | --- | --- |
 | `SECTIONS`, `build_core()`, `section()`, `materialize_all()`, `browser_section()`, the worker's `section` message or the board's `od*` functions (what is core and what is computed on demand) | `python -m unittest tests.test_sections tests.test_browser_build tests.test_payload_snapshot` and `node --test tests/on_demand.test.cjs tests/worker_history.test.cjs tests/worker_startup.test.cjs`; then the `tools/payload_diff.py` dump and compare below, since a payload with every section computed must not change |
 | `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`. Premises extraction is `tests/test_premises.py`. `tests/test_payload_snapshot.py` compares whole `extract()` payloads with `tests/fixtures/payload_snapshot/`; after an intended change regenerate them with `python tests/test_payload_snapshot.py --update` and review the diff. A change meant to leave the payload alone also runs `python tools/payload_diff.py dump research/<name>` on main and on the branch and `compare`s the two (owner only: it reads every save on the machine) |
-| `template/board.html` or `template/board.js` (the board's markup, CSS or script) | `python -m unittest discover -s tests` and `node --test tests/*.test.cjs` |
+| `template/board.html`, `template/board.js`, `template/board-staff.js` or `template/board-write.js` (the board's markup, CSS or script) | `python -m unittest discover -s tests` and `node --test tests/*.test.cjs` |
+| `ba_cli.py` (the CLI, `--list`, the watch server, the game-link client) | `python -m unittest tests.test_cli_target tests.test_watch_server tests.test_watch_game tests.test_locale_detect tests.test_map_assets tests.test_wiki_assets tests.test_game_names tests.test_building_facts`; run `python ba_dashboard.py <save> -o <out>` once by hand |
+| `ba_alerts.py` (the findings) | the `ba_dashboard.py` (extraction) row's suites, plus `python -m unittest tests.test_doc_registries` and `node --test tests/alert_kinds.test.cjs tests/site_panel.test.cjs` |
+| `ba_msg.py` (the message layer) | `python -m unittest discover -s tests -p "test_i18n*.py"` and `node --test tests/i18n_*.test.cjs` |
+| `class ModRules` in `ba_dashboard.py` (what the planners ask the mod adapters) | `python -m unittest tests.test_mods tests.test_open_store tests.test_payback tests.test_marketing_plan tests.test_street_food tests.test_mod_staffing tests.test_open_factory` |
+| `keptRecord()`, `KEEP`, or a reader's field table (`OS_RECORD`, `OF_RECORD`, `SF_RECORD`, `FINDER_KEPT`) | `node --test tests/remembered.test.cjs`, then the reader's own suites: `tests/open_store*.test.cjs`, `tests/open_factory.test.cjs`, `tests/street_food*.test.cjs` or `tests/finder*.test.cjs` |
+| Any `.py`, `.js`, `.mjs` or `.cjs` file, `ruff.toml` or `eslint.config.mjs` | `npm run lint` (`node tools/verify.mjs lint`: Ruff, then ESLint). Fix a finding in the code. When the linter is wrong about a file, override the rule for that file in the config with a comment saying why, never with an inline disable comment |
 | `template/open-store-model.js` (Open a store arithmetic) | `npm run verify`; its direct arithmetic tests are `tests/open_store_model.test.cjs`, and its board integration uses `tests/open_store.test.cjs`, `tests/open_store_checklist.test.cjs`, `tests/open_store_opened.test.cjs` and `tests/finder_plan.test.cjs`. Compare `python check_profit_model.py <save-root>` before and after locally when owner saves are available; never commit its private outputs |
 | `template/open-factory-model.js` (Plan a factory arithmetic) | `npm run verify`; direct arithmetic: `tests/open_factory_model.test.cjs`, browser flow and persistence: `tests/open_factory.test.cjs` |
 | `tools/verify.mjs`, its sharding helpers, npm verification scripts or the CI stage wiring | `npm test -- tests/verify.test.cjs`, then `npm run verify` |
@@ -223,7 +254,7 @@ stale one fails them.
 | `marketing_score()`, `MARKETING_REACH` or the neighbourhood factors (the promotion formula) | `python -m unittest tests.test_marketing_plan`; then `python tools/check_marketing.py`, which holds the formula against the promotion each save stores (owner only: it reads every save on the machine; never commit its output) |
 | `_open_store()` and its helpers, `ba_store_rules.json`, or the board's `os*` functions (Open a store) | `python -m unittest tests.test_open_store` and `node --test tests/open_store.test.cjs tests/open_store_checklist.test.cjs tests/open_store_opened.test.cjs tests/finder_plan.test.cjs`; after a change to the profit model, `python check_profit_model.py` and compare its numbers with `docs/dashboard-reference.md`, "Open a store" |
 | `make_item_prices.py`, `ba_item_prices.json`, or the payback figures (`_payback()`, the Payback column, `spPayback()`) | `python -m unittest tests.test_payback` and `node --test tests/payback.test.cjs` |
-| Added or changed UI text (`tt()`, `data-tt*`, `msg()`), `web/i18n.js`, `tools/i18n.py`, `i18n/` | `python -m unittest discover -s tests -p "test_i18n*.py"` and `node --test tests/i18n_*.test.cjs tests/global_names.test.cjs`, plus the rows for the files the text is in; after removing or renaming a key, run `python tools/i18n.py prune` |
+| Added or changed UI text (`tt()`, `data-tt*`, `msg()`), `web/i18n.js`, `tools/i18n.py`, `i18n/` | `python -m unittest discover -s tests -p "test_i18n*.py"` and `node --test tests/i18n_*.test.cjs tests/global_names.test.cjs`, plus the rows for the files the text is in; after removing or renaming a key, run `python tools/i18n.py prune`. A branch from before `i18n/base.json` runs `python tools/i18n.py fold` while its merge of main is still open, before committing it: fold reads the branch's old `i18n/<lang>.base.json` and `.ai.json` from git and folds their marks into `base.json` |
 | `tools/Invoke-ZaiClaude.ps1` | `python -m unittest tests.test_agent_cli` |
 | `tools/game_update/` | no tests: run the script you changed against the installed game (`docs/game-update.md`) |
 | `tools/game_link_mock.py`, `docs/game-link-api.md` | `python -m unittest tests.test_game_link_mock tests.test_watch_game` and `node --test tests/game_link.test.cjs`; a contract change bumps `schemaVersion` in the doc, the mock, the mod and both clients in one commit |
@@ -259,15 +290,22 @@ and never attach one to an issue.
   one moves onto it when you touch it, keeping its viewport, storage and motion; its host
   may change where the harness serves it more simply.
 - The Python tests need `node` on PATH: `tests/test_plan_orders.py` runs the board script.
+- On a machine with `python3` but no `python` on PATH, set `PYTHON=python3` for `node --test`
+  runs as well: `tests/_i18n.cjs` and the suites that spawn Python read it.
+- `npm run lint` needs Ruff, which `npm ci` does not install: `pip install ruff==0.16.10`, the
+  version CI pins (`RUFF_VERSION` in `tools/verify.mjs`). The stage runs `ruff` from PATH or
+  `python -m ruff`, and stops with that install command when it finds neither. ESLint comes
+  with `npm ci`.
 
 ## Traps
 
 - CSS classes are global across every page of the board, so give a new class a feature
   prefix or scope it under its page's root class. `.site` and `.chip` have collided before.
-- `web/map.js` and `web/wiki.js` are spliced into the board script (`template/board.js`) and
+- `web/map.js` and `web/wiki.js` are spliced into the board script (`template/board.js`, with
+  `template/board-staff.js` and `template/board-write.js` spliced back in at their lines) and
   run in its global scope, reusing its helpers (`attr`, `icon`, `wireTips`, `ICON`, `shortName`,
-  `ssEsc`, `spEsc`, `hrNum`). A new top-level
-  name must be unique across all three files, and `web/i18n.js`, which runs in the same
+  `ssEsc`, `spEsc`, `hrNum`). A new top-level name must be unique across all five files, and
+  `web/i18n.js`, which runs in the same
   global scope from the head (its names start `tt`/`TT_`). `tests/global_names.test.cjs`
   fails on a column-0 name declared twice across them, `template/board.html`'s inline
   scripts and the site's scripts.
@@ -282,14 +320,24 @@ and never attach one to an issue.
   and focus-return handling. The
   `section.measured{content-visibility:visible}` escape hatch is for the Playwright tests,
   which add `measured` to measure a section that is off screen; it is not the fix.
-- Many tests read source files as text — slicing between comment or declaration anchors
-  through `between()`/`at()` in `tests/_slice.cjs` or a bare `indexOf`, matching a line with a
-  regex, or loading the whole board script into a VM through `loadBoard()` in
-  `tests/_board.cjs` (and `web/app.js` through `loadShell()` in `tests/_shell.cjs`, whose
-  helpers a test calls on `window.BigCopilotShell`). When you change a comment or declaration in a source file, update the
-  tests that read it: `rg -l "board\.js|_board\.cjs" tests` lists them (put the file's name in the
-  pattern: `board\.html`, `app\.js`, `map\.js`, `worker\.js`, `ba_dashboard\.py`). `check_profit_model.py`
-  imports `template/open-store-model.js` directly. A reworded
+- Tests run `web/app.js` and the board script whole rather than slicing them. `loadShell()` in
+  `tests/_shell.cjs` runs `web/app.js` in a VM: a test calls its helpers on
+  `window.BigCopilotShell`, and reaches the file's other names through `BigCopilotShell.scope`,
+  where it reads and sets a `let`, calls a function or puts a stand-in in its place, and reads a
+  `const`; `run()` runs a test's code among them. A test that needs another name adds it to that
+  list in `web/app.js`. `loadBoard()` in `tests/_board.cjs` runs the board script, and its `edit`
+  hook fills a placeholder the way `render()` does (`/*__WIKI_SCRIPT__*/` with `web/wiki.js`); a
+  browser test hands its page a board function's own text (`String(board.bodyPopover)`). Some
+  tests still read source files as text: the scans over every script
+  (`tests/global_names.test.cjs`, `tests/number_locale.test.cjs`, `tests/feature_badges.test.cjs`),
+  `tests/test_doc_registries.py` over `ba_dashboard.py` and `ba_alerts.py`, and slices between
+  anchors through `between()`/`at()` in `tests/_slice.cjs` or a bare `indexOf`
+  (`template/board.html`'s markup, `web/worker.js`, `web/wiki.js`). When you change a comment
+  or declaration in a source file, update the tests that read it:
+  `rg -l "board\.js|board-staff\.js|board-write\.js|_board\.cjs" tests` lists them (put the file's name in the
+  pattern: `board\.html`, `app\.js`, `map\.js`, `worker\.js`, `ba_dashboard\.py`, `ba_alerts\.py`);
+  a name a test reaches through `BigCopilotShell.scope` is renamed there too.
+  `check_profit_model.py` imports `template/open-store-model.js` directly. A reworded
   `_slice.cjs` anchor fails loudly; a bare `indexOf` can slice the wrong span.
 - Text on the page goes through a key, one per sentence (`docs/architecture.md`, "UI
   text"). A `Msg` that is concatenated or `.replace()`d becomes a plain `str` and stays
@@ -311,14 +359,16 @@ and never attach one to an issue.
 - The Pyodide worker's virtual filesystem holds only the files `web/worker.js` fetches from
   the page's content-addressed `web/assets/` manifest (`web/py/` in unstamped development)
   and the few it writes at runtime (`docs/architecture.md`, "Pyodide"), so
-  `ba_dashboard` must not open any other file at import time. The fetched files are the
+  `ba_dashboard`, `ba_msg` and `ba_alerts` must not open any other file at import time.
+  `ba_cli.py` is never fetched, so nothing the worker imports may import it. `ba_alerts` and
+  `ba_dashboard` import each other's names at their ends, so a new module-level use of the
+  other module's names in either breaks the import. The fetched files are the
   ones `PY_CODE` and `PY_DATA` in `build_web.py` name; the worker names each one itself,
   `tests/test_web_fresh.py` fails when the two disagree, and `tests/worker_startup.test.cjs`
   reads its list from the same tuples. Read a file lazily, inside a function, as
   `load_buildings()`, `load_demand_curves()` and `load_template()` (through `render()`) do.
-  `template/board.html`, `template/board.js`, `template/open-store-model.js` and
-  `template/open-factory-model.js` are not among the fetched files: the worker
-  never renders.
+  `template/board.html`, `template/board.js`, `template/board-write.js` and the
+  calculation models are not among the fetched files: the worker never renders.
 
 ## Where to read more
 

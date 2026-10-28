@@ -66,11 +66,15 @@ const forward = async page => { await page.goForward(); await page.waitForTimeou
 test('every finding kind names a real route, and every route is a view of its area', async t => {
   const page = await board(t);
   const got = await page.evaluate(() => ({
-    kinds: ALERT_GROUPS.map(g => g.id), routed: Object.keys(FINDING_ROUTES),
+    ids: FINDING_KINDS.map(k => k.id), kinds: ALERT_GROUPS.map(g => g.id), routed: Object.keys(FINDING_ROUTES),
     bad: Object.entries(FINDING_ROUTES).filter(([, f]) => !ROUTES[f.route]).map(([k]) => k),
     views: AREAS.flatMap(a => (a.views || []).map(v => `${a.id}/${v}`)).filter(id => !ROUTES[id]),
   }));
-  assert.equal(got.kinds.length, 34, 'the finding catalogue is 34 kinds');
+  // Every kind in the catalogue, each once: a new FINDING_KINDS record is
+  // counted without a number to bump here.
+  assert.ok(got.ids.length > 0, 'the finding catalogue was read');
+  assert.equal(new Set(got.ids).size, got.ids.length, 'each kind once');
+  assert.deepEqual(got.kinds, got.ids, 'ALERT_GROUPS holds every FINDING_KINDS id, in order');
   assert.deepEqual([...got.routed].sort(), [...got.kinds].sort());
   assert.deepEqual(got.bad, []);
   assert.deepEqual(got.views, []);

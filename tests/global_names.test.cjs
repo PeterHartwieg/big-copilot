@@ -1,6 +1,7 @@
 // Every classic script on the page shares one global scope: web/i18n.js in the
 // head, the inline scripts of template/board.html, and the board script
-// (template/board.js), which render() splices map.js and wiki.js into. The
+// (template/board.js with its parts, such as template/board-write.js, spliced
+// back in by load_template()), which render() splices map.js and wiki.js into. The
 // site's page adds web/update.js (inline) and web/app.js and web/community.js
 // (classic <script src>), and web/report.js, which app.js loads on demand. So a top-level name declared twice is a bug: a second
 // `const` or `let` is a SyntaxError that stops the whole script (a blank board),
@@ -44,7 +45,10 @@ const SOURCES = [
   {name: 'template/mod-demand-model.js', text: read('template/mod-demand-model.js')},
   {name: 'template/open-store-model.js', text: read('template/open-store-model.js')},
   {name: 'template/open-factory-model.js', text: read('template/open-factory-model.js')},
+  {name: 'template/street-food-model.js', text: read('template/street-food-model.js')},
   {name: 'template/board.js', text: read('template/board.js')},
+  {name: 'template/board-staff.js', text: read('template/board-staff.js')},
+  {name: 'template/board-write.js', text: read('template/board-write.js')},
   {name: 'web/map.js', text: read('web/map.js')},
   {name: 'web/wiki.js', text: read('web/wiki.js')},
   {name: 'web/update.js', text: read('web/update.js')},

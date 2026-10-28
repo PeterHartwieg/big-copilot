@@ -133,6 +133,20 @@ lengthy per-machine detail behind a disclosure. Do not reintroduce a fixed board
 width or use an unbroken note to size a metric column. Issue #7's screenshots show
 why both the shared layout and the displayed content need regression coverage.
 
+## Linting
+
+`npm run lint` runs Ruff over the Python with the pyflakes rules only (`ruff.toml`), then
+ESLint over the JavaScript (`eslint.config.mjs`, `eslint:recommended` with unused names
+counted and parameters and caught errors left alone). `npm run verify` runs the same
+stage after assembly and before the suites, and CI runs it in the Lint job. ESLint comes
+with `npm ci`. Ruff does not: install the version CI pins with `pip install ruff==0.16.10`.
+The stage runs `ruff` from PATH or `python -m ruff`, and stops with that install command
+when it finds neither. The board's scripts share one global scope, so the ESLint config
+reads their top-level declarations the way `tests/global_names.test.cjs` does and gives
+each script the names the others declare. That test still catches a name declared in two
+files. Fix a finding in the code. When the linter is wrong about a file, override the rule
+for that file in the config with a comment saying why, rather than an inline disable comment.
+
 ## Adding text to the page
 
 Every word Big Copilot writes itself goes through a key, so it can be translated: the

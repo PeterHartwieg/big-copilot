@@ -10,7 +10,6 @@ const {en, enBetween, enRe, escapeRe} = require('./_i18n.cjs');
 const LIMIT = new RegExp([1, 2].map(n => escapeRe(enBetween('sp.cap.ceiling', 'limit', 'fix', {n}).trim())).join('|'));
 const {spawnSync} = require('node:child_process');
 const path = require('node:path');
-const fs = require('node:fs');
 const {chromium} = require('playwright');
 
 let browser;

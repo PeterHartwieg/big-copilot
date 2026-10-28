@@ -29,20 +29,43 @@ export function selectPython(env = process.env, spawn = spawnSync) {
     : 'no Python found; install Python 3 or set PYTHON to its executable path');
 }
 
-// Wrangler's own entry point, for this Node to run (no .cmd shim, so no shell on
-// Windows). Resolved like any package, so NODE_PATH pointing at another
+// A package's own entry point, for this Node to run (no .cmd shim, so no shell
+// on Windows). Resolved like any package, so NODE_PATH pointing at another
 // checkout's node_modules works in a worktree without one.
-export function wranglerBin(root = ROOT) {
+function packageBin(root, name, label) {
   const require = createRequire(path.join(root, 'package.json'));
   try {
-    const manifest = require.resolve('wrangler/package.json');
+    const manifest = require.resolve(`${name}/package.json`);
     const bin = require(manifest).bin;
-    const wrangler = path.resolve(path.dirname(manifest), typeof bin === 'string' ? bin : bin.wrangler);
-    if (!existsSync(wrangler)) throw new Error('missing executable');
-    return wrangler;
+    const file = path.resolve(path.dirname(manifest), typeof bin === 'string' ? bin : bin[name]);
+    if (!existsSync(file)) throw new Error('missing executable');
+    return file;
   } catch {
-    throw new Error('Wrangler is missing; run npm ci or point NODE_PATH at the checkout containing node_modules');
+    throw new Error(`${label} is missing; run npm ci or point NODE_PATH at the checkout containing node_modules`);
   }
+}
+
+export const wranglerBin = (root = ROOT) => packageBin(root, 'wrangler', 'Wrangler');
+export const eslintBin = (root = ROOT) => packageBin(root, 'eslint', 'ESLint');
+
+// The Ruff CI installs (.github/workflows/tests.yml) and docs/contributing.md names.
+export const RUFF_VERSION = '0.16.10';
+
+// Ruff on PATH, else as a module of the selected Python (or the one found when
+// the lint stage runs alone): the command and the arguments before `check`.
+export function ruffCommand(root, env, python, spawn = spawnSync, log = console.log) {
+  const probe = (command, args) => {
+    const result = spawn(command, [...args, '--version'], { cwd: root, encoding: 'utf8', env });
+    return !result.error && result.status === 0 ? String(result.stdout || '').trim() : null;
+  };
+  let found = probe('ruff', []), command = ['ruff', []];
+  if (found === null) {
+    try { python ??= selectPython(env, spawn); } catch { python = null; }
+    if (python) { found = probe(python, ['-m', 'ruff']); command = [python, ['-m', 'ruff']]; }
+  }
+  if (found === null) throw new Error(`install ruff: pip install ruff==${RUFF_VERSION} (or put ruff on PATH)`);
+  if (!found.includes(RUFF_VERSION)) log(`note: ${found || 'ruff'} found; CI runs ruff ${RUFF_VERSION}`);
+  return command;
 }
 
 export function nodeFiles(root, requested = []) {
@@ -118,7 +141,7 @@ export function pythonModules(root, python, env, spawn = spawnSync) {
 
 export function verify(args = [], { root = ROOT, env = process.env, spawn = spawnSync, log = console.log } = {}) {
   const [stage = 'all', ...focused] = args;
-  if (!['all', 'assemble', 'python', 'node', 'optimized', 'worker', 'check'].includes(stage)) throw new Error(`unknown stage: ${stage}`);
+  if (!['all', 'assemble', 'lint', 'python', 'node', 'optimized', 'worker', 'check'].includes(stage)) throw new Error(`unknown stage: ${stage}`);
   if (focused.length && !['node', 'python'].includes(stage)) throw new Error(`${stage} does not accept extra arguments`);
   // Explicit CLI option, never an environment variable: the full local gate must
   // always run every suite, even when launched from a sharded CI environment.
@@ -131,7 +154,7 @@ export function verify(args = [], { root = ROOT, env = process.env, spawn = spaw
     if (focused.length) throw new Error('sharding runs the full suite list; do not combine it with focused suites');
     shard = { index: Number(match[1]) - 1, total: Number(match[2]) };
   }
-  const python = stage === 'worker' ? null : selectPython(env, spawn);
+  const python = ['worker', 'lint'].includes(stage) ? null : selectPython(env, spawn);
   const childEnv = python ? { ...env, PYTHON: python } : { ...env };
   const run = (command, commandArgs, envOverrides = {}) => {
     log(`> ${JSON.stringify([command, ...commandArgs])}`);
@@ -161,6 +184,12 @@ export function verify(args = [], { root = ROOT, env = process.env, spawn = spaw
   }
   const commands = [];
   if (!assembled && ['all', 'assemble', 'python', 'node', 'optimized'].includes(stage)) commands.push([python, ['build_web.py', '--assemble']]);
+  // Ruff is found when its stage comes, so a missing one fails there, with the
+  // install command, and never before an earlier stage has run.
+  if (['all', 'lint'].includes(stage)) {
+    commands.push(() => { const [command, prefix] = ruffCommand(root, childEnv, python, spawn, log); return [command, [...prefix, 'check', '.']]; });
+    commands.push([process.execPath, [eslintBin(root), '.', '--max-warnings=0']]);
+  }
   if (['all', 'python'].includes(stage)) commands.push([python, modules
     ? ['tools/python_shard.py', ...modules]
     : ['-m', 'unittest', ...(focused.length ? focused : ['discover', '-s', 'tests'])]]);
@@ -185,18 +214,21 @@ export function verify(args = [], { root = ROOT, env = process.env, spawn = spaw
   let next = 0;
   try {
     for (; next < commands.length; next++) {
-      const status = run(...commands[next]);
+      const command = commands[next];
+      const status = run(...(typeof command === 'function' ? command() : command));
       if (status !== 0) return status;
     }
     return 0;
   } finally {
     if (next >= optimizedAt && next < restoreAt) {
       // The failure's own status (or error) stands; a failed restore only adds a note.
+      let failure = null;
       try {
-        if (run(...commands[restoreAt]) !== 0) throw new Error('failed');
+        if (run(...commands[restoreAt]) !== 0) failure = 'failed';
       } catch (error) {
-        log(`re-assembling the readable page failed (${error.message}); run python build_web.py --assemble before --check or the tests`);
+        failure = error.message;
       }
+      if (failure) log(`re-assembling the readable page failed (${failure}); run python build_web.py --assemble before --check or the tests`);
     }
   }
 }

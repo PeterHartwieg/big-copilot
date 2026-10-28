@@ -109,8 +109,8 @@ in a single statement.
 
 The local CLI remains offline. Exporting accepted community wording into `i18n/`
 makes it available in subsequent bundled builds. Import must validate the English
-source version before updating `.base.json`, and only accepted human contributions
-clear the corresponding `.ai.json` marks.
+source version before recording the language's English in `i18n/base.json`, and only
+accepted human contributions clear the language's draft marks there.
 
 Download `/api/translations/overlay?lang=it` as `overlay.json`, then use:
 

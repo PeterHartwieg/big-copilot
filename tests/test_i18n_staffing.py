@@ -18,7 +18,7 @@ from tests.i18n_check import MsgAsserts, msg_param
 
 from ba_dashboard import (
     _alerts, IDLE_PARTS, PHRASE_SHAPES, STAFF_HOURS, WEEKDAYS, Msg, _cap_first, _hour_phrase, _idle_parts,
-    _off_hours, _role_words, _sp_counters, _staff_notes, _wire_msgs, msg, plain, tok,
+    _off_hours, _role_words, _sp_counters, _staff_notes, _wire_msgs, msg, tok,
 )
 from tests import cinema_fixture
 from tests.test_site_panel_fields import stub

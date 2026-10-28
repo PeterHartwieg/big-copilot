@@ -6,7 +6,7 @@
 // NODE_PATH may point at an existing Playwright installation.
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const {en, enRe} = require('./_i18n.cjs');
+const {enRe} = require('./_i18n.cjs');
 const {suiteBrowser, boardHtml, openPage} = require('./_page.cjs');
 
 const browser = suiteBrowser();

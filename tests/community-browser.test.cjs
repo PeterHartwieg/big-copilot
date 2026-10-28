@@ -95,7 +95,7 @@ async function setup(t, options = {}) {
     // A tab still on an app.js from before window.BigCopilotDialog existed.
     if(options.noDialogHelper && name==='community.js') body='delete window.BigCopilotDialog;\n'+body;
     if(options.savedLanguageBeforeInit && name==='index.html') {
-      body=body.replace(/(<script src="community\.js[^\"]*"><\/script>)/,'$1<script src="/community-timing-gate.js"></script>');
+      body=body.replace(/(<script src="community\.js[^"]*"><\/script>)/,'$1<script src="/community-timing-gate.js"></script>');
       if(options.fallbackVoteMarkup) body=body.replace(/(<footer class="sitefoot sf-compact">)([\s\S]*?)(<\/footer>)/,(_all,start,contents,end)=>
         start+contents.replace(/<span class="feature-new" data-new-feature="community-voting"[^>]*>New<\/span>/,'')
           .replace(/class="sf-cta sf-fill" data-community-open/,'class="sf-link sf-btn" data-community-open')+end);

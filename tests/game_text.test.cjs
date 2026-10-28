@@ -5,18 +5,11 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {en, enRe} = require('./_i18n.cjs');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
-const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
-const {between} = require('./_slice.cjs');
 // web/app.js run whole: gameTextLanguage() and dropForeignLocale() are called
-// through window.BigCopilotShell, over the storage given it.
+// through window.BigCopilotShell, over the storage given it, and
+// takeLocale() and resetLocale(), which drive the strip and the build,
+// through its scope, with stand-ins for the note, the chip and the build.
 const {loadShell} = require('./_shell.cjs');
-// The page's tt(), which app.js writes every word through.
-const i18n = fs.readFileSync(path.join(__dirname, '..', 'web', 'i18n.js'), 'utf8');
-// takeLocale() and resetLocale(), which drive the strip and the build.
-const take = between(source, '  async function takeLocale(', '  /* --- what the board asks for');
 
 const ENGLISH = {'ba:neighborhood_global': 'Global', menu_options_others_language: 'Language'};
 const GERMAN = {'ba:neighborhood_global': 'Global', menu_options_others_language: 'Sprache'};
@@ -24,25 +17,23 @@ const GERMAN = {'ba:neighborhood_global': 'Global', menu_options_others_language
 function setup(kept = '') {
   const storage = {ledger_locale: kept};
   const notes = [];
-  const {shell} = loadShell({globals: {localStorage: {
+  const builds = [];
+  const {shell, scope: context} = loadShell({globals: {localStorage: {
     getItem: (key) => (key in storage ? storage[key] : null),
     setItem(key, value) { storage[key] = value; },
     removeItem(key) { delete storage[key]; },
   }}});
-  const context = vm.createContext({
-    LOCALE_KEY: 'ledger_locale', gameTextLanguage: shell.gameTextLanguage,
-    localStorage: {removeItem(key) { delete storage[key]; }},
-    stored: {get: (key) => storage[key] || '', set: (key, value) => { storage[key] = value; return true; }},
+  // The storage the page keeps, over the same table.
+  context.stored.get = (key) => storage[key] || '';
+  context.stored.set = (key, value) => { storage[key] = value; return true; };
+  Object.assign(context, {
     // app.js hands note() its words as a function that writes them.
     note: (...args) => notes.push(args.map((a) => (typeof a === 'function' ? a() : a))),
     localeState() { context.painted = (context.painted || 0) + 1; },
     buildFrom(f) { builds.push(f); },
-    sourceGen: 0, lastFile: null, lastFileGen: -1,
   });
-  const builds = [];
-  vm.runInContext(i18n, context);
-  vm.runInContext(take + '\nthis.api = {takeLocale, resetLocale};', context);
-  const api = {gameTextLanguage: shell.gameTextLanguage, dropForeignLocale: shell.dropForeignLocale, ...context.api};
+  const api = {gameTextLanguage: shell.gameTextLanguage, dropForeignLocale: shell.dropForeignLocale,
+    takeLocale: context.takeLocale, resetLocale: context.resetLocale};
   return {api, storage, notes, builds, context};
 }
 
