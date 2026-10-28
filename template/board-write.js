@@ -1499,8 +1499,10 @@ function gwConfirm(spec){
     if(!dlg.open || mine !== seq || !current()) return;
     /* "Allowed." is said once: a Try again after this does not say it again. */
     if(res.error){ allowed = false; return gwFailed(dlg, spec, res, () => plan(), () => plan()); }
-    /* Approval may span a refresh. Its old dry run cannot judge the new
-       board: wait for its sections and check again before offering Apply. */
+    /* A dry run that outlived its board (approval may span a refresh)
+       cannot judge the new one: wait for its sections and check again
+       before offering Apply. The recheck is reviewed, never auto-applied:
+       a one-click write stops at Apply on purpose. */
     if(board !== D) return plan();
     /* The answer on screen and the body it judged go together. */
     const answer = last = res.body || {};
