@@ -92,7 +92,7 @@ test('the deployed page opens the map and wiki and remembers dismissed badges', 
     assert.equal(await page.locator('#cityMapPage .places').isVisible(),false);
     assert.equal(await page.locator('[data-new-feature="map"]:not([hidden])').count(),0);
     await page.locator('#navRefs a[data-id="wiki"]').click();
-    await page.getByRole('searchbox', {name: en('wiki.search.aria')}).waitFor();
+    await page.getByRole('searchbox', {name: en('wiki.search.aria')}).waitFor({timeout:CONTENT_WAIT_MS});
     assert.equal(await page.locator('[data-new-feature="wiki"]:not([hidden])').count(),0);
     await page.evaluate(() => {
       D.businesses = [{name:'Release Gifts',typeSlug:'ba:businesstype_giftshop',status:'retail',
@@ -100,7 +100,7 @@ test('the deployed page opens the map and wiki and remembers dismissed badges', 
       D.market = {rows:[{slug:'ba:itemname_cheapgift',cells:[{hood:'ba:neighborhood_midtown',marketPrice:25.63}]}]};
       window.BigCopilotWiki.route('wiki/businesstypes-giftshop');
     });
-    await page.getByRole('heading', {name:en("wiki.prices.title"),exact:true}).waitFor();
+    await page.getByRole('heading', {name:en("wiki.prices.title"),exact:true}).waitFor({timeout:CONTENT_WAIT_MS});
     const prices = await page.locator('.wk-prices').first().textContent();
     assert.match(prices, /Release Gifts: \$30\.27/);
     assert.match(prices, /\$25\.63/);
