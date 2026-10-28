@@ -2437,11 +2437,6 @@ function gwRosterWeek(row){
 }
 /* An office row's computers: the stations of its one role, by index. */
 const gwOfficeComputers = row => new Set((row.roles || []).flatMap(r => r.stations || []));
-const spOfficeBase = key => (Array.isArray(D.officeStaffing) ? D.officeStaffing : [])
-  .find(r => r.key === key && !r.failed) || null;
-const spOfficePlanOf = key => spPlanRead(key) === "open" && spOfficeBase(key)?.openCover
-  && !spOfficeBase(key).openCover.failed ? "open" : "office";
-const spOfficeReplaces = row => !!row && (row.demandBased || row.variant === "open");
 const gwOfficeRow = key => {
   const base = spOfficeBase(key);
   const row = spOfficePlanOf(key) === "open" ? base.openCover : base;

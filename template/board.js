@@ -5373,6 +5373,14 @@ const spPlanWrite = (key, which) => {
   if(which === "full" || which === "open") remember(SP_PLAN_STORE + at, which);
   else forget(SP_PLAN_STORE + at);
 };
+/* An office's plan (spOfficeRoster()): its own row, and the pick between
+   that row and its optional Every open hour plan (`openCover`), which
+   shares the shops' remembered "open" pick. */
+const spOfficeBase = key => (Array.isArray(D.officeStaffing) ? D.officeStaffing : [])
+  .find(r => r.key === key && !r.failed) || null;
+const spOfficePlanOf = key => spPlanRead(key) === "open" && spOfficeBase(key)?.openCover
+  && !spOfficeBase(key).openCover.failed ? "open" : "office";
+const spOfficeReplaces = row => !!row && (row.demandBased || row.variant === "open");
 /* A demand test needs a serving station to test. A site with none has
    cleaning and security alone, and both plans would be the same week. */
 const spOffersFull = row => !!(row && !row.failed && row.fullCover
