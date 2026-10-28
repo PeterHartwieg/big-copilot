@@ -58,7 +58,7 @@ test('the deployed page opens the map and wiki and remembers dismissed badges', 
     // Locally the page and this require read the same file, so a mismatch is
     // the page's own fault; only against RELEASE_URL can the two differ.
     const why = !process.env.RELEASE_URL
-      ? 'the local page drew the wrong count (a render, route or fetch bug)'
+      ? 'the local page drew the wrong count (a render or route bug)'
       : drawn < changes.length
         ? `the site at ${base} is older than this checkout (deploy first, or run without RELEASE_URL)`
         : `this checkout is older than the site at ${base} (update the checkout, or run without RELEASE_URL)`;
