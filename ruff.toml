@@ -1,0 +1,46 @@
+# Ruff with the pyflakes rules only: unused and undefined names, imports and
+# redefinitions (docs/contributing.md, "Linting"). `npm run lint` runs
+# `ruff check .` through tools/verify.mjs. Gitignored paths are skipped too.
+extend-exclude = [
+  "web/py/",  # generated copies of the root modules
+  "web/assets/",
+  "docs/",
+  "mockup/",
+  "research/",
+  "build/",
+  "node_modules/",
+  ".claude/",
+]
+
+[lint]
+select = ["F"]
+
+[lint.per-file-ignores]
+# Findings in files this change does not own: each rule is ignored only in the
+# file it fails in today, with its count.
+"ba_dashboard.py" = [
+  "F402",  # 1, fixed in a follow-up
+  "F541",  # 2, fixed in a follow-up
+  "F821",  # 1, fixed in a follow-up
+  "F841",  # 4, fixed in a follow-up
+]
+"ba_mods.py" = [
+  "F401",  # 1, fixed in a follow-up
+  "F811",  # 1, fixed in a follow-up
+]
+"ba_rlo.py" = ["F401"]  # 3, fixed in a follow-up
+"tests/test_factory_staffing.py" = ["F401"]  # 1, fixed in a follow-up
+"tests/test_full_cover.py" = ["F401"]  # 1, fixed in a follow-up
+"tests/test_game_names.py" = ["F401"]  # 2, fixed in a follow-up
+"tests/test_hype_alerts.py" = ["F401"]  # 1, fixed in a follow-up
+"tests/test_i18n_staffing.py" = ["F401"]  # 1, fixed in a follow-up
+"tests/test_real_estate.py" = ["F401"]  # 2, fixed in a follow-up
+"tests/test_section_cache.py" = ["F841"]  # 1, fixed in a follow-up
+"tests/test_sections.py" = ["F401"]  # 1, fixed in a follow-up
+"tests/test_staffing_oracle.py" = ["F401"]  # 2, fixed in a follow-up
+"tests/test_street_food_writes.py" = ["F401"]  # 1, fixed in a follow-up
+"tests/test_supply_bottom_up.py" = ["F401"]  # 1, fixed in a follow-up
+"tests/test_supply_fixes.py" = ["F401"]  # 2, fixed in a follow-up
+"tests/test_wiki_build.py" = ["F841"]  # 2, fixed in a follow-up
+"tests/test_wiki_guides.py" = ["F401"]  # 2, fixed in a follow-up
+"tests/test_wiki_review.py" = ["F401"]  # 1, fixed in a follow-up

@@ -1,17 +1,13 @@
 """Build a progress dashboard from a Big Ambitions save game.
 
-    python ba_dashboard.py                          # newest save in the default folder
-    python ba_dashboard.py "path\\to\\Costy Co.hsg"  # a specific save
-    python ba_dashboard.py --list                   # every save, by character
-    python ba_dashboard.py "Costy Co"               # a character or save by name
-    python ba_dashboard.py -o board.html            # choose the output file
-    python ba_dashboard.py --watch                  # serve it and follow the save
-    python ba_dashboard.py --game                   # the running game, through the link mod
+This module reads a save into the board's payload (build_core(), the sections,
+extract()) and renders the page around it (render()). The in-browser board
+calls it through browser_build(), browser_section() and browser_name().
 
-The dashboard is a single self-contained HTML file. In watch mode it is also served
-from 127.0.0.1 and refreshes itself whenever the game writes a new save. --game
-reads the running game itself through the Big Copilot Link mod
-(docs/game-link-api.md) instead of a save folder.
+The command line, the save catalogue, the watch server and the game-link
+client are in ba_cli.py, which `python ba_dashboard.py` runs; the Pyodide
+worker never fetches that file. `python ba_dashboard.py --help` lists the
+options.
 """
 
 from __future__ import annotations
@@ -20,44 +16,41 @@ import collections
 import contextlib
 import copy
 import datetime as dt
-import decimal
 import fractions
+import functools
 import gc
 import hashlib
 import itertools
 import json
 import math
-import numbers
 import os
 import re
 import struct
 import sys
-import threading
 import time
 from html import escape as html_escape
 
-# What only the CLI, the watch server and the game link use. The Pyodide
-# worker never calls any of it, and importing it there costs over half a
-# second of every start, so it is left out in the browser. Imported at module
-# level, not inside the functions, so tests can patch ba_dashboard.http.server
-# and ba_dashboard.urllib.request.
+# Only a local run prints a planner failure's traceback (_plan_failed()); the
+# browser keeps the one line, so the import is left out there.
 if sys.platform != "emscripten":
-    import argparse
-    import http.client
-    import http.server
     import traceback
-    import urllib.error
-    import urllib.parse
-    import urllib.request
-    import webbrowser
 
-    _RequestHandler = http.server.BaseHTTPRequestHandler
-else:
-    _RequestHandler = object  # BoardHandler is never served in the browser
+# `python ba_dashboard.py` runs this file as __main__. Registered under its
+# name too, so a module that imports it by name, ba_cli.py or ba_alerts.py,
+# gets this run of it rather than reading and executing a second copy.
+if __name__ == "__main__":
+    sys.modules.setdefault("ba_dashboard", sys.modules[__name__])
 
 from ba_save import (
     Names, NotEnglishText, Save, _plain, bundled_locale, english_text, house_number, load_best_locale,
     load_locale, load_save,
+)
+# The message layer is ba_msg.py's. Each name is re-exported (`X as X`) for
+# the importers and tests that read it off ba_dashboard.
+from ba_msg import (
+    MSG_FIELD as MSG_FIELD, MSG_FIXED as MSG_FIXED, NAME_TOKEN as NAME_TOKEN, WEEKDAYS as WEEKDAYS,
+    Msg as Msg, _half_away as _half_away, _js_round as _js_round, _msg_format as _msg_format,
+    _wire_msgs as _wire_msgs, _wire_value as _wire_value, msg as msg, plain as plain, tok as tok,
 )
 try:
     import ba_mods
@@ -69,6 +62,141 @@ except ModuleNotFoundError as exc:
     ba_mods = None
 ba_street_food = ba_mods.ba_street_food if ba_mods else None
 ba_economy = ba_mods.ba_economy if ba_mods else None
+
+
+class ModRules:
+    """What the mods change about one save's rules, as the adapters say it.
+
+    ba_mods and the adapters it loads (ba_economy, ba_street_food, ba_facts)
+    make the decisions; this is the one place the planners ask them, so they
+    need neither the adapters' names nor a guard for an adapter that did not
+    load. With none loaded, a worker from before ba_mods.py, every answer is
+    the vanilla one.
+
+    Build.mod_rules is the one a build passes down. A function called without
+    one (a test, mostly) makes its own over the same save: the adapters keep
+    their own state per save, so both read alike. Each answer is asked for the
+    first time it is needed, never at construction.
+    """
+
+    def __init__(self, save: Save):
+        self.save = save
+
+    # --- ba_mods: the models a mod leaves unknown, vehicle prices, the seasons
+    @functools.cached_property
+    def capabilities(self) -> dict:
+        """{capability: [reason, ...]} for each planning model a mod leaves unknown."""
+        return ba_mods.capabilities(self.save) if ba_mods else {}
+
+    def detect(self) -> dict:
+        """The `mods` payload key: the adapters this save needs, {} for a vanilla save."""
+        return ba_mods.detect(self.save) if ba_mods else {}
+
+    def vehicle_prices(self, motor: dict, non_motor) -> tuple[dict, bool]:
+        """The vehicle prices wealth counts, and whether every model has one."""
+        if ba_mods:
+            return ba_mods.vehicle_prices(self.save, motor, non_motor)
+        return {**dict.fromkeys(non_motor, 0), **motor}, True
+
+    @functools.cached_property
+    def seasons(self) -> dict | None:
+        """The Alcware Seasons calendar, None without one."""
+        return ba_mods.seasons(self.save) if ba_mods else None
+
+    def sales_ratio(self, ratio: float, item: str, day: int) -> float:
+        """A product's sales ratio on `day` under the seasons; the game's without them."""
+        return ba_mods.sales_ratio(ratio, item, self.seasons, day) if self.seasons else ratio
+
+    # --- Street Food
+    @property
+    def street_food(self) -> dict | None:
+        """ba_street_food's read of the save, None for a save without the mod."""
+        return ba_street_food.read(self.save) if ba_street_food else None
+
+    @property
+    def street_food_days(self) -> list:
+        """The fleet's recorded days of sales."""
+        return ba_street_food.days(self.save) if ba_street_food else []
+
+    def is_commissary_expense(self, key) -> bool:
+        """Whether a deductible expense is the fleet's shared commissary label."""
+        return bool(ba_street_food) and key == ba_street_food.COMMISSARY_EXPENSE
+
+    # --- the economy mods' public reports (ba_economy), by provider
+    @property
+    def economy(self) -> bool:
+        """Whether the economy adapter loaded at all."""
+        return ba_economy is not None
+
+    def report(self, provider: str) -> dict | None:
+        """A provider's report ("rlo", "hart"), None when the save has none."""
+        return ba_economy.report(self.save, provider) if ba_economy else None
+
+    def module(self, provider: str, name: str) -> dict:
+        """One module of a provider's report, with its `status`."""
+        return ba_economy.module(self.save, provider, name) if ba_economy else {"status": "disabled"}
+
+    def data(self, provider: str, name: str):
+        """A ready module's data, else None."""
+        return ba_economy.data(self.save, provider, name) if ba_economy else None
+
+    @property
+    def planner(self) -> dict | None:
+        """What the planners' sections carry of the reports, None for no report."""
+        return ba_economy.planner(self.save) if ba_economy else None
+
+    def tables(self, rules: dict, prices: dict) -> tuple[dict, dict]:
+        """The store rules and item prices with the mod's registered amounts."""
+        return ba_economy.tables(self.save, rules, prices) if ba_economy else (rules, prices)
+
+    def price_unavailable(self, identifiers) -> list:
+        """The items among `identifiers` that a mod's or the game link's price
+        catalogue lacks; [] where neither replaces the game's prices."""
+        return ba_economy.price_unavailable(self.save, identifiers) if ba_economy else []
+
+    def deduction(self, label):
+        """"recurring", "once" or "unknown" for a deduction label RLO reports,
+        None where it makes no claim."""
+        return ba_economy.deduction(self.save, label) if ba_economy else None
+
+    @property
+    def footfall(self) -> dict:
+        """RLO's reported footfall per address, each row checked against the save."""
+        return ba_economy.footfall(self.save) if ba_economy else {}
+
+    def promotion(self, addr, own):
+        """The promotion RLO writes for a site whose campaigns give `own`, None
+        where its report cannot say."""
+        return ba_economy.promotion(self.save, addr, own)
+
+    def city_amount(self, amount):
+        """A cost at RLO's current city price factor."""
+        return ba_economy.city_amount(self.save, amount)
+
+    def outside(self, addr):
+        """RLO's rows kept outside the game's statements for one site, None
+        without them."""
+        return ba_economy.outside(self.save, addr)
+
+    def closures(self, addr):
+        """RLO's recorded closures of one site, None without them."""
+        return ba_economy.closures(self.save, addr)
+
+    def native_economy(self, name: str):
+        """One table of the game link's native economy facts, None without them."""
+        import ba_facts
+        return ba_facts.native_economy(getattr(self.save, "facts", None), name)
+
+    @staticmethod
+    def address(row: dict) -> tuple:
+        """A report row's address as (street, number)."""
+        return ba_economy.address(row)
+
+    @staticmethod
+    def amount(value):
+        """A catalogue amount as a number."""
+        import ba_facts
+        return ba_facts.catalogue_amount(value)
 
 SAVE_ROOT = os.path.join(
     os.environ.get("USERPROFILE", ""),
@@ -361,159 +489,8 @@ HOOD_LABEL = {
 HOOD_TAG = {key: tag for tag, key in NEIGHBOURHOODS.items()}
 
 
-# A game name inside a sentence the page shows travels as a token,
-# U+27E6 <key>|<English> U+27E7, so the page can write it in the language the player picked
-# (gnString() in the board script) and in English otherwise. Only text that
-# reaches the page carries one: ids, subjects, history keys and anything sent to
-# the game stay plain English, and plain() turns a token back into its English
-# for Python's own reading (the CLI, the tests). A plural or a lowercased name
-# cannot be a token, since the page swaps the whole name: those stay English.
-NAME_TOKEN = re.compile("\u27e6(ba:[^\u27e7|\\s]+)\\|([^\u27e7]*)\u27e7")
-
-
-def tok(key, english) -> str:
-    """A game name for a sentence: a token where it has a game key, else as is."""
-    if not english:
-        return english or ""
-    if not isinstance(key, str) or not key.startswith("ba:") or "\u27e7" in english or "|" in key:
-        return english
-    return f"\u27e6{key}|{english}\u27e7"
-
-
-def plain(text):
-    """Text with every game-name token back in its English."""
-    return NAME_TOKEN.sub(lambda m: m.group(2), text) if isinstance(text, str) else text
-
-
-# Big Copilot's own sentences in the reader's language (docs/architecture.md,
-# "UI text"). Python keeps writing English: msg() returns that English as a
-# str, which every reader, test and plain() sees as before, and which also
-# carries the key and the params the page needs to write the sentence in
-# another language. _wire_msgs() hands those to the page at the end of
-# extract(). Concatenating or .replace()-ing a Msg gives a plain str: that
-# sentence then stays English on every page, which the coverage test in
-# tests/test_i18n_msg.py catches for a converted area.
-MSG_FIELD = re.compile(r"\{(\w+)(?::([^{}]+))?\}")
-MSG_FIXED = re.compile(r"(,)?\.(\d)f")
-
-
-class Msg(str):
-    """An English sentence that knows its catalogue key and params."""
-
-    def __new__(cls, text, key=None, p=None):
-        self = super().__new__(cls, text)
-        self.key = key
-        self.p = dict(p or {})
-        return self
-
-    def __reduce__(self):
-        return (Msg, (str(self), self.key, self.p))
-
-    def wire(self) -> list:
-        """[key, params] for the page: numbers raw, game names as tokens, a
-        nested Msg as {"m": [key, params, english]}."""
-        return [self.key, {k: _wire_value(v) for k, v in self.p.items()}]
-
-
-def _wire_value(v):
-    if isinstance(v, Msg):
-        return {"m": [v.key, {k: _wire_value(x) for k, x in v.p.items()}, str(v)]}
-    if isinstance(v, (list, tuple)):
-        return [_wire_value(x) for x in v]
-    if isinstance(v, bool) or v is None or isinstance(v, (int, float)):
-        return v
-    if isinstance(v, (numbers.Real, decimal.Decimal)):
-        return float(v)  # a Fraction or Decimal travels as JSON's number
-    return str(v)
-
-
-def _js_round(x: float) -> int:
-    """Math.round(): halves go up, as the page's compact() rounds."""
-    return int(math.floor(x + 0.5))
-
-
-def _half_away(v, places: int = 0) -> decimal.Decimal:
-    """v rounded to `places` decimals, halves away from zero.
-
-    The one rounding rule for numbers written into text, on both sides of the
-    payload: the page's fmt() and tt() round the size of a number and put the
-    sign back (Math.round(Math.abs(n))), and Intl.NumberFormat, which writes
-    every fixed-decimal number on the page, rounds halves away from zero too.
-    Python's format() rounds halves to even, so $2.50 would read "$2" in a
-    finding and "$3" on the tile beside it. A float is read at its shortest
-    decimal form (repr), as Intl reads it, so 2.675 is 2.68 on both sides.
-    """
-    shown = decimal.Decimal(v if isinstance(v, (int, decimal.Decimal)) else repr(float(v)))
-    if not shown.is_finite():  # inf and nan are written as they are
-        return shown
-    return shown.quantize(decimal.Decimal(1).scaleb(-places), decimal.ROUND_HALF_UP)
-
-
-def _msg_format(v, spec: str | None) -> str:
-    """One placeholder's English, by the spec tt() in web/i18n.js shares. Each
-    writes what the f-string it replaces wrote, with halves rounded away from
-    zero (_half_away()) as the page rounds them: {x} as f"{x}", {x:,} as
-    f"{x:,}", {x:.1f} / {x:,.0f} as the same f-string spec, {w:$} as the
-    board's fmt() ("-$1,234"; f"${x:,.0f}", which writes "$-1,234", becomes
-    "${x:,.0f}" instead), {w:$c} as compact(), {d:day} a weekday name."""
-    if isinstance(v, Msg) or spec is None:
-        return str(v)
-    if spec == "day":
-        return WEEKDAYS[int(v) % 7]
-    if spec == ",":
-        return format(v, ",")
-    if spec == "$":
-        return ("-" if v < 0 else "") + "$" + format(_half_away(abs(v)), ",.0f")
-    if spec == "$c":
-        a, s = abs(v), "-" if v < 0 else ""
-        if a >= 1e6:
-            places = "0.1" if a >= 1e7 else "0.01"
-            return s + "$" + str(decimal.Decimal(a / 1e6).quantize(decimal.Decimal(places), decimal.ROUND_HALF_UP)) + "M"
-        if a >= 1e3:
-            return s + "$" + str(_js_round(a / 1e3)) + "k"
-        return s + "$" + str(_js_round(a))
-    fixed = MSG_FIXED.fullmatch(spec)
-    if fixed:
-        return format(_half_away(v, int(fixed.group(2))), spec)
-    raise ValueError(f"msg(): unknown placeholder spec {spec!r}")
-
-
-def msg(key: str, en, **p) -> Msg:
-    """A sentence the page can translate: its English, with {name} and
-    {name:spec} filled from p. `en` is a string, or {"one": ..., "other": ...}
-    chosen by the param n. The specs (_msg_format()): {n:,} grouped, {x:.1f}
-    and {x:,.0f} fixed decimals, {w:$} money with the sign first, {w:$c}
-    compact money, {d:day} a weekday index (0 Sunday). A game name goes in as a token (tok()), a nested
-    sentence as another msg()."""
-    if isinstance(en, dict):
-        en = en["one"] if p.get("n") == 1 else en["other"]
-
-    def fill(m):
-        if m.group(1) not in p:
-            raise KeyError(f"msg({key!r}): no param {m.group(1)!r}")
-        return _msg_format(p[m.group(1)], m.group(2))
-
-    return Msg(MSG_FIELD.sub(fill, en), key, p)
-
-
-def _wire_msgs(payload):
-    """Every field holding a Msg gets row["i18n"][field] = [key, params] beside
-    it, so the page can write the sentence in the UI language. One pass over
-    the whole payload, at the end of extract()."""
-    # Only a dict or a list can hold a Msg further down, so nothing else is
-    # descended into: the payload's numbers and strings run to six figures.
-    if isinstance(payload, dict):
-        wires = {k: v.wire() for k, v in payload.items() if isinstance(v, Msg) and v.key}
-        for v in payload.values():
-            if isinstance(v, (dict, list)):
-                _wire_msgs(v)
-        if wires:
-            payload.setdefault("i18n", {}).update(wires)
-    elif isinstance(payload, list):
-        for v in payload:
-            if isinstance(v, (dict, list)):
-                _wire_msgs(v)
-    return payload
+# Game names in a sentence (tok(), plain()) and Big Copilot's own sentences
+# (msg(), Msg, _wire_msgs()) are ba_msg.py's, imported at the top.
 
 
 # The display names the page is sent, by key prefix. build_web.py ships the
@@ -1025,10 +1002,6 @@ COMPANY_DEMAND_KINDS = {"insurance", "happiness"}
 # fridges keep food as cargo but have none, so an empty fridge still counts.
 DISPLAY_ITEMS = {"ba:itemname_industrialcoffeemachine"}
 
-# Day 1 of a save is a Monday, so day % 7 gives the weekday directly. Confirmed
-# against payroll (hours logged this week) and against import delivery days.
-WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-
 # --- the board's own thresholds, not read from the game ---------------------
 
 # Idle stock thresholds: enough weeks of cover, and enough units, to be worth saying.
@@ -1147,7 +1120,8 @@ def marketing_plan(traffic, was_ids, sqm, type_slug, neighbourhood, free_ids=Non
     The cheapest mix that brings promotion to 100; when none can, the cheapest
     that brings marketing to 100 (or, in a building too big for that, to the
     most it can reach). No tolerance: 99 is short. Ties go to fewer campaigns,
-    then to the mix the site runs now (`was_ids`). Settled by Peter, 28 Sep 2026.
+    then to the mix the site runs now (`was_ids`): docs/dashboard-reference.md,
+    "What a shop's and an office's page adds".
     `free_ids` are the types the plan may use (every type when None): the ones
     the site has a switch for and the ones a contacted agency sells
     (_marketing()). They hold every type running now, so a type outside them
@@ -1735,9 +1709,8 @@ UNRENTABLE_BUILDINGS = ("residential", "special")
 
 # rent_per_day = m2 x (30 + traffic) x district rate x (1.033 in an office)
 #
-# Fitted 15 September 2026 against 48 non-residential leases across three
-# characters on build 3675, worst residual 0.6%. Residential leases do not
-# follow it and are never estimated. A game patch can rebalance rents, so the
+# Fitted to real non-residential leases (docs/dashboard-reference.md, "Estimated rent").
+# Residential leases do not follow it and are never estimated. A game patch can rebalance rents, so the
 # payload carries a live check against the player's own current leases and the
 # page can say how far the estimate is off today.
 RENT_TRAFFIC_OFFSET = 30
@@ -1754,8 +1727,8 @@ RENT_OFFICE_FACTOR = 1.033
 
 # Taking a lease costs a deposit upfront, which is what actually stops an early
 # character signing. The game bills it as a transaction and never stores it
-# against the building, so it too is a multiple of the daily rent, fitted on
-# 15 September 2026 across 21 lease deposits from three characters (build 3675).
+# against the building, so it too is a multiple of the daily rent, fitted to
+# real lease deposits (docs/dashboard-reference.md, "Deposit").
 # A deposit transaction can also be a building purchase (about 1000x the rent
 # and more) or one of the small deposits the game takes for something that is
 # not a lease, so only the band between these two factors is read as a lease.
@@ -1776,7 +1749,7 @@ DEPOSIT_TRANSACTION = "ba:transaction_deposit"
 # with the layout's number: every player cinema reads customerCapacity exactly its
 # layout's (4 Broadway S1 150, 5 Sixth Street S2 125, 15 Third Avenue S3 100) once
 # it is fitted out, and no rival cinema or theater reads above its own layout's
-# (issue #159).
+# (docs/dashboard-reference.md, "Building capacity").
 CAP_CATEGORIES = ("retail", "office", "cinema", "theater")
 FALLBACK_CAPS = {
     "retail": {"A": 15, "C": 30, "D": 40, "M": 75},
@@ -2233,7 +2206,8 @@ def _premises(save: Save, names: Names, market: dict, estate: dict | None = None
 
 # --------------------------------------------------------------- real estate
 # Buildings the player owns outright, and buildings to buy (Real estate). The
-# rules are the game's own code, build 3682, read 12 Oct 2026 from
+# rules are the game's own code on build 3682 (docs/dashboard-reference.md,
+# "Real estate"), read from
 # Buildings.Building, RealEstateHelper and TaxHelper, and the Addressables
 # NeighborhoodData and BuildingTypeData (research/real-estate-2026-10-12/rules.md):
 #
@@ -2277,7 +2251,8 @@ TAX_THRESHOLD = 150_000           # PlayerShouldDoTaxes: under this in sales not
 # one-off bill) counts once. Wages, rent, marketing, imports, fees, and
 # Economy Expansion's utilities.
 #
-# The keys real saves hold (build 3682, 12 Oct 2026, ten characters):
+# The keys real saves hold (build 3682, ten characters; docs/dashboard-reference.md,
+# "Before tax day"):
 # running costs econoview_row_salaries, tax_import, tax_marketing, tax_rent,
 # ba:transaction_licensingfee_label, _healthinsurance_label,
 # _replacementwage_label, _replacementfee_label, _privatedriver_label,
@@ -2521,7 +2496,7 @@ def _estate_owned(save: Save, names: Names, mods: dict) -> dict:
     }
 
 
-def _tax_period(save: Save) -> dict:
+def _tax_period(save: Save, mod_rules: ModRules | None = None) -> dict:
     """This tax period's sales and deductions, so far and projected to tax day.
 
     Mirrors TaxHelper.GenerateTaxes at the midnight the day becomes a multiple
@@ -2542,6 +2517,7 @@ def _tax_period(save: Save) -> dict:
     purchase counts once. On tax day itself the new period has just begun:
     nothing is projected (`fresh`).
     """
+    mod_rules = mod_rules or ModRules(save)
     root = save.root
     gv = save.deref(root.get("gameVariables")) or {}
     per_year = _days_per_year(gv)
@@ -2565,8 +2541,8 @@ def _tax_period(save: Save) -> dict:
             sales += (st or {}).get("TotalSales") or 0
     gambling = max((root.get("CurrentTaxPeriodGamblingWinnings") or 0)
                    - (root.get("CurrentTaxPeriodGamblingLosses") or 0), 0)
-    street_food = ba_street_food.read(save) if ba_street_food else None
-    food_days = ba_street_food.days(save) if ba_street_food else []
+    street_food = mod_rules.street_food
+    food_days = mod_rules.street_food_days
     food_today = 0.0
     for entry in food_days:
         if start <= entry["day"] <= tax_day:
@@ -2583,8 +2559,8 @@ def _tax_period(save: Save) -> dict:
     for row in save.items(root.get("currentTaxPeriodDeductibleExpenses")):
         amount = abs((row or {}).get("amount") or 0)
         label = (row or {}).get("key")
-        semantic = ba_economy.deduction(save, label) if ba_economy else None
-        if ba_street_food and (row or {}).get("key") == ba_street_food.COMMISSARY_EXPENSE:
+        semantic = mod_rules.deduction(label)
+        if mod_rules.is_commissary_expense((row or {}).get("key")):
             # The shared label includes goods, fees and fines: scale paid rent only.
             rent = min(amount, food_rent)
             recurring += rent
@@ -2594,7 +2570,7 @@ def _tax_period(save: Save) -> dict:
             recurring += amount
         else:
             once += amount
-            if (ba_economy and ba_economy.report(save, "rlo") is not None and amount
+            if (mod_rules.report("rlo") is not None and amount
                     and (semantic == "unknown" or (semantic is None
                                                    and not str(label or "").startswith(TAX_ONCE_KEYS)))):
                 unclassified_mod_deductions.append(str(label or ""))
@@ -2621,10 +2597,10 @@ def _tax_period(save: Save) -> dict:
     }
     if street_food and street_food["status"] != "ready":
         result["unavailable"] = "streetFood"
-    if ba_economy and ba_economy.report(save, "rlo") is not None:
-        outside = ba_economy.data(save, "rlo", "outsideStatements")
+    if mod_rules.report("rlo") is not None:
+        outside = mod_rules.data("rlo", "outsideStatements")
         reasons = (["unclassified-mod-deductions"] if unclassified_mod_deductions else [])
-        if outside is None and ba_economy.module(save, "rlo", "outsideStatements")["status"] != "disabled":
+        if outside is None and mod_rules.module("rlo", "outsideStatements")["status"] != "disabled":
             reasons.append("mod-tax-observations-unavailable")
         elif outside is not None and outside["taxEffectsOutsideNativeForecast"]:
             result["taxEffects"] = outside["taxEffectsOutsideNativeForecast"]
@@ -2888,7 +2864,7 @@ def _estate_notes(estate: dict | None) -> list:
     return out
 
 
-def _real_estate(save: Save, names: Names, estate: dict) -> dict:
+def _real_estate(save: Save, names: Names, estate: dict, mod_rules: ModRules | None = None) -> dict:
     """Real estate's two views: the buildings owned and the buildings to buy,
     with the multiplier rent is paid at and the Before tax day plan."""
     buy = estate.get("buy")
@@ -2897,7 +2873,7 @@ def _real_estate(save: Save, names: Names, estate: dict) -> dict:
     tax = estate.get("tax")
     if tax is None:
         candidates = [(b["key"], b["price"]) for b in buy if b["listed"] and b["deductible"]]
-        tax = estate["tax"] = _tax_shelter(save, _tax_period(save), candidates)
+        tax = estate["tax"] = _tax_shelter(save, _tax_period(save, mod_rules), candidates)
     return {
         "owned": estate["rows"], "villas": estate["villas"], "mult": estate["mult"],
         "histFrom": estate["histFrom"], "buy": buy, "tax": tax,
@@ -2905,7 +2881,8 @@ def _real_estate(save: Save, names: Names, estate: dict) -> dict:
 
 
 # ------------------------------------------------------------------ rivalry
-# The Rivals leaderboard as the game ranks it (issue #414), read against build
+# The Rivals leaderboard as the game ranks it (docs/dashboard-reference.md,
+# "The Rivals leaderboard"), read against build
 # 3682's IL: RivalLeaderboard.Load() makes one row per rival in rivalStates plus
 # the player, sorts them by weekly income, highest first, and numbers them by
 # position. Defeated rivals keep their place in the order (they show no rank of
@@ -3682,6 +3659,8 @@ class Build:
         self.shared: dict = {}
         self.private: dict = {}
         self.sections: dict = {}
+        # What the mods change about this save's rules, asked once per build.
+        self.mod_rules = ModRules(save)
 
 
 def extract(save: Save, names: Names, history_path: str | None = None, *, planning_cache=None) -> dict:
@@ -3852,9 +3831,8 @@ def _real_estate_section(build: Build) -> dict:
     """Section realEstate: owned buildings, buildings to buy and Before tax day."""
     estate = build.shared["estate"]
     if estate is None:  # the core's attempt failed: try again here, where a failure shows
-        estate = build.shared["estate"] = _estate_owned(
-            build.save, build.names, ba_mods.detect(build.save) if ba_mods else {})
-    return {"realEstate": _real_estate(build.save, build.names, estate)}
+        estate = build.shared["estate"] = _estate_owned(build.save, build.names, build.mod_rules.detect())
+    return {"realEstate": _real_estate(build.save, build.names, estate, build.mod_rules)}
 
 
 def _open_store_section(build: Build) -> dict:
@@ -3862,14 +3840,14 @@ def _open_store_section(build: Build) -> dict:
     s = build.shared
     return {"openStore": _open_store(build.save, build.names, s["buildings"], s["businesses"],
                                     build.sections["premises"]["premises"], s["all_grids"],
-                                    s["stmt_history"], s["daily"], s["staff"])}
+                                    s["stmt_history"], s["daily"], s["staff"], build.mod_rules)}
 
 
 def _open_factory_section(build: Build) -> dict:
     """Section openFactory: factory costs and opening requirements."""
     s = build.shared
     return {"openFactory": _open_factory(build.save, build.names, s["buildings"],
-                                        s["businesses"], s["recipes"], s["staff"])}
+                                        s["businesses"], s["recipes"], s["staff"], build.mod_rules)}
 
 
 # The section registry: each section's payload keys, the sections it needs
@@ -3991,16 +3969,17 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         addr = _address_of(b, strict=True)
         if addr in residential:
             continue
-        row = _business(save, names, b, addr, latest, stmt_history, staff_by_addr, day, agencies)
+        row = _business(save, names, b, addr, latest, stmt_history, staff_by_addr, day, agencies,
+                        build.mod_rules)
         # The game's own switch that shuts a site's doors, which the
         # not-trading finding names as a reason of its own.
         row["closed"] = bool(b.get("temporarilyClosed"))
-        if ba_economy and ba_economy.report(save, "rlo") is not None:
-            accounting = ba_economy.outside(save, addr)
+        if build.mod_rules.report("rlo") is not None:
+            accounting = build.mod_rules.outside(addr)
             row["modAccounting"] = accounting if accounting is not None else {
                 "coverage": "unavailable", "knownOmittedCategories": [], "rows": [],
                 "statementAdjustment": "none", "balancesAreSeparate": True}
-            closure = ba_economy.closures(save, addr)
+            closure = build.mod_rules.closures(addr)
             if closure:
                 row["modClosures"] = closure
         businesses.append(row)
@@ -4093,7 +4072,7 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     build.private["posts"] = _take_posts(factories)
     build.private["hires"] = {}
     # The mod adapters in use and their inputs (ba_mods.py); none on a vanilla save.
-    mods = ba_mods.detect(save) if ba_mods else {}
+    mods = build.mod_rules.detect()
     # Real estate's owned buildings: core, for the sidebar's count and the
     # rent finding; the buy list and the tax plan wait for the page, but on
     # the last day before tax day the count needs the plan too.
@@ -4106,8 +4085,8 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
     except Exception:
         estate = None
     try:
-        if estate is not None and _tax_period(save)["left"] == 1:
-            _real_estate(save, names, estate)
+        if estate is not None and _tax_period(save, build.mod_rules)["left"] == 1:
+            _real_estate(save, names, estate, build.mod_rules)
     except Exception:
         estate.pop("buy", None)
         estate.pop("tax", None)
@@ -4551,9 +4530,9 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
     workedOver: how many, and the most hours or days the demand allows. A demand
     the table does not know, from a newer game, is left out rather than guessed at.
 
-    Somebody given no hours at the site holds no demand here at all (Peter, 30
-    September 2026: "this should not be a warning, more an opportunity. You can
-    reduce your headcount"): a full-time or four-day demand is only unmet once
+    Somebody given no hours at the site holds no demand here at all, a chance to
+    run with fewer people rather than a warning (docs/dashboard-reference.md,
+    "Staff demands"): a full-time or four-day demand is only unmet once
     they have a week, and a desk, a building or insurance only matter while
     they work, and a quit warning from one of them is somebody the site can
     do without leaving. Their ids are listed as staffIdle instead, the people
@@ -4783,7 +4762,8 @@ def shift_print(entries) -> str:
     return f"{value:08x}"
 
 
-def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencies=None) -> dict:
+def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencies=None,
+              mod_rules: ModRules | None = None) -> dict:
     # The address keeps its takings after a business closes: a statement from
     # before this business opened (or from a day it did not exist) is the old
     # tenant's, not this one's. The game still counts it in the day's business
@@ -4955,7 +4935,8 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
     crew = staff_by_addr.get(addr, [])
     sat = save.deref(b.get("satisfaction")) or {}
     promo = save.deref(b.get("promotion")) or {}
-    reported_promotion = ba_economy.footfall(save).get(addr) if ba_economy else None
+    mod_rules = mod_rules or ModRules(save)
+    reported_promotion = mod_rules.footfall.get(addr)
     if reported_promotion and reported_promotion["status"] == "ready":
         promo = {**promo, "total": reported_promotion["writtenPromotion"]}
     btype = b.get("businessTypeName", "")
@@ -4993,7 +4974,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
     )
     wants_uniforms = status == "retail" and UNIFORM_DEMAND not in not_made
     uniform_gaps = _uniform_gaps(save, b, crew, names) if wants_uniforms else []
-    campaigns, marketing = _marketing(save, b, building, status, neighbourhood, promo, agencies)
+    campaigns, marketing = _marketing(save, b, building, status, neighbourhood, promo, agencies, mod_rules)
 
     return {
         "name": name or "Vacant lease",
@@ -5028,8 +5009,8 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
             "facility": sat.get("facility", 0),
         },
         "promotion": promo.get("total", 0),
-        **({"promotionUnavailable": True} if ba_economy and ba_economy.report(save, "rlo") is not None
-           and ba_economy.module(save, "rlo", "footfall")["status"] != "disabled"
+        **({"promotionUnavailable": True} if mod_rules.report("rlo") is not None
+           and mod_rules.module("rlo", "footfall")["status"] != "disabled"
            and (not reported_promotion or reported_promotion["status"] != "ready") else {}),
         "traffic": promo.get("trafficIndex", 0),
         "marketingIndex": promo.get("marketing", 0),
@@ -5166,7 +5147,8 @@ def _marketing_agencies(save, names=None) -> list:
     return out
 
 
-def _marketing(save, b, building, status, neighbourhood, promo, agencies=None) -> tuple[list, dict | None]:
+def _marketing(save, b, building, status, neighbourhood, promo, agencies=None,
+               mod_rules: ModRules | None = None) -> tuple[list, dict | None]:
     """A site's campaigns, and its cheapest mix (marketing_plan()).
 
     `campaigns` is one row per entry the game holds: the type's enum name, the
@@ -5175,11 +5157,9 @@ def _marketing(save, b, building, status, neighbourhood, promo, agencies=None) -
     known; anything else gets None. `on` and `was` are enum names, as the write
     sends them.
 
-    Peter's rule (28 Sep 2026): a type the site already has an entry for (a
-    switch in BizMan) is turned on or off at any time, whatever its agency. A
-    type with no entry needs a new one, which only an agency that is a phone
-    contact adds, and only while it is open. So the plan may switch the types
-    with an entry and the types a contacted agency sells; any other stays off.
+    The plan may switch the types the site already has an entry for (a switch
+    in BizMan) and the types a contacted agency sells; any other stays off
+    (docs/dashboard-reference.md, "What a shop's and an office's page adds").
     With no type free and a change wanted the plan's `on` is None.
     `visit` names the agencies, not contacts yet, whose types would make a
     better plan (a higher promotion, or the same for less); `visitRaises`, that
@@ -5190,6 +5170,7 @@ def _marketing(save, b, building, status, neighbourhood, promo, agencies=None) -
     none. `needsSetup`: a type a contacted agency sells has no entry, so
     BizMan does not show its switch yet.
     """
+    mod_rules = mod_rules or ModRules(save)
     campaigns = []
     unknown_campaign = False
     types = (getattr(save, "facts", None) or {}).get("marketingTypes")
@@ -5205,7 +5186,7 @@ def _marketing(save, b, building, status, neighbourhood, promo, agencies=None) -
                           "enabled": bool(c.get("enabled"))})
     if status not in ("retail", "office") or not building:
         return campaigns, None
-    if unknown_campaign or building.get("marketingUnavailable") or (ba_mods and ba_mods.capabilities(save).get("marketing")):
+    if unknown_campaign or building.get("marketingUnavailable") or mod_rules.capabilities.get("marketing"):
         return campaigns, {"unavailable": True, "on": None, "needsSetup": False, "visit": [],
                            "costPlan": None, "costNow": None}
     sqm, kind = building.get("m"), building.get("t")
@@ -5228,25 +5209,25 @@ def _marketing(save, b, building, status, neighbourhood, promo, agencies=None) -
     free = entered | new_ok
     traffic = promo.get("trafficIndex", 0) or 0
     adjustments = {}
-    if ba_economy and ba_economy.report(save, "rlo") is not None:
+    if mod_rules.report("rlo") is not None:
         addr = _address_of(b)
-        module = ba_economy.module(save, "rlo", "footfall")
+        module = mod_rules.module("rlo", "footfall")
         if module["status"] != "disabled":
-            current = ba_economy.footfall(save).get(addr)
-            if not current or current["status"] != "ready" or ba_economy.promotion(save, addr, 0) is None:
+            current = mod_rules.footfall.get(addr)
+            if not current or current["status"] != "ready" or mod_rules.promotion(addr, 0) is None:
                 return campaigns, {"unavailable": True, "on": None, "needsSetup": False, "visit": [],
                                    "costPlan": None, "costNow": None}
             native_own = marketing_score(traffic, was, sqm, kind, neighbourhood, rules)[1]
             if current["ownPromotion"] != native_own:
                 return campaigns, {"unavailable": True, "on": None, "needsSetup": False, "visit": [],
                                    "costPlan": None, "costNow": None}
-            adjustments["promotion_fn"] = lambda own: ba_economy.promotion(save, addr, own)
-        price_module = ba_economy.module(save, "rlo", "prices")
+            adjustments["promotion_fn"] = lambda own: mod_rules.promotion(addr, own)
+        price_module = mod_rules.module("rlo", "prices")
         if price_module["status"] not in ("disabled", "ready"):
             return campaigns, {"unavailable": True, "on": None, "needsSetup": False, "visit": [],
                                "costPlan": None, "costNow": None}
         if price_module["status"] == "ready" and "ba:transaction_marketing" in price_module["data"]["livingTransactionTypes"]:
-            adjustments["cost_fn"] = lambda cost: ba_economy.city_amount(save, cost)
+            adjustments["cost_fn"] = lambda cost: mod_rules.city_amount(cost)
     best = marketing_plan(traffic, was, sqm, kind, neighbourhood, rules=rules, **adjustments)
     plan = marketing_plan(traffic, was, sqm, kind, neighbourhood, free, rules, **adjustments)
     unavailable = bool(unknown_campaign or building.get("factsUnavailable") or
@@ -6612,7 +6593,8 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
 
     `routed(site, item)`, given, is {sender: its part of all the site hands
     on and uses} where Demand sizing solved the split of a chain the site is
-    in (#521, _DemandSizing.walk_split()), else None. Such a site asks each
+    in (_DemandSizing.walk_split(), docs/dashboard-reference.md, "The supply
+    chain view"), else None. Such a site asks each
     route for that part of its need and its own supply (its lines, its
     import) brings the rest: a top-up route brings what the site's stock
     lost, and the lines making it there run steadily, so the routes bring
@@ -7774,7 +7756,8 @@ class _DemandSizing:
     set_made().
 
     A site whose own lines make an item that routes from the company's
-    other sites also bring it (a factory fed the product by another, #521)
+    other sites also bring it (a factory fed the product by another;
+    docs/dashboard-reference.md, "The supply chain view")
     shares what the ends draw from it between the two (made_share()), so the
     same shop sale is never asked of both."""
 
@@ -8017,7 +8000,8 @@ class _DemandSizing:
     def made_share(self, site: str, item: str, eats=None) -> float | None:
         """The share of what the ends draw of `item` from `site` that its own
         lines make, where routes from the company's other sites bring it
-        there too (#521): Factory 2 makes soda and is topped up with Factory
+        there too (docs/dashboard-reference.md, "The supply chain view"):
+        Factory 2 makes soda and is topped up with Factory
         1's, and the shops past it sell 10,000 a week; the two make it
         between them, never 10,000 each. Every such split of the item is
         worked out together (_splits()), and so is a site with no route
@@ -8365,7 +8349,8 @@ class _DemandSizing:
         [(merge site, [the sites whose routes bring it there], what the
         lines there and those routes bring a day together)]. Where a line
         falls short, one of them is the link of the chain it shares with
-        others (#521). A share within MERGE_SHARE_SLACK of nothing or of
+        others (docs/dashboard-reference.md, "The supply chain view"). A share
+        within MERGE_SHARE_SLACK of nothing or of
         all of it counts as that: a route carrying a billionth of a unit a
         day meets nothing."""
         seen, ring = {site}, [site]
@@ -9098,7 +9083,7 @@ def _supply_graph(save: Save, names: Names, businesses: list, index: dict, *, ed
         factor, _peak_day = peak_of(business)
         for line in business["lines"]:
             # A ticket is issued at the booth, never held: no stock, need or
-            # refill belongs on the node (issue #159).
+            # refill belongs on the node (docs/dashboard-reference.md, "Reading the numbers").
             if line.get("issued"):
                 continue
             shop = shop_need[business["key"]].get(line["item"])
@@ -9427,7 +9412,7 @@ def _supply_factory_flow(save: Save, names: Names, businesses: list, *, index: d
         "day": day,
         "demand": sizing.demand,
         # The share of a site's draw its own lines make, where routes bring
-        # the same item there too (#521).
+        # the same item there too (docs/dashboard-reference.md, "The supply chain view").
         "madeShare": sizing.made_share,
         "merges": sizing.merges,
         # The chain whose split a line shares, for the sold days to add up.
@@ -11217,7 +11202,8 @@ def _unnamed_hours(machines_posted: list) -> dict:
 
 def _rounded_together(exacts: list) -> list | None:
     """Whole units for figures that add up together (a chain's lines' sold
-    days, #521): each one's whole units, and one more for those with the
+    days; docs/dashboard-reference.md, "The supply chain view"): each one's whole
+    units, and one more for those with the
     largest fractions until they add up to the rounded total. None where
     the last unit would fall between fractions within a ten-thousandth of
     each other, which only a site's name could tell apart: each then keeps
@@ -11398,7 +11384,7 @@ def _factories(
     def lines_share(key, slug):
         """The share of what the ends draw from `key` that its own lines
         make: all of it unless routes from other sites bring the product
-        there too (made_share(), #521)."""
+        there too (made_share(); docs/dashboard-reference.md, "The supply chain view")."""
         got = made_share(key, slug, dem_eats) if made_share else None
         return 1.0 if got is None else got
 
@@ -11433,7 +11419,8 @@ def _factories(
     chained_sold = []
 
     def named_by(site):
-        """A site's order where a chain's tip ties (#521): its business
+        """A site's order where a chain's tip ties (docs/dashboard-reference.md,
+        "The supply chain view"): its business
         name as a player reads a list (case aside, then case), then its
         key."""
         name = (businesses[index[site]].get("name") or "") if site in index else ""
@@ -11525,7 +11512,8 @@ def _factories(
             else:
                 group = None
             # Where the product meets another site's of it on the way to the
-            # shops (#521), the link this line shares: the merge site, the
+            # shops (docs/dashboard-reference.md, "The supply chain view"), the link
+            # this line shares: the merge site, the
             # sites whose routes bring it there, what they and the lines
             # there make a day together, and what is drawn from it with the
             # margin, on the same reading as `needDay`. Of the nearest
@@ -11748,7 +11736,8 @@ def _factories(
             }
         )
 
-    # Lines sharing a chain's split (#521) each read their share of what
+    # Lines sharing a chain's split (docs/dashboard-reference.md, "The supply
+    # chain view") each read their share of what
     # the shops past them sell, rounded so that together they add up to
     # the chain's own rounded total: each line's whole units, and one more
     # for those with the largest fractions until they do (one line rounded
@@ -14239,7 +14228,8 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
     return rows, dict(weeks)
 
 
-# --- the rule for the people a site already has (Peter, 28-29 September 2026)
+# --- the rule for the people a site already has (docs/dashboard-reference.md,
+# "The week the board would copy into BizMan")
 # Somebody already working here may be given no hours (they are spare, and
 # the Staff page offers to move them), or a week that still meets every
 # schedule demand they hold; somebody it does not meet now may be moved any
@@ -14265,7 +14255,8 @@ def _worse_off(person: dict, entry: dict, before: tuple, now: dict) -> bool:
     """Whether a planned week cuts somebody short of a demand the week they have meets better.
 
     No hours at all is never worse off: the person is spare, and the Staff
-    page offers to move them (Peter, 29 September 2026: "0 h is fine"). A
+    page offers to move them (docs/dashboard-reference.md, "The week the board
+    would copy into BizMan"). A
     week with hours in it has to keep the hours band's floor (its ceiling and
     the rest are never broken by the placer) and an exact day count, or leave
     them no further from it than now: a person with no hours demand may be cut
@@ -14337,7 +14328,8 @@ def _without_pins(slots: list, pins: list) -> list:
     return out
 
 
-# --- while the plan waits on somebody (issue #446)
+# --- while the plan waits on somebody (docs/dashboard-reference.md, "The week
+# the board would copy into BizMan")
 # A write sends the plan's entries for the people already here and leaves the
 # ones that wait on a hire or a bench member empty until the player adds them.
 # A plan that moved somebody off an hour they work now, and gave that hour to
@@ -15784,8 +15776,8 @@ def _staffing(
         scratch = {pid: _copy_state(entry) for pid, entry in site["before"].items()
                    if pid not in free}
         scratch.update({pid: _copy_state(shared[pid]) for pid in free})
-        # The Staff page's plan for the shop (Peter, 26 September 2026:
-        # "Staff the hours it's open, never change opening"): the hours it
+        # The Staff page's plan for the shop, which never changes its opening
+        # (docs/dashboard-reference.md, "What's on the board"): the hours it
         # opens now and never more, placed from the same starting week as the
         # full-cover plan, as the other choice to it. See _open_need().
         opened_scratch = {pid: _copy_state(entry) for pid, entry in scratch.items()}
@@ -15793,7 +15785,8 @@ def _staffing(
         offered = any(s["skill"] for s in grid["stations"]) and any(grid["open"])
         try:
             # Full cover keeps the people here on the hours they work now while
-            # it waits on a hire (issue #446) only where the shop is open around
+            # it waits on a hire (docs/dashboard-reference.md, "The week the board
+            # would copy into BizMan") only where the shop is open around
             # the clock already, so the week is the hours it runs: holding them
             # in every shop's longest week cost the board most of a second
             # placement of it (+84% extract on the largest save). Elsewhere the
@@ -15910,7 +15903,8 @@ def _open_need(site: dict) -> dict:
     A shop without: its demand curve, with every open hour nothing has read
     (basis `none`) given every station of the role (_open_floor()), which the
     page uses in place of the demand plan -- an open hour needs its stations
-    before anything is measured (Peter, 26 September 2026). Hours the shop is
+    before anything is measured (docs/dashboard-reference.md, "What's on the
+    board"). Hours the shop is
     shut are left out by the placer either way.
     """
     if site["run"] >= DEMAND_RUN_DAYS:
@@ -16324,7 +16318,8 @@ def _factory_site_plan(save, building, site, business, posts_of, pool, people, m
 
 
 # How many finished days since the shop first opened make the demand data good
-# enough for the demand plan (Peter, 23 September 2026): nine covers every
+# enough for the demand plan (docs/dashboard-reference.md, "The week the board
+# would copy into BizMan"): nine covers every
 # weekday once and two of them twice, a week and a bit of game time rather than
 # the fortnight HOUR_WEEKS_THIN would take. Not nine in a row: a nightclub shut
 # every Monday still completes on its ninth day, and its Mondays are no demand.
@@ -16407,8 +16402,9 @@ def _run_measured(grid: dict, run: int, daily: list | None = None) -> dict:
     The demand plan calls a weekday thin below HOUR_WEEKS_THIN weeks and reads
     a thin weekday off another through the game's day curve, or not at all; an
     hour with no report it reads off another weekday the same way. Nine days
-    since the shop first opened are what Peter decided is enough (23 September
-    2026). So for such a shop no weekday is thin, and every hour with no report
+    since the shop first opened are enough (DEMAND_RUN_DAYS, docs/dashboard-reference.md,
+    "The week the board would copy into BizMan"). So for such a shop no weekday
+    is thin, and every hour with no report
     on file counts as no customers: the shop was shut then, or empty, and
     either way nobody is staffed for it. A weekday it never opened is no demand
     all day. `daily`, from _open_day_average(), replaces each hour's average
@@ -16501,8 +16497,9 @@ def _full_cover_in_game(current: list, stations: list, slots: list) -> bool:
     """Whether the schedule in the game is full cover of the shop's own hours.
 
     Every serving station staffed every hour the shop is open, whatever those
-    hours are (Peter, 23 September 2026: the player may keep a shorter day, and
-    the plan counts its shut hours as no demand). Nothing less inside them: an
+    hours are: the player may keep a shorter day, and the plan counts its shut
+    hours as no demand (docs/dashboard-reference.md, "The week the board would
+    copy into BizMan"). Nothing less inside them: an
     hour a register stands empty is an hour whose customers were turned away by
     the schedule rather than by demand. A site with no serving station, or one
     open no hour at all, has no demand to test, so it never is one.
@@ -16558,7 +16555,8 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     for snap in (True, False):
         trial = {pid: _copy_state(entry) for pid, entry in kept.items()}
         # With `keep`, each re-cut week is held against its own re-cut plain
-        # week (issue #446), not against the plain cut above; the rank then
+        # week, the hold of docs/dashboard-reference.md, "The week the board would
+        # copy into BizMan", not against the plain cut above; the rank then
         # picks among weeks that each passed that guard.
         other = _place_cut_week(*args, trial, cuts=cuts, snap=snap, **kwargs)
         moved = other.pop("snapMoved")
@@ -16865,7 +16863,7 @@ def _week_d_place(ctx: dict) -> None:
     )
 
     shifts, hire_weeks, here = _week_d_fill(ctx, [])
-    # Issue #446: a write leaves out every entry that waits on somebody not
+    # A write leaves out every entry that waits on somebody not
     # here yet, so a plan that moved a person off an hour they work now and
     # gave the hour to a hire is a week with fewer people in that hour until
     # the hire comes. Where the plain week does that, it is placed again with
@@ -16876,7 +16874,7 @@ def _week_d_place(ctx: dict) -> None:
     # week is kept only if it puts nobody to work the plain week leaves at
     # 0 h, draws the same bench members, hires no more people, and leaves
     # fewer hours short; the first that does is kept. Otherwise the plain
-    # week stands.
+    # week stands (docs/dashboard-reference.md, "The week the board would copy into BizMan").
     dropped, missing = _waiting_drops(shifts, standing, role_keys) if standing else ([], 0)
     if dropped:
         start, keys = ctx["start"], ctx["keys"]
@@ -17547,7 +17545,8 @@ def _finish_site(site, full, names, people, opened=None) -> dict:
     }
 
 
-# --- hiring: the Staff page (issue #89; docs/architecture.md, the payload contract)
+# --- hiring: the Staff page (docs/dashboard-reference.md, "What's on the board";
+# docs/architecture.md, the payload contract)
 #
 # The skills a business accepts when the player assigns somebody to it, as the
 # game's own check has them (AssignToBusinessAndHireMassAction and
@@ -17596,7 +17595,7 @@ ASSIGN_SKILLS = {
 }
 FACTORY_TYPES = COST_CENTRE_TYPES - OVERHEAD_TYPES
 
-# Peter's office default (25 Sep 2026; docs/dashboard-reference.md): "computers
+# The office default (docs/dashboard-reference.md, "What's on the board"): "computers
 # staffed 24/7 = 3 in a 50-capacity building, proportionally fewer in smaller
 # ones (at least 1); every computer 8 to 22 on weekdays; half the computers 8 to
 # 22 on weekends." For every office: round(3 x door / 50) computers, at least 1
@@ -17679,7 +17678,8 @@ def _office_recent(save: Save, building: dict) -> list:
 # An office hour is cut only when both of its latest readings sit this far
 # under today's computers. The plan adds one computer at a time, so a reading
 # one under today's may be from before its own last step up; two under cannot
-# be (Peter, 11 October 2026). From 20 computers an hour a reading one under is
+# be (docs/dashboard-reference.md, "What's on the board"). From 20 computers an
+# hour a reading one under is
 # already full (AT_CAP), so the cut also asks that the readings were not full
 # one computer down: otherwise it would undo the step that reading caused.
 OFFICE_CUT_GAP = 2
@@ -18242,8 +18242,9 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             full = take((row or {}).get("fullCover"))
             opened = take((row or {}).get("openCover"))
             if row and not row.get("failed") and demand is not None:
-                # Peter (26 September 2026): "Staff the hours it's open, never
-                # change opening." The Staff page never uses full cover, whose
+                # The Staff page staffs the hours a shop is open and never changes
+                # its opening (docs/dashboard-reference.md, "What's on the board"),
+                # so it never uses full cover, whose
                 # write opens a shop 0 to 24: it has the open-hours plan
                 # (`open`, _open_need()) instead. Without complete data that
                 # plan replaces the demand plan, whose unread open hours had
@@ -18259,7 +18260,8 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
                     if opened is not None:
                         plans["open"] = opened
             # Full cover (24/7), for a shop whose Staffing block the player
-            # put on it (29 September 2026): the page hires into it and its
+            # put on it (docs/dashboard-reference.md, "What a shop's and an office's
+            # page adds"): the page hires into it and its
             # write opens the shop 0 to 24 there, and nowhere else.
             if row and not row.get("failed") and full is not None:
                 plans["full"] = full
@@ -19305,8 +19307,8 @@ def _counts_only(grids: list) -> None:
 
     Old counts cannot name today's bottleneck, so the hour findings stay off
     for them (_hour_findings()); the demand plans read them as they are
-    (_need_curve() over _run_measured()), with no measurement to start (Peter,
-    9 and 10 October 2026). An office whose save holds no opening hours is
+    (_need_curve() over _run_measured()), with no measurement to start
+    (docs/dashboard-reference.md, "What's on the board"). An office whose save holds no opening hours is
     open around the clock, as the office default plans it.
     """
     for grid in grids:
@@ -19907,7 +19909,7 @@ def _site_trends(businesses: list, day: int) -> list:
 # ------------------------------------------------------------------- payback
 # What a site cost to set up, and when its profit paid that back
 # (docs/dashboard-reference.md, "Payback"). The rules are the game's own, read
-# from its code on 28 Sep 2026 and checked against six real bills to the coin:
+# from its code and checked against six real bills to the coin:
 #   installation firm  586 x the building's m² + every item at its default
 #                      price; walls and floors cost nothing
 #                      (InteriorInstallationFirmHelper.GetInstallationFee)
@@ -20931,7 +20933,8 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
         shows = catalogue.displays.get(p, ())
         # A main product, or one a requirement names, with no display made
         # for the type takes any that works in it: a fast food restaurant's
-        # ice cream stands in the coffee shop's counter (issue #497). An extra
+        # ice cream stands in the coffee shop's counter (docs/dashboard-reference.md,
+        # "Open a store"). An extra
         # (weight under 1) is left to outfit_optional(), which allows the same.
         item, qty = sized(shows)
         if not item and (main.get(p, 0) >= 1 or p in shelf_products):
@@ -21252,7 +21255,8 @@ def _opened_stores(save: Save, regs: dict, businesses: list, types: dict, rules:
     return out
 
 
-def _store_market(save: Save, rules: dict, items: set, mpm: float, agent: int) -> dict:
+def _store_market(save: Save, rules: dict, items: set, mpm: float, agent: int,
+                  mod_rules: ModRules | None = None) -> dict:
     """What each product meets in each neighbourhood today.
 
     Per item: its default price, sales ratio, whether it has a neighbourhood
@@ -21305,14 +21309,14 @@ def _store_market(save: Save, rules: dict, items: set, mpm: float, agent: int) -
     discount = 1 - 0.25 * max(0, min(100, agent)) / 100
     # Alcware Seasons rescales 27 products' sales ratio each game day
     # (ba_mods.sales_ratio()); without its calendar the ratio is the game's.
-    calendar, today = ba_mods.seasons(save) if ba_mods else None, save.root.get("Day") or 0
+    mod_rules, today = mod_rules or ModRules(save), save.root.get("Day") or 0
     hoods = _in_order({h for (_n, h) in sellers} | {h for (_n, h) in lowest})
     out = {}
     for name in _in_order(items):
         row = products.get(name) or {}
         out[name] = {
             "p": row.get("p") or 0,
-            "r": ba_mods.sales_ratio(row.get("r") or 0, name, calendar, today) if calendar else row.get("r") or 0,
+            "r": mod_rules.sales_ratio(row.get("r") or 0, name, today),
             "d": row.get("d") or 0,
             "s": row.get("s") or 0,
             "opt": optimal_providers(row.get("p") or 0),
@@ -21425,7 +21429,7 @@ def _own_sales(save: Save, regs: dict, businesses: list, market: dict, day: int)
     return {hood: dict(items) for hood, items in sorted(out.items())}
 
 
-def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
+def _finance_facts(save: Save, daily: list, rules: dict, mod_rules: ModRules | None = None) -> dict:
     """What the banks weigh before they lend (Dialogs.BankDialog.LoanRequest),
     and their terms.
 
@@ -21439,6 +21443,7 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
     address it names; one at an address that is no bank still counts in
     what is owed overall.
     """
+    mod_rules = mod_rules or ModRules(save)
     root = save.root
     gv = save.deref(root.get("gameVariables")) or {}
     funds = 0.0
@@ -21448,7 +21453,7 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
             - (fund.get("withdrawal") or 0) + (fund.get("interestPayment") or 0)
     property_ = sum((save.deref(e) or {}).get("purchasePrice") or 0 for e in save.items(root.get("realEstate")))
     motor_prices, non_motor = rules.get("vehicles") or {}, rules.get("nonMotorVehicles") or []
-    prices, price_model = ba_mods.vehicle_prices(save, motor_prices, non_motor) if ba_mods else ({**dict.fromkeys(non_motor, 0), **motor_prices}, True)
+    prices, price_model = mod_rules.vehicle_prices(motor_prices, non_motor)
     owned_types = [(save.deref(v) or {}).get("vehicleTypeName") for v in save.items(root.get("VehicleInstances"))]
     unknown_vehicles = sorted({str(kind or "unknown") for kind in owned_types if kind not in prices})
     vehicles = sum(prices.get(kind, 0) for kind in owned_types)
@@ -21473,10 +21478,9 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
             "term": per_year * (terms.get("y") or 0), "owed": money(owed.get(bank, 0)),
         })
     finance_unavailable = None
-    if ba_economy:
-        import ba_facts
-        owner = ba_economy.data(save, "rlo", "bankTerms")
-        native = ba_facts.native_economy(getattr(save, "facts", None), "banks")
+    if mod_rules.economy:
+        owner = mod_rules.data("rlo", "bankTerms")
+        native = mod_rules.native_economy("banks")
         if owner is not None and (owner["additionalCreditIncluded"] or owner["principalIsExpense"]):
             # The native loan model has neither the additional credit ledger
             # nor a principal-as-expense projection. Keep recorded totals, but
@@ -21485,8 +21489,8 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
             finance_unavailable = ("additional-credit-eligibility" if owner["additionalCreditIncluded"]
                                    else "principal-expense-basis")
         elif owner is not None:
-            banks = [{"id": row["bankId"], "name": BANK_PLACES.get(row["bankId"], (row["bankId"], None))[0], "key": site_key(ba_economy.address(row)),
-                      "rate": ba_facts.catalogue_amount(row["annualRatePercent"]), "interestMultiplier": 1,
+            banks = [{"id": row["bankId"], "name": BANK_PLACES.get(row["bankId"], (row["bankId"], None))[0], "key": site_key(mod_rules.address(row)),
+                      "rate": mod_rules.amount(row["annualRatePercent"]), "interestMultiplier": 1,
                       "years": row["termDays"] / per_year, "term": row["termDays"],
                       "max": row["capCents"] / 100, "owed": row["nativeDebtAtBankCents"] / 100,
                       "incomeShare": row["incomeTermShareThousandths"] / 1000,
@@ -21495,15 +21499,15 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
                          and row.get("securedCapTreatment") != "included-in-effective-cap" else {})}
                      for row in owner["banks"]]
         elif native is not None:
-            banks = [{"id": site_key(ba_economy.address(row)), "name": row["name"], "key": site_key(ba_economy.address(row)),
-                      "rate": row["annualRatePercent"], "interestMultiplier": ba_facts.catalogue_amount(row["interestMultiplier"]),
+            banks = [{"id": site_key(mod_rules.address(row)), "name": row["name"], "key": site_key(mod_rules.address(row)),
+                      "rate": row["annualRatePercent"], "interestMultiplier": mod_rules.amount(row["interestMultiplier"]),
                       "years": row["yearsToPayLoan"], "term": row["paybackDays"],
-                      "max": ba_facts.catalogue_amount(row["capAmount"]),
-                      "owed": money(owed.get(places.get(site_key(ba_economy.address(row))), 0)),
+                      "max": mod_rules.amount(row["capAmount"]),
+                      "owed": money(owed.get(places.get(site_key(mod_rules.address(row))), 0)),
                       **({"unavailable": "secured-bank-eligibility"} if row["securedAccountRules"] != "none" else {})}
                      for row in native]
-        elif ((ba_economy.report(save, "rlo") is not None
-               and ba_economy.module(save, "rlo", "bankTerms")["status"] != "disabled")
+        elif ((mod_rules.report("rlo") is not None
+               and mod_rules.module("rlo", "bankTerms")["status"] != "disabled")
                 or "nativeEconomy" in (getattr(save, "facts", None) or {})):
             banks = []
             finance_unavailable = "native-bank-terms"
@@ -21523,14 +21527,15 @@ def _finance_facts(save: Save, daily: list, rules: dict) -> dict:
 
 
 def _open_store(save: Save, names: Names, regs_list: list, businesses: list, premises: dict,
-                grids: list, stmt_history: list, daily: list, staff: list) -> dict:
+                grids: list, stmt_history: list, daily: list, staff: list,
+                mod_rules: ModRules | None = None) -> dict:
     """The facts Expansion › Open a store plans with (see the section note)."""
     rules = load_store_rules()
     if not rules.get("types"):
         return {}
+    mod_rules = mod_rules or ModRules(save)
     prices = load_item_prices()
-    if ba_economy:
-        rules, prices = ba_economy.tables(save, rules, prices)
+    rules, prices = mod_rules.tables(rules, prices)
     catalogue = _OutfitCatalogue(rules, prices)
     root = save.root
     day = root["Day"]
@@ -21652,13 +21657,13 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
                if model == "office" else {}),
         }
 
-    market = _store_market(save, rules, product_items, mpm, agent)
+    market = _store_market(save, rules, product_items, mpm, agent, mod_rules)
     # The cheapest walls and floors to each interior score a neighbourhood
     # asks for (Midtown's 50 today), per layout: {layout: {score: route}}.
     decor = {}
     materials = prices.get("materials") or {}
     targets = sorted({int(h.get("mi") or 0) for h in (rules.get("hoods") or {}).values()} - {0})
-    mod_interiors = ba_economy and ba_economy.data(save, "rlo", "interiors") is not None
+    mod_interiors = mod_rules.data("rlo", "interiors") is not None
     for layout in _in_order({layout for t in types.values() for layout in t["layouts"]}):
         # A layout nobody has read is costed as another version of its size.
         near = layout if layout in slots else next((k for k in sorted(slots) if k[:1] == layout[:1]), None)
@@ -21694,10 +21699,10 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
     table = prices.get("items") or {}
     vendors = rules.get("vendors") or {}
     used_vendors = {v for item in items_used for v in (furniture.get(item) or {}).get("v") or ()}
-    compatibility = ba_mods.capabilities(save) if ba_mods else {}
+    compatibility = mod_rules.capabilities
     return {
         **({"compatibility": compatibility} if compatibility else {}),
-        **({"modEconomy": ba_economy.planner(save)} if ba_economy and ba_economy.planner(save) else {}),
+        **({"modEconomy": mod_rules.planner} if mod_rules.planner else {}),
         "game": {
             "promo": round(_house_rule(gv, "baseCustomerPromotionMultiplier"), 4),
             "prices": round(mpm, 4),
@@ -21714,7 +21719,7 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
                        "weekend": list(OFFICE_WEEKEND)},
         },
         "types": types,
-        **({"priceUnavailable": missing_prices} if ba_economy and (missing_prices := ba_economy.price_unavailable(save, items_used | product_items)) else {}),
+        **({"priceUnavailable": missing_prices} if (missing_prices := mod_rules.price_unavailable(items_used | product_items)) else {}),
         "market": market,
         "hoods": hoods,
         "decor": decor,
@@ -21729,13 +21734,14 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
         # Each cinema and theatre: its size and version, and what that seats.
         "venues": {b["key"]: [plan_layout(b), b.get("cap")]
                    for b in buildings if b["type"] in ("cinema", "theater") and plan_layout(b)},
-        "finance": _finance_facts(save, daily, rules),
+        "finance": _finance_facts(save, daily, rules, mod_rules),
     }
 
 
 # ----------------------------------------------------------- plan a factory
-# Expansion › Plan a factory (issue #172, mockup/factory-flow/NOTES.md on the
-# factory-flow-canvas branch): the facts a factory plan is priced from. As for
+# Expansion › Plan a factory (docs/dashboard-reference.md, "Plan a factory";
+# mockup/factory-flow/NOTES.md on the factory-flow-canvas branch): the facts a
+# factory plan is priced from. As for
 # a store, Python says what the save and the game's tables hold and the board
 # does the arithmetic the reader moves (the lines, the building, the install
 # mode, the loan). No break-even: a factory is a cost centre of its chain.
@@ -21822,7 +21828,7 @@ def _factory_days(save: Save, reg: dict) -> dict:
 
 
 def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, recipes: dict,
-                  staff: list) -> dict:
+                  staff: list, mod_rules: ModRules | None = None) -> dict:
     """The facts Expansion › Plan a factory prices a plan from.
 
     `products`: per recipe product and ingredient, its wholesale price (`w`),
@@ -21849,10 +21855,10 @@ def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, r
     products = rules.get("products") or {}
     if not products:
         return {}
+    mod_rules = mod_rules or ModRules(save)
     prices = load_item_prices()
-    if ba_economy:
-        rules, prices = ba_economy.tables(save, rules, prices)
-        products = rules.get("products") or {}
+    rules, prices = mod_rules.tables(rules, prices)
+    products = rules.get("products") or {}
     root = save.root
     gv = save.deref(root.get("gameVariables")) or {}
     agents = sorted(((p.get("level") or 0, str(p.get("name") or "")) for p in staff
@@ -21922,14 +21928,14 @@ def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, r
             "kind": kind,
             "shelves": _placed_items(save, reg).get(PALLET_SHELF, 0),
             **({"open": _open_hours(save, reg), "building": {**_building_row(reg, save),
-                    "key": b["key"], "hood": b["neighbourhood"], "m2": _building_row(reg, save).get("m")}} if ba_economy and ba_economy.planner(save) else {}),
+                    "key": b["key"], "hood": b["neighbourhood"], "m2": _building_row(reg, save).get("m")}} if mod_rules.planner else {}),
             "imports": [[slug, contracts[b["key"]][slug]] for slug in _in_order(contracts[b["key"]])],
             "vehicles": vehicles,
             **({"days": _factory_days(save, reg)} if kind == "factory" else {}),
         }
     roles = collections.Counter(p.get("skill") for p in staff)
     hq_support = {}
-    if ba_economy and ba_economy.planner(save):
+    if mod_rules.planner:
         headquarters = [b for b in businesses if b.get("typeSlug") == PLAN_HQ and b.get("key") in regs]
         # A single actual HQ has a known site. Multiple HQs need an explicit
         # placement choice before assigning incremental utilities to one.
@@ -21961,15 +21967,15 @@ def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, r
             used.add(item)
             items[item] = {"p": float((table.get(item) or {}).get("p") or 0), "v": (furniture.get(item) or {}).get("v") or []}
             sold_by.update(items[item]["v"])
-    compatibility = ba_mods.capabilities(save) if ba_mods else {}
+    compatibility = mod_rules.capabilities
     # Recipe names can be aliases for registered products. Validate the actual
     # catalogue identity, then report any missing input under the planner's key.
-    missing_prices = set(ba_economy.price_unavailable(save, used | set(product_identities.values()))) if ba_economy else set()
+    missing_prices = set(mod_rules.price_unavailable(used | set(product_identities.values())))
     missing_prices = sorted((missing_prices & used) | {
         slug for slug, identity in product_identities.items() if identity in missing_prices})
     return {
         **({"compatibility": compatibility} if compatibility else {}),
-        **({"modEconomy": ba_economy.planner(save)} if ba_economy and ba_economy.planner(save) else {}),
+        **({"modEconomy": mod_rules.planner} if mod_rules.planner else {}),
         "game": {
             "prices": round(gv.get("marketPriceMultiplier") or 1.0, 4),
             "export": round(_house_rule(gv, "exportMultiplier"), 4),
@@ -22407,1823 +22413,8 @@ def _plan(
 
 
 # --------------------------------------------------------------------- alerts
-# What the number in a finding's "worth" is counted in, for the page to print
-# under the amount. Only groups whose worth carries money get a unit; the rest
-# are left empty because their worth is always None.
-# Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
-# needs: its group, emitted by note() in _alerts() or _finding() in a helper
-# such as _idle_notes() (or an AMENITY_DEMANDS row); its FINDING_KINDS record
-# in template/board.js with id, label, note, on, link, route and evidence (or
-# NO_EVIDENCE in tests/alert_kinds.test.cjs); ALERT_UNITS if its worth is money,
-# else NOT_MONEY there; its line under "What counts as a finding" in
-# docs/dashboard-reference.md. The checklist has the only-if fields.
-ALERT_UNITS = {
-    "notrading": msg("f.unit.rent", "/day rent"),
-    "vacant": msg("f.unit.rent", "/day rent"),
-    "loss": msg("f.unit.loss", "/day loss"),
-    "hype": msg("f.unit.revenue", "/day revenue"),
-    "trend": msg("f.unit.revenue", "/day revenue"),
-    "atcap": msg("f.unit.trade", "/day trade"),
-    "idlestaff": msg("f.unit.wages", "/day wages"),
-    "dead": msg("f.unit.tied", "/day tied up"),
-    "target": msg("f.unit.excess", "/day excess"),
-    "rentprice": msg("f.unit.rent", "/day rent"),
-}
-
-
-def _amt(n, unit: str, *, of=None, sign: str = "", places: int = 0) -> dict:
-    """The figure a finding with no money worth shows on the right, as data,
-    so the page never reads it back out of the sentence: `n` (and `of`, for
-    "84/168") in `unit`, one of the unit ids the page's amtUnit() words.
-    `sign` is "$", "%" or "x". A number the sentence rounds is rounded the
-    same way here, so the two always agree; `places` is how many decimals
-    the sentence writes ("1.0 days"), sent as `dp` for the page to keep."""
-    out = {"n": n, "unit": unit}
-    if of is not None:
-        out["of"] = of
-    if sign:
-        out["sign"] = sign
-    if places:
-        out["n"] = _shown(n, places)
-        out["dp"] = places
-    return out
-
-
-def _shown(v, places: int = 0):
-    """v as a finding's sentence writes it with `places` decimals
-    (_half_away()), as a number: an int when it is whole."""
-    r = _half_away(v, places)
-    return int(r) if r == r.to_integral_value() else float(r)
-
-
-def _msg_list(items: list):
-    """Several names or phrases as one list, "a, b, c", that stays a message:
-    a nested "{a}, {b}" per comma, the last pair under a key of its own
-    (f.list.last), so a translation can join that one with its "and". One item
-    is itself, none is ""."""
-    if not items:
-        return ""
-    if len(items) == 1:
-        return items[0]
-    if len(items) == 2:
-        return msg("f.list.last", "{a}, {b}", a=items[0], b=items[1])
-    return msg("f.list", "{a}, {b}", a=items[0], b=_msg_list(items[1:]))
-
-
-def _worked_over(d: dict):
-    """Why an hours or days demand fails when the roster itself meets it: the
-    week worked so far has passed its top. The whole row, or how many of it;
-    None when it has not."""
-    w = d.get("workedOver")
-    if not w:
-        return None
-    if w["count"] == d["count"]:
-        if w["unit"] == "days":
-            return msg("f.jobdemand.over.days", "worked over {max} days this week", max=w["max"])
-        return msg("f.jobdemand.over.hours", "worked over {max} hours this week", max=w["max"])
-    if w["unit"] == "days":
-        return msg("f.jobdemand.over.days.some", {"one": "{n} worked over {max} days this week",
-                                                    "other": "{n} worked over {max} days this week"},
-                   n=w["count"], max=w["max"])
-    return msg("f.jobdemand.over.hours.some", {"one": "{n} worked over {max} hours this week",
-                                                "other": "{n} worked over {max} hours this week"},
-               n=w["count"], max=w["max"])
-
-
-def _demand_priority(priority: int):
-    """A job demand's priority as a finding says it, lowercased: the game's
-    0 Nice to have, 1 Important, 2 Critical."""
-    if priority == 2:
-        return msg("f.jobdemand.critical", "critical")
-    if priority == 1:
-        return msg("f.jobdemand.important", "important")
-    return msg("f.jobdemand.nice", "nice to have")
-
-
-def _alert_id(*parts: str) -> str:
-    """A stable id for a finding: the same finding keeps it across renders,
-    and it does not depend on where the finding sits in the list."""
-    return hashlib.sha1(":".join(parts).encode("utf-8")).hexdigest()[:10]
-
-
-def _finding(
-    level: str,
-    site: str,
-    group: str,
-    text: str,
-    *,
-    key=None,
-    rank: float = 0.0,
-    subject: str = "",
-    worth=None,
-    always: bool = False,
-    ev: dict | None = None,
-    named: str | None = None,
-    amt: dict | None = None,
-) -> dict:
-    """One row of the list.
-
-    `key` is the business's site key (its address) when the finding is about
-    one business; a synthetic site such as "3 shops" has none. The id hashes
-    the key where there is one, so a renamed business keeps its silences and
-    two shops that share a name never share a finding. The page navigates by
-    the key too, so it never opens a namesake.
-
-    `ev` is what the site panel needs to point at the row this finding is
-    about, once `rank` and `subject` have been dropped by _condense(): the
-    item's `slug`, or a machine's list position as `slot`. It is left off
-    entirely where the panel has a fixed mark to pulse instead, because it
-    travels in every payload.
-
-    `subject` is English, since the id hashes it; `named` is how a summary
-    line of several rows names it (_condense()), with its game names as tokens.
-
-    `amt` is the figure a row with no money worth shows (_amt()), left off
-    where the sentence has none.
-    """
-    return {
-        "level": level,
-        "site": site,
-        "group": group,
-        "text": text,
-        "rank": rank,
-        "subject": subject,
-        "named": subject if named is None else named,
-        "worth": worth,
-        "unit": ALERT_UNITS.get(group, ""),
-        "id": _alert_id(group, key or site, subject),
-        "siteKey": key,
-        "always": always,
-        **({"ev": ev} if ev else {}),
-        **({"amt": amt} if amt else {}),
-    }
-
-
-# Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
-# needs: its group, emitted by note() in _alerts() or _finding() in a helper
-# such as _idle_notes() (or an AMENITY_DEMANDS row); its FINDING_KINDS record
-# in template/board.js with id, label, note, on, link, route and evidence (or
-# NO_EVIDENCE in tests/alert_kinds.test.cjs); ALERT_UNITS if its worth is money,
-# else NOT_MONEY there; its line under "What counts as a finding" in
-# docs/dashboard-reference.md. The checklist has the only-if fields.
-def _alerts(
-    businesses: list,
-    supply: dict,
-    chains: list,
-    trends: list,
-    hype: list,
-    hours: list,
-    grids: list,
-    day: int,
-    gate: float,
-    mode: str | tuple = "cap",
-    agencies: list = (),
-    estate: dict | None = None,
-) -> dict | list:
-    """Only things worth acting on, with a number and a deadline where one exists.
-
-    Two filters run over everything below. Findings that repeat across many
-    products at one site collapse into a single counted line, and findings that
-    carry a dollar figure have to clear the materiality gate — a fraction of a
-    day's profit — or they are counted at the foot of the panel instead of read
-    out. A site that cannot trade at all is never counted away.
-
-    ``mode`` sizes factory lines on capacity ("cap") or on demand ("dem"). Only
-    the supply helpers read it, so a tuple of modes builds every other finding
-    once and returns one result per mode, in order (extract() asks for both).
-    """
-    # Real estate first (_estate_owned()): the company-wide rent line leads the
-    # opportunities and, on tax eve, the buildings to buy lead the warnings.
-    found = _estate_notes(estate)
-
-    def note(level, site, group, text, rank=0.0, subject="", worth=None, always=False,
-             key=None, ev=None, named=None, amt=None):
-        found.append(
-            _finding(level, site, group, text, key=key, rank=rank, subject=subject,
-                     worth=worth, always=always, ev=ev, named=named, amt=amt)
-        )
-
-    # A delivery plan: a route or an import into the site, or a repeating
-    # wholesale contract to it.
-    planned = {link["to"] for link in supply["graph"]["links"]}
-    planned |= {businesses[s]["key"] for s in supply.get("wholesaleShops", ())
-                if 0 <= s < len(businesses)}
-
-    # --- a site that has not started trading is one finding, not four
-    silent = set()
-    for b in businesses:
-        # Only a shop or an office can fail to trade. A warehouse, factory or
-        # head office never books a sale, so silence there is its normal state.
-        if b["status"] not in ("retail", "office") or b["revenue"] or day - b["opened"] > NEW_SITE_DAYS:
-            continue
-        office = b["status"] == "office"
-        silent.add(b["key"])
-        priced = [l for l in b["lines"] if l["price"] > 0]
-        # A ticket is issued, never shelved, so only the other lines need stock.
-        shelved = [l for l in priced if not l.get("issued")]
-        stocked = [l for l in shelved if l["units"] > 0]
-        # Which of the six pre-flight checks fail is the finding, so the slugs
-        # are kept on the business beside the words: the site panel reads the
-        # same list and the two cannot drift apart. An office sells hours, not
-        # goods, so it has nothing to stock or deliver. A site shut with the
-        # game's temporarily-closed switch books no day however ready it is,
-        # so that reason comes first.
-        failed, reasons = [], []
-        if b.get("closed"):
-            failed.append("closed")
-            reasons.append(msg("f.notrading.closed", "temporarily closed"))
-        if b["staff"] == 0:
-            failed.append("staff")
-            reasons.append(msg("f.notrading.staff", "no staff"))
-        if not priced:
-            failed.append("prices")
-            reasons.append(msg("f.notrading.prices", "no prices set"))
-        elif not office and shelved and not stocked:
-            failed.append("stock")
-            reasons.append(msg("f.notrading.stock", "no stock"))
-        elif not office and len(stocked) * 2 < len(shelved):
-            failed.append("shelves")
-            reasons.append(msg("f.notrading.shelves", "{n} of {of} shelves bare",
-                               n=len(shelved) - len(stocked), of=len(shelved)))
-        if not office and (shelved or not priced) and b["key"] not in planned:
-            failed.append("plan")
-            reasons.append(msg("f.notrading.plan", "no delivery plan"))
-        b["notTrading"] = failed
-        if not reasons:
-            reasons.append(
-                msg("f.notrading.ready.office", "staffed and priced, no trading day booked yet")
-                if office or not shelved else
-                msg("f.notrading.ready", "staffed and stocked, no trading day booked yet")
-            )
-        note(
-            "critical",
-            b["name"],
-            "notrading",
-            msg("f.notrading", "{site} opened day {day}, not trading yet: {reasons}, ${rent:,.0f}/day rent",
-                site=b["name"], day=b["opened"], reasons=_msg_list(reasons), rent=b["rent"]),
-            worth=b["rent"],
-            always=True,
-            key=b["key"],
-        )
-
-    vacant = [b for b in businesses if b["status"] == "vacant"]
-    if vacant:
-        rent = sum(b["rent"] for b in vacant)
-        note(
-            "warn",
-            msg("f.site.leases", {"one": "{n} lease", "other": "{n} leases"}, n=len(vacant)),
-            "vacant",
-            msg("f.vacant", {"one": "{n} vacant lease costing ${rent:,.0f}/day in rent",
-                             "other": "{n} vacant leases costing ${rent:,.0f}/day in rent"}, n=len(vacant), rent=rent),
-            worth=rent,
-        )
-
-    for b in businesses:
-        if b["status"] == "vacant" or b["key"] in silent:
-            continue
-        if b["profit"] < 0 and not b["costCentre"]:
-            note(
-                "critical" if b["profit"] < -1000 else "warn",
-                b["name"],
-                "loss",
-                msg("f.loss", "Lost {w:$} yesterday", w=abs(b["profit"])),
-                worth=abs(b["profit"]),
-                key=b["key"],
-            )
-        if b["status"] in ("retail", "office") and b["staff"] == 0:
-            note("critical", b["name"], "staff", msg("f.staff.none", "No staff assigned"), always=True, key=b["key"])
-        sat = b["satisfaction"]["overall"]
-        if sat is not None and b["customers"] and sat < 80:
-            note("warn", b["name"], "satisfaction", msg("f.satisfaction", "Customer satisfaction at {n}%", n=sat),
-                 key=b["key"], amt=_amt(sat, "satisfied", sign="%"))
-        if b.get("missingUniformLocker"):
-            # Installing the locker is the first action to take, so it stands in
-            # for whichever roles are uncovered behind it.
-            note(
-                "warn", b["name"], "uniform",
-                msg("f.uniform.locker", "No uniform locker installed; add one to manage employee uniforms"),
-                always=True, key=b["key"],
-            )
-        elif b.get("uniformGaps"):
-            skills = b.get("uniformGapSkills") or []
-            roles = _msg_list([tok(skills[i] if i < len(skills) else None, role)
-                               for i, role in enumerate(b["uniformGaps"])])
-            note(
-                "warn", b["name"], "uniform",
-                msg("f.uniform.gaps", "No uniform set for {roles}; customers judge every role "
-                    "staffed at a station here", roles=roles),
-                always=True, key=b["key"],
-            )
-        for slug in b["missingAmenities"]:
-            group, text = AMENITY_DEMANDS[slug]
-            note("warn", b["name"], group, text, always=True, key=b["key"])
-
-    # --- what staff ask for and do not get. A site that has not started trading
-    # still has staff whose satisfaction is moving, so it is not folded away here.
-    for b in businesses:
-        if b["status"] == "vacant":
-            continue
-        demands = b.get("staffDemands", [])
-        wants = [d for d in demands if not d["company"]]
-        quitting = b.get("quitWarnings", 0)
-        # Every demand the site itself can meet, with the game's priority, headed
-        # by how many people lack one. Once somebody with an unmet demand has
-        # warned they will quit, the line is louder and names everything unmet
-        # here, the company-wide demands too, since those may be all they lack.
-        if quitting and demands:
-            count, shown = b.get("staffLackingAny", 0), demands
-        elif wants:
-            count, shown = b.get("staffLacking", 0), wants
-        else:
-            continue
-        items = []
-        for d in shown:
-            why = (msg("f.jobdemand.company", "company-wide") if d["company"]
-                   else _demand_priority(d["priority"]))
-            over = _worked_over(d)
-            if over:
-                why = msg("f.jobdemand.why", "{priority}, {over}", priority=why, over=over)
-            items.append(msg("f.jobdemand.item", "{demand} for {n} ({why})",
-                             demand=tok(d.get("slug"), d["demand"]), n=d["count"], why=why))
-        if quitting:
-            text = msg("f.jobdemand.quit", {
-                "one": "{count} staff with unmet demands: {demands}; {n} of them has warned they will quit",
-                "other": "{count} staff with unmet demands: {demands}; {n} of them have warned they will quit",
-            }, count=count, demands=_msg_list(items), n=quitting)
-        else:
-            text = msg("f.jobdemand", {"one": "{n} staff member with unmet demands: {demands}",
-                                       "other": "{n} staff with unmet demands: {demands}"},
-                       n=count, demands=_msg_list(items))
-        note(
-            "critical" if quitting else "warn", b["name"], "jobdemand", text,
-            always=True, key=b["key"], amt=_amt(count, "staff"),
-        )
-
-    # --- the staff demands no single site can settle: health insurance comes
-    # through an HR manager's plan, a happy boss is the owner's own happiness.
-    company, lacking = collections.OrderedDict(), 0
-    for b in businesses:
-        if b["status"] == "vacant":
-            continue
-        lacking += b.get("staffLackingCompany", 0)
-        for d in b.get("staffDemands", []):
-            if d["company"]:
-                row = company.setdefault(d["slug"], dict(d, count=0))
-                row["count"] += d["count"]
-    if company:
-        rows = sorted(company.values(), key=lambda d: (-d["priority"], -d["count"], d["demand"]))
-        insured = any(JOB_DEMANDS[d["slug"]][0] == "insurance" for d in rows)
-        demands = _msg_list([msg("f.companydemand.item", "{demand} for {n}",
-                                 demand=tok(d.get("slug"), d["demand"]), n=d["count"]) for d in rows])
-        note(
-            "warn", msg("f.site.company", "Company"), "companydemand",
-            msg("f.companydemand.insurance", {
-                "one": "{n} staff member with unmet demands: {demands}. Health insurance comes through "
-                       "an HR manager's plan",
-                "other": "{n} staff with unmet demands: {demands}. Health insurance comes through "
-                         "an HR manager's plan"}, n=lacking, demands=demands)
-            if insured else
-            msg("f.companydemand", {"one": "{n} staff member with unmet demands: {demands}",
-                                    "other": "{n} staff with unmet demands: {demands}"},
-                n=lacking, demands=demands),
-            always=True, amt=_amt(lacking, "staff"),
-        )
-
-    # --- the promotion cap, which is reached with campaigns or not at all
-    # Promotion is the foot traffic the address comes with plus whatever the
-    # marketing campaigns add, held at 100. Each shop's and office's plan
-    # (_marketing()) is the cheapest mix that brings it to 100, or marketing
-    # to 100 where 100 is out of reach. The sites whose plan differs from what
-    # they run make up to two lines: those it raises (a warning when one gains
-    # PROMOTION_GAP points or more), and those that pay for campaigns that only
-    # push past the target. A plan that only adds missing switches changes
-    # neither cost nor promotion and is no finding. A site short of 100 whose
-    # plan waits on a first visit to an agency gets a line naming it: one with
-    # no plan at all (no switch, no agency known), and one already on the best
-    # mix its known agencies allow that a visit would raise (a visit that would
-    # only save money is the site panel's hint alone). Each line has its own
-    # subject, so its id is its own. The sites not trading yet are the
-    # not-trading line's.
-    raised, saved, unplanned, capped = [], [], [], []
-    gain = lambda b: b["marketingPlan"]["promotionPlan"] - b["marketingPlan"]["promotionNow"]  # noqa: E731
-    for b in businesses:
-        p = b.get("marketingPlan")
-        if b["status"] not in ("retail", "office") or b["key"] in silent or not p:
-            continue
-        if p["on"] is None:
-            if p["visit"] and p["promotionNow"] < PROMOTION_CAP:
-                unplanned.append(b)
-        elif set(p["on"]) != set(p["was"]):
-            # A site whose plan costs more is raising its promotion, even where
-            # the promotion the save stores already reads higher than the model's.
-            (raised if gain(b) > 0 or p["costPlan"] > p["costNow"] else saved).append(b)
-        elif p.get("visitRaises") and p["promotionPlan"] < PROMOTION_CAP and p["promotionNow"] < PROMOTION_CAP:
-            capped.append(b)
-    sites_of = lambda group: msg("f.site.sites", {"one": "{n} site", "other": "{n} sites"}, n=len(group))  # noqa: E731
-    if raised:
-        raised.sort(key=lambda b: (-gain(b), b["name"]))
-        extra = sum(b["marketingPlan"]["costPlan"] - b["marketingPlan"]["costNow"] for b in raised)
-        n, site, top = len(raised), raised[0]["name"], raised[0]["marketingPlan"]["promotionPlan"]
-
-        def item(b):
-            p = b["marketingPlan"]
-            if gain(b) > 0:
-                return msg("f.promotion.item.gain", "{site} {a}% → {b}%", site=b["name"],
-                           a=p["promotionNow"], b=p["promotionPlan"])
-            return msg("f.promotion.item.save", "{site} {a:$} → {b:$}/day", site=b["name"],
-                       a=p["costNow"], b=p["costPlan"])
-        sites = _msg_list([item(b) for b in raised])
-        if n == 1:
-            text = (msg("f.promotion.reach.less.one", "{site} can reach {p}% promotion for less", site=site, p=top)
-                    if extra < 0 else
-                    msg("f.promotion.reach.more.one", "{site} can reach {p}% promotion for {w:$}/day more",
-                        site=site, p=top, w=extra)
-                    if extra > 0 else
-                    msg("f.promotion.reach.one", "{site} can reach {p}% promotion", site=site, p=top))
-        elif all(b["marketingPlan"]["promotionPlan"] >= PROMOTION_CAP for b in raised):
-            text = (msg("f.promotion.reach.less.many", "{n} sites can reach 100% promotion for less: {sites}",
-                        n=n, sites=sites)
-                    if extra < 0 else
-                    msg("f.promotion.reach.more.many",
-                        "{n} sites can reach 100% promotion for {w:$}/day more: {sites}", n=n, w=extra, sites=sites)
-                    if extra > 0 else
-                    msg("f.promotion.reach.many", "{n} sites can reach 100% promotion: {sites}", n=n, sites=sites))
-        else:
-            text = (msg("f.promotion.gain.less.many", "{n} sites can gain promotion for less: {sites}",
-                        n=n, sites=sites)
-                    if extra < 0 else
-                    msg("f.promotion.gain.more.many", "{n} sites can gain promotion for {w:$}/day more: {sites}",
-                        n=n, w=extra, sites=sites)
-                    if extra > 0 else
-                    msg("f.promotion.gain.many", "{n} sites can gain promotion: {sites}", n=n, sites=sites))
-        note(
-            "warn" if any(gain(b) >= PROMOTION_GAP for b in raised) else "info",
-            site if n == 1 else sites_of(raised), "promotion", text, rank=-max(gain(b) for b in raised),
-            subject="mix-raise", always=True, key=raised[0]["key"] if n == 1 else None,
-            amt=_amt(top, "promotion", sign="%"),
-        )
-    if saved:
-        saved.sort(key=lambda b: (b["marketingPlan"]["costPlan"] - b["marketingPlan"]["costNow"], b["name"]))
-        w = sum(b["marketingPlan"]["costNow"] - b["marketingPlan"]["costPlan"] for b in saved)
-        if len(saved) == 1:
-            text = msg("f.promotion.save.one", "{site} can save {w:$}/day at the same promotion",
-                       site=saved[0]["name"], w=w)
-        else:
-            text = msg("f.promotion.save.many", "{n} sites can save {w:$}/day at the same promotion: {sites}",
-                       n=len(saved), w=w, sites=_msg_list([
-                           msg("f.promotion.item.save", "{site} {a:$} → {b:$}/day", site=b["name"],
-                               a=b["marketingPlan"]["costNow"], b=b["marketingPlan"]["costPlan"])
-                           for b in saved]))
-        note(
-            "info", saved[0]["name"] if len(saved) == 1 else sites_of(saved), "promotion", text,
-            subject="mix-save", always=True, key=saved[0]["key"] if len(saved) == 1 else None,
-            amt=_amt(_shown(w), "/day", sign="$"),
-        )
-    by_key = {a["key"]: a["name"] for a in agencies}
-    agencies_of = lambda group: _msg_list([by_key.get(k) or k for k in  # noqa: E731
-                                           sorted({k for b in group for k in b["marketingPlan"]["visit"]})])
-    if unplanned:
-        one = len(unplanned) == 1
-        note(
-            "info", unplanned[0]["name"] if one else sites_of(unplanned), "promotion",
-            msg("f.promotion.visit", "Visit {agencies} once: no campaign can be set at {sites} before that",
-                agencies=agencies_of(unplanned), sites=_msg_list([b["name"] for b in unplanned])),
-            subject="visit-first", always=True, key=unplanned[0]["key"] if one else None,
-        )
-    if capped:
-        one = len(capped) == 1
-        note(
-            "info", capped[0]["name"] if one else sites_of(capped), "promotion",
-            msg("f.promotion.visit.more", "Visit {agencies} once to raise promotion at {sites}",
-                agencies=agencies_of(capped), sites=_msg_list([b["name"] for b in capped])),
-            subject="visit-more", always=True, key=capped[0]["key"] if one else None,
-        )
-
-    # --- what a hype wave is carrying, and what the day it ends costs
-    grid_of = {g["key"]: g for g in grids}
-
-    def full_hours(key: str) -> int:
-        """Hours of a normal week this shop spends within 10% of its ceiling."""
-        grid = grid_of.get(key)
-        if not grid:
-            return 0
-        return sum(
-            1
-            for wd in range(7)
-            if not grid["thin"][wd]
-            for hour in range(24)
-            if grid["customers"][wd][hour] is not None
-            and grid["effective"][wd][hour]
-            and grid["customers"][wd][hour] >= grid["effective"][wd][hour] * HYPE_TIGHT
-        )
-
-    # A shop's takings under hype are one number however many waves carry them,
-    # so the waves are gathered by the shop they land hardest on and each shop
-    # gets one line. The waves come soonest-ending first, which the line keeps.
-    by_top = {}
-    for wave in hype:
-        top = max(wave["sites"], key=lambda s: s["revenue"])
-        by_top.setdefault(top["key"], (top, []))[1].append(wave)
-
-    for top, waves in by_top.values():
-        waves.sort(key=lambda w: w["daysLeft"])
-        soonest = waves[0]["daysLeft"]
-        if len(waves) == 1:
-            left, n = waves[0]["daysLeft"], waves[0]["count"]
-            if left <= 0:
-                lines = msg("f.hype.lines.today", {"one": "{n} line ends today", "other": "{n} lines ends today"}, n=n)
-            elif left == 1:
-                lines = msg("f.hype.lines.tomorrow", {"one": "{n} line ends tomorrow", "other": "{n} lines ends tomorrow"}, n=n)
-            else:
-                lines = msg("f.hype.lines.left", {"one": "{n} line has {days} days left", "other": "{n} lines has {days} days left"},
-                            n=n, days=left)
-        else:
-            parts = []
-            for i, wave in enumerate(waves):
-                left, n = wave["daysLeft"], wave["count"]
-                if left <= 0:
-                    parts.append(msg("f.hype.part.today", {"one": "{n} ends today",
-                                                           "other": "{n} end today"}, n=n))
-                elif left == 1:
-                    parts.append(msg("f.hype.part.tomorrow", {"one": "{n} ends tomorrow",
-                                                              "other": "{n} end tomorrow"}, n=n))
-                elif i == 0:
-                    parts.append(msg("f.hype.part.first", {"one": "{n} ends in {days} days",
-                                                           "other": "{n} end in {days} days"}, n=n, days=left))
-                else:
-                    parts.append(msg("f.hype.part.later", {"one": "{n} in {days} days",
-                                                           "other": "{n} in {days} days"}, n=n, days=left))
-            lines = msg("f.hype.lines.waves", "{n} lines ({waves})",
-                        n=sum(w["count"] for w in waves), waves=_msg_list(parts))
-        one = len(waves) == 1
-        hood = tok(waves[0]["hood"], hood_label(waves[0]["hood"]))
-        # Pricing is somebody else's job in this company. When a wave lands on a
-        # shop that is already full, the door turns part of it away — until the
-        # wave's end date.
-        full = full_hours(top["key"])
-        # The baseline is the first wave's: the shop's own days before a later
-        # wave already carry the earlier one.
-        base = min(waves, key=lambda w: w["startDay"])["baseline"]
-        if base:
-            drop = max(top["revenue"] - base["revenue"], 0)
-            said = dict(hood=hood, lines=lines, site=top["name"], revenue=top["revenue"],
-                        base=base["revenue"], basis=base["basis"], drop=drop)
-            if full and one:
-                text = msg("f.hype.wave.full", {
-                    "one": "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it against ${base:,.0f} for "
-                           "{basis}; about ${drop:,.0f}/day of revenue rides on the wave. It already runs within 10% "
-                           "of capacity for {n} hour of a normal week, so the door is turning part of the wave "
-                           "away.",
-                    "other": "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it against ${base:,.0f} for "
-                             "{basis}; about ${drop:,.0f}/day of revenue rides on the wave. It already runs within "
-                             "10% of capacity for {n} hours of a normal week, so the door is turning part of the "
-                             "wave away.",
-                }, n=full, **said)
-            elif full:
-                text = msg("f.hype.waves.full", {
-                    "one": "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it against ${base:,.0f} for "
-                           "{basis}; about ${drop:,.0f}/day of revenue rides on the waves. It already runs within "
-                           "10% of capacity for {n} hour of a normal week, so the door is turning part of the "
-                           "waves away.",
-                    "other": "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it against ${base:,.0f} for "
-                             "{basis}; about ${drop:,.0f}/day of revenue rides on the waves. It already runs within "
-                             "10% of capacity for {n} hours of a normal week, so the door is turning part of the "
-                             "waves away.",
-                }, n=full, **said)
-            elif one:
-                text = msg("f.hype.wave", "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it against "
-                           "${base:,.0f} for {basis}; about ${drop:,.0f}/day of revenue rides on the wave.", **said)
-            else:
-                text = msg("f.hype.waves", "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it against "
-                           "${base:,.0f} for {basis}; about ${drop:,.0f}/day of revenue rides on the waves.", **said)
-            note(
-                "critical" if soonest <= 2 else "warn",
-                top["name"],
-                "hype",
-                text,
-                worth=drop,
-                key=top["key"],
-            )
-        else:
-            said = dict(hood=hood, lines=lines, site=top["name"], revenue=top["revenue"])
-            note(
-                "warn",
-                top["name"],
-                "hype",
-                msg("f.hype.nobase", "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it. There is no "
-                    "shop of the same kind trading without a wave and no trading days before this one started, "
-                    "so there is no baseline to say what the drop will be", **said)
-                if one else
-                msg("f.hype.nobase.waves", "{hood} hype on {lines}; {site} does ${revenue:,.0f}/day under it. There "
-                    "is no shop of the same kind trading without a wave and no trading days before the first of "
-                    "them started, so there is no baseline to say what the drop will be", **said),
-                always=True,
-                key=top["key"],
-                amt=_amt(_shown(top["revenue"]), "/day under hype", sign="$"),
-            )
-
-    # --- a site whose week moved, against the week before it
-    riding = {w["top"] for w in hype}
-    for row in trends:
-        if not row["ready"] or row["change"] is None:
-            continue
-        if abs(row["change"]) < TREND_MOVE:
-            continue
-        b = businesses[row["s"]]
-        # A factory's takings are batch exports on the purchase calendar, not
-        # trading; and a shop up under its own hype wave is the line above this
-        # one said twice. An office's fees are trading like a shop's takings.
-        if b["status"] not in ("retail", "office"):
-            continue
-        if row["change"] > 0 and b["key"] in riding:
-            continue
-        said = dict(pct=abs(row["change"]) * 100, now=row["last7"], start=day - 7, end=day - 1,
-                    before=row["prev7"])
-        note(
-            "warn" if row["change"] < 0 else "info",
-            b["name"],
-            "trend",
-            msg("f.trend.up", "Revenue up {pct:.0f}% week on week: ${now:,.0f} over days {start}-{end} against "
-                "${before:,.0f} the week before", **said)
-            if row["change"] > 0 else
-            msg("f.trend.down", "Revenue down {pct:.0f}% week on week: ${now:,.0f} over days {start}-{end} against "
-                "${before:,.0f} the week before", **said),
-            worth=abs(row["last7"] - row["prev7"]) / 7,
-            key=b["key"],
-        )
-
-    # The supply findings that depend on the mode go in here, between the
-    # findings above and those below (by_mode()). note() appends to whatever
-    # `found` is bound to when it is called, so rebinding `found` here sends
-    # every note() below into the second half while `head` keeps the first.
-    head, found = found, []
-
-    # --- what the hour-by-hour grid says that a daily total cannot
-    # Five shops hitting the same 30/h ceiling in the same hours is one finding
-    # about five shops, not five findings. Offices group only with offices, and
-    # a role's stations only with the same stations: two findings that name two
-    # different answers are two lines, whatever else they share. A site held by
-    # its building's own capacity is no line at all: there is nothing to do
-    # about it, so it stays on the site page's hour grid and chip only.
-    same = collections.OrderedDict()
-    for finding in hours:
-        if (
-            finding["kind"] == "cap"
-            and finding["key"] not in silent
-            and finding["heldBy"][0][0] != "door"
-        ):
-            same.setdefault(
-                (
-                    finding.get("office", False),
-                    finding["limit"],
-                    finding["cap"],
-                    finding.get("capTop", finding["cap"]),
-                    finding["when"],
-                    finding["hours"],
-                    finding.get("noun"),
-                    finding.get("fix"),
-                ),
-                [],
-            ).append(finding)
-    for (office, limit, cap, top, when, per_week, _noun, _fix), group in same.items():
-        worth = sum(f["throughput"] for f in group)
-        where = (
-            group[0]["site"]
-            if len(group) == 1
-            else msg("f.site.offices", {"one": "{n} office", "other": "{n} offices"}, n=len(group))
-            if office
-            else msg("f.site.shops", {"one": "{n} shop", "other": "{n} shops"}, n=len(group))
-        )
-        said = dict(
-            where=where, when=when, n=per_week, worth=worth, fix=group[0]["fix"],
-            rate=msg("f.atcap.rate", "{n}/h", n=cap) if cap == top
-            else msg("f.atcap.range", "{low}-{high}/h", low=cap, high=top),
-            noun=group[0].get("noun") or _sp_counters(office),
-            # Only the first character: a tie joins two limits, and
-            # str.capitalize() would lowercase "DJ booths" in the second.
-            # _cap_first() does that and keeps the limit a message.
-            limit=_cap_first(limit),
-        )
-        several = group[0].get("limits", 1) > 1
-        if len(group) == 1:
-            text = (
-                msg("f.atcap.limits", {
-                    "one": "{where} fills the {noun} {when}, {n} hour a week at {rate} and "
-                           "${worth:,.0f}/day of sales in those hours. {limit} are the limit; the fix is {fix}",
-                    "other": "{where} fills the {noun} {when}, {n} hours a week at {rate} and "
-                             "${worth:,.0f}/day of sales in those hours. {limit} are the limit; the fix is {fix}"}, **said)
-                if several else
-                msg("f.atcap", {
-                    "one": "{where} fills the {noun} {when}, {n} hour a week at {rate} and "
-                           "${worth:,.0f}/day of sales in those hours. {limit} is the limit; the fix is {fix}",
-                    "other": "{where} fills the {noun} {when}, {n} hours a week at {rate} and "
-                             "${worth:,.0f}/day of sales in those hours. {limit} is the limit; the fix is {fix}"}, **said)
-            )
-        else:
-            sites = _msg_list([f["site"] for f in group])
-            text = (
-                msg("f.atcap.sites.limits", {
-                    "one": "{where} fill the {noun} {when}, {n} hour a week at {rate} and "
-                           "${worth:,.0f}/day of sales in those hours. {limit} are the limit; the fix is {fix}: {sites}",
-                    "other": "{where} fill the {noun} {when}, {n} hours a week at {rate} and "
-                             "${worth:,.0f}/day of sales in those hours. {limit} are the limit; the fix is {fix}: {sites}"}, sites=sites, **said)
-                if several else
-                msg("f.atcap.sites", {
-                    "one": "{where} fill the {noun} {when}, {n} hour a week at {rate} and "
-                           "${worth:,.0f}/day of sales in those hours. {limit} is the limit; the fix is {fix}: {sites}",
-                    "other": "{where} fill the {noun} {when}, {n} hours a week at {rate} and "
-                             "${worth:,.0f}/day of sales in those hours. {limit} is the limit; the fix is {fix}: {sites}"}, sites=sites, **said)
-            )
-        # One site can be at more than one ceiling, and the limit is what keeps
-        # the ids apart: a role short of people says "Gym Trainer staffing" and
-        # the same role short of posts says "fitness planning boards", so
-        # silencing one line never silences the other. The limit alone is
-        # hashed, and it is the string main hashed too, so a shop's and an
-        # office's silences survive this change.
-        note(
-            "warn", where, "atcap", text, subject=plain(limit), named=limit, worth=worth,
-            key=group[0]["key"] if len(group) == 1 else None,
-        )
-
-    # --- overstaffing: one line per site, the whole week of it. The hour grid
-    # keeps every idle run of the site's roles under "week"; a finding written
-    # before that existed carries its one run and is read as a week of one.
-    for finding in hours:
-        if finding["key"] in silent or finding["kind"] != "idle":
-            continue
-        site = finding["site"]
-        default = _sp_counters(finding.get("office", False))
-        week = finding.get("week") or {
-            "spare": finding["spare"],
-            "worth": finding["worth"],
-            "seen": finding["seen"],
-            "parts": [{
-                "noun": finding.get("noun"),
-                "staff": finding["staff"],
-                "when": _hour_phrase({WEEKDAYS.index(finding["day"]): set(
-                    range(finding["from"], finding["to"]))}),
-            }],
-        }
-        runs = _idle_parts(week["parts"], default)
-        note(
-            "info",
-            site,
-            "idlestaff",
-            # The waste leads, so the row's headline is the whole week's figure
-            # and the shape of the hours unfolds as its detail.
-            msg("f.idlestaff", {
-                "one": "{site} has {n} staffed hour a week more than its customers need: {runs}, at {seen} customers an hour",
-                "other": "{site} has {n} staffed hours a week more than its customers need: {runs}, at {seen} customers an hour",
-            }, site=site, n=week["spare"], runs=runs, seen=week["seen"]),
-            worth=week["worth"],
-            key=finding["key"],
-        )
-
-    middle = found
-    factories = supply.get("factories", {})
-    if supply.get("streetFoodRestricted"):
-        factories = dict(factories, sites=[site for site in factories.get("sites", [])
-                                         if not site.get("streetFoodRestricted")])
-
-    def by_mode(mode: str) -> dict:
-        # _condense() pops fields off the rows it is given, so each mode gets
-        # its own copies of the shared findings.
-        rows = [dict(f) for f in head]
-        # A shop only runs dry if a day of selling outruns the morning top-up.
-        rows.extend(_shelf_notes(businesses, supply, silent, mode))
-        # A depot only runs dry if it cannot reach the next delivery by more than a
-        # few hours, and an order is only wrong if it cannot cover the week it has to
-        # cover.
-        rows.extend(_import_notes(businesses, supply, silent, mode))
-        rows.extend(dict(f) for f in middle)
-        rows.extend(_idle_notes(businesses, supply["idle"], silent, mode))
-        rows.extend(_feed_notes(businesses, factories, silent, mode))
-        rows.extend(_staff_notes(businesses, factories, silent, mode))
-        rows.extend(_unnamed_notes(businesses, factories, silent))
-        return _condense(rows, gate)
-
-    if isinstance(mode, str):
-        return by_mode(mode)
-    return [by_mode(m) for m in mode]
-
-
-def _fact_labels(businesses: list, supply: dict) -> dict:
-    """(site index, slug) -> the name a finding gives the goods: the site's own
-    line, else what an import row or a factory line calls it."""
-    labels, by_slug = {}, {}
-    for i, b in enumerate(businesses):
-        for line in b.get("lines", []):
-            labels.setdefault((i, line["slug"]), line["item"])
-            by_slug.setdefault(line["slug"], line["item"])
-    for row in supply.get("imports", []):
-        labels.setdefault((row["s"], row["slug"]), row["item"])
-    for site in supply.get("factories", {}).get("sites", []):
-        for row in site["needs"]:
-            labels.setdefault((site["s"], row["slug"]), row["item"])
-            if row.get("importSite") is not None:
-                labels.setdefault((row["importSite"], row["slug"]), row["item"])
-    # A site the plans ask for goods it has never held: another site's name for them.
-    for s, items in supply.get("facts", {}).items():
-        for slug in items:
-            if slug in by_slug:
-                labels.setdefault((int(s), slug), by_slug[slug])
-    return labels
-
-
-def _shelf_notes(businesses: list, supply: dict, silent: set, mode: str = "cap") -> list:
-    """A shelf on no plan with little left, or a top-up its busiest day outruns.
-
-    Read off the shelf's fact. A tight top-up (covers the day, not the margin)
-    is for the Checks and Orders pages, never a finding here; a shelf the Not
-    routed finding names (`via`) is said there, once.
-    """
-    facts = supply.get("facts", {})
-    rows = {(r["s"], r["slug"]): r for r in supply.get("shops", [])}
-    labels = _fact_labels(businesses, supply)
-    notes = []
-    for s_key in _in_order(facts):
-        s = int(s_key)
-        b = businesses[s]
-        # A shop shut with the game's temporarily closed switch sells nothing:
-        # its shelves are no finding (the not-trading finding names it).
-        if b["key"] in silent or b.get("closed"):
-            continue
-        # Nothing upstream supplies it (_supply_facts' shelf()): one finding
-        # per shop, however many of its goods it is (a shop pricing a dozen
-        # things nothing brings is one thing to sort out).
-        unsourced = []
-        for slug in _in_order(facts[s_key]):
-            fact = _supply_fact(facts, s, slug, mode)
-            if (fact["role"] == "shelf" and fact["st"] == "noplan"
-                    and fact["why"] in ("source", "priced") and fact["lvl"] != "info"):
-                unsourced.append((slug, fact))
-        if unsourced:
-            notes.append(_unsourced_note(businesses, b, s, unsourced, labels))
-        for slug in _in_order(facts[s_key]):
-            fact = _supply_fact(facts, s, slug, mode)
-            if fact["role"] != "shelf":
-                continue
-            if fact["st"] == "noplan" and fact["why"] in ("source", "priced"):
-                continue
-            line = next((l for l in b["lines"] if l["slug"] == slug), None)
-            if not line:
-                continue
-            item = tok(slug, line["item"])
-            if (fact["st"] == "noplan" and fact["lvl"] in ("warn", "critical")
-                    and fact.get("via") is None):
-                rate = round(line.get("tradeRate", line["rate"]))
-                notes.append(_finding(
-                    fact["lvl"], b["name"], "unplanned",
-                    msg("f.unplanned", "{item} is on no distribution plan: {units:,} left at {rate:,}/day",
-                        item=item, units=line["units"], rate=rate),
-                    key=b["key"], rank=-line["units"], subject=line["item"], named=item, ev={"slug": slug},
-                    amt=_amt(rate, "/day")))
-            elif fact["st"] == "short" and fact["cad"] == "weekly":
-                # Fed by a weekly wholesale delivery, not a top-up.
-                rate = round(line.get("tradeRate", line["rate"]))
-                row = rows.get((s, slug)) or {}
-                day = fact.get("day") or row.get("wholesaleDay")
-                day = (msg("f.wholesale.day", "{d:day}", d=WEEKDAYS.index(day)) if day in WEEKDAYS
-                       else day or msg("f.wholesale.next", "the next"))
-                also_short = _below(fact["have"], fact["use"])
-                said = dict(item=item, day=day, have=fact["have"], use=fact["use"])
-                if fact["why"] == "shortfall" and also_short:
-                    # Both at once: the stock does not reach the drop, and the
-                    # delivery would not carry the week if it did.
-                    text = (msg("f.wholesale.both.raise", "{item} runs out before {day}'s wholesale delivery, and "
-                                "the delivery brings {have:,} a week against the {use:,} it sells; raise the "
-                                "contract to {set:,}", set=fact["setTo"], **said)
-                            if fact.get("setTo") else
-                            msg("f.wholesale.both", "{item} runs out before {day}'s wholesale delivery, and the "
-                                "delivery brings {have:,} a week against the {use:,} it sells", **said))
-                elif fact["why"] == "shortfall":
-                    text = msg("f.wholesale.shortfall", "{item} runs out before {day}'s wholesale delivery: "
-                               "{units:,} left at {rate:,}/day", item=item, day=day, units=line["units"], rate=rate)
-                else:
-                    text = msg("f.wholesale.order", "{item}'s wholesale delivery brings {have:,} a week against "
-                               "the {use:,} it sells", **said)
-                # Running out before the delivery ranks ahead of an order
-                # short of the week; the ratio breaks ties among each.
-                ratio = round(fact["have"] / fact["use"], 2) if fact["use"] else 0
-                notes.append(_finding(
-                    fact["lvl"], b["name"], "wholesale", text, key=b["key"],
-                    rank=ratio - 10 if fact["why"] == "shortfall" else ratio,
-                    subject=line["item"], named=item, ev={"slug": slug},
-                    amt=_amt(line["units"], "left") if fact["why"] == "shortfall" and not also_short
-                    else _amt(fact["use"], "/week used")))
-            elif fact["st"] == "short" and fact["why"] == "target":
-                peak = (rows.get((s, slug)) or {}).get("peakDay")
-                notes.append(_finding(
-                    "critical", b["name"], "outruns",
-                    msg("f.outruns.day", "{item} sells {use:,} on a {d:day} against a {have:,} top-up; empties "
-                        "before the next drop", item=item, use=fact["use"], have=fact["have"],
-                        d=WEEKDAYS.index(peak))
-                    if peak in WEEKDAYS else
-                    msg("f.outruns", "{item} sells {use:,} on its busiest day against a {have:,} top-up; empties "
-                        "before the next drop", item=item, use=fact["use"], have=fact["have"]),
-                    key=b["key"],
-                    rank=-round(fact["use"] / fact["have"] * 100) if fact["have"] else 0,
-                    subject=line["item"], named=item, ev={"slug": slug}))
-    return notes
-
-
-def _lasts_msg(days):
-    """How long a holding lasts, as a finding says it: "about 18 days", and
-    past LASTS_CAP days "over 60 days", as the cover figures cap it."""
-    days = days or 0
-    if days > LASTS_CAP:
-        return msg("f.lasts.over", "over {n:,} days", n=LASTS_CAP)
-    return msg("f.lasts.about", {"one": "about {n:,} day", "other": "about {n:,} days"}, n=max(1, round(days)))
-
-
-def _unsourced_note(businesses: list, b: dict, s: int, found: list, labels: dict) -> dict:
-    """One shop's goods nothing upstream supplies, as one finding: a top-up
-    from a site that has none coming in, or a price with nothing bringing it.
-    One item is said on its own; several are listed, the ones with a top-up
-    first, and the finding lands on the first."""
-    found = sorted(found, key=lambda sf: (sf[1]["why"] != "source", -(sf[1].get("have") or 0), str(sf[0])))
-    level = "critical" if any(f["lvl"] == "critical" for _slug, f in found) else "warn"
-    slug, fact = found[0]
-    label = labels.get((s, slug), slug)
-    named = tok(slug, label)
-    source = fact.get("from")
-    if len(found) > 1:
-        items = [tok(sl, labels.get((s, sl), sl)) for sl, _f in found]
-        text = msg("f.unsourced.list", "Nothing upstream supplies {n} goods {site} is topped up with or prices: "
-                   "{items}; add them to an import, or to a route from a factory that makes them",
-                   n=len(found), site=b["name"], items=_msg_list(items))
-    elif fact["why"] == "source" and source is not None and 0 <= source < len(businesses):
-        text = msg("f.unsourced", "{item} is topped up to {have:,} from {source}, but nothing brings "
-                   "it to {source}: no stock, import, factory line or route; add it to an import "
-                   "there, or to a route from a factory that makes it",
-                   item=named, have=fact["have"], source=businesses[source]["name"])
-    else:
-        text = msg("f.unsourced.priced", "{item} is priced here but nothing brings it: no top-up, "
-                   "wholesale delivery or import; add it to a route from a depot or factory",
-                   item=named)
-    return _finding(level, b["name"], "unsourced", text, key=b["key"],
-                    rank=-len(found), subject=label, named=named, ev={"slug": slug})
-
-
-def _import_notes(businesses: list, supply: dict, silent: set, mode: str = "cap") -> list:
-    """A line an import brings, when its week or its stock falls short.
-
-    One finding per (site, item), read off the fact: a depot's, or a factory's
-    own import. An import the factory lines draw on is said in their words
-    (kind feed), one only other sites draw on in the order's (order, paused);
-    stock that will not reach the drop is a shortfall either way. Tight is
-    never a finding here.
-    """
-    facts = supply.get("facts", {})
-    # The rows walked in the sizing asked for: Demand's own where it was sent.
-    rows = {(r["s"], r["slug"]): r
-            for r in (supply.get("importsDem", supply.get("imports", [])) if mode == "dem"
-                      else supply.get("imports", []))}
-    depots = supply.get("factories", {}).get("depots", {})
-    labels = _fact_labels(businesses, supply)
-    notes = []
-    for s_key in _in_order(facts):
-        s = int(s_key)
-        b = businesses[s]
-        if b["key"] in silent:
-            continue
-        for slug in _in_order(facts[s_key]):
-            whole = _supply_fact(facts, s, slug, mode)
-            # A factory's own contract beside a daily top-up is its `import`.
-            fact = whole.get("import") or whole
-            # A depot only a route from your own site feeds: its daily top-up
-            # against its busiest day, as a shelf's (tight is no finding).
-            if fact["role"] == "depot" and fact["cad"] == "daily":
-                if fact["st"] == "short" and fact["why"] == "target":
-                    item = labels.get((s, slug), slug)
-                    named = tok(slug, item)
-                    plans = [fact.get("from")] + [r[0] for r in fact.get("raise") or ()]
-                    notes.append(_finding(
-                        "critical", b["name"], "topup",
-                        msg("f.topup.several", "{item} is topped up to {have:,} a day against the {use:,} its busiest "
-                            "day sends on; raise the top-ups on the plans of {sites} to {set:,}",
-                            item=named, have=fact["have"], use=fact["use"], set=fact["setTo"],
-                            sites=_msg_list([businesses[x]["name"] for x in plans if x is not None]))
-                        if fact.get("raise") else
-                        msg("f.topup", "{item} is topped up to {have:,} a day against the {use:,} its busiest day "
-                            "sends on; raise the top-up to {set:,}",
-                            item=named, have=fact["have"], use=fact["use"], set=fact["setTo"]),
-                        key=b["key"], rank=round(fact["have"] / fact["use"], 2) if fact["use"] else 0,
-                        subject=item, named=named, ev={"slug": slug}))
-                continue
-            if fact["cad"] != "weekly" or fact["role"] not in ("depot", "input"):
-                continue
-            st, why = fact["st"], fact["why"]
-            # A factory's own paused contract beside a top-up is said with the
-            # input (_feed_notes), once; one the top-up covers is no finding.
-            if st == "paused" and whole is not fact:
-                continue
-            if not (st == "paused" or (st == "short" and why in ("order", "shortfall"))
-                    or (st == "noplan" and fact["lvl"] != "info")):
-                continue
-            item = labels.get((s, slug), slug)
-            named = tok(slug, item)
-            row = rows.get((s, slug))
-            entry = depots.get(s, {}).get(slug) or {}
-            parts = fact.get("parts") or {}
-            site, key = b["name"], b["key"]
-            ev = {"slug": slug}
-            if st == "short" and why == "shortfall" and row:
-                notes.append(_shortfall_note(row, item, site, key, businesses))
-                continue
-            if st == "short" and fact["role"] == "depot" and fact.get("wholesale"):
-                # A depot a wholesale store delivers to: its contract, said on
-                # the depot's own page (Weekly imports does not list it).
-                said = dict(item=named, have=fact["have"], use=fact["use"], route=parts.get("route"),
-                            set=fact.get("setTo"))
-                if parts.get("route") and fact.get("setTo"):
-                    text = msg("f.depot.wholesale.route.raise", "{item}'s wholesale delivery brings {have:,} a week "
-                               "against {use:,} used beyond the {route:,} a week a route brings; raise the contract "
-                               "to {set:,}", **said)
-                elif parts.get("route"):
-                    text = msg("f.depot.wholesale.route", "{item}'s wholesale delivery brings {have:,} a week "
-                               "against {use:,} used beyond the {route:,} a week a route brings", **said)
-                elif fact.get("setTo"):
-                    text = msg("f.depot.wholesale.raise", "{item}'s wholesale delivery brings {have:,} a week "
-                               "against {use:,} used; raise the contract to {set:,}", **said)
-                else:
-                    text = msg("f.depot.wholesale", "{item}'s wholesale delivery brings {have:,} a week against "
-                               "{use:,} used", **said)
-                notes.append(_finding(
-                    fact["lvl"], site, "wholesale", text,
-                    key=key, rank=round(fact["have"] / fact["use"], 2) if fact["use"] else 0,
-                    subject=item, named=named, ev=ev, amt=_amt(fact["use"], "/week used")))
-                continue
-            smart = _smart_words(entry.get("target") or 0, entry.get("plainAfter", 0),
-                                 entry.get("plainBefore", 0)) if entry.get("smart") else ""
-            if parts.get("lines") or fact["role"] == "input":
-                amt = None
-                if st == "paused":
-                    text = msg("f.import.paused.resume", "{item} import is paused; resume the contract supplying "
-                               "{site}", item=named, site=site)
-                elif st == "noplan":
-                    stock = next((l["units"] for l in b["lines"] if l["slug"] == slug), 0)
-                    said = dict(item=named, site=site, stock=stock, use=fact["use"], route=parts.get("route"),
-                                weeks=stock / fact["use"] if fact["use"] else 0)
-                    amt = _amt(said["weeks"], "weeks", places=1)
-                    # The factories alone, or other sites drawing on it too;
-                    # and a route bringing part of the week, or not.
-                    if not parts.get("sites") and parts.get("route"):
-                        text = msg("f.import.noplan.route", "{item} has no standing import; {site} holds {stock:,}, "
-                                   "{weeks:.1f} weeks of the {use:,} a week the factories eat beyond the {route:,} a "
-                                   "week a route brings", **said)
-                    elif not parts.get("sites"):
-                        text = msg("f.import.noplan", "{item} has no standing import; {site} holds {stock:,}, "
-                                   "{weeks:.1f} weeks of the {use:,} a week the factories eat", **said)
-                    elif parts.get("route"):
-                        text = msg("f.import.noplan.sites.route", "{item} has no standing import; {site} holds "
-                                   "{stock:,}, {weeks:.1f} weeks of the {use:,} a week the factories and other sites "
-                                   "draw beyond the {route:,} a week a route brings", **said)
-                    else:
-                        text = msg("f.import.noplan.sites", "{item} has no standing import; {site} holds {stock:,}, "
-                                   "{weeks:.1f} weeks of the {use:,} a week the factories and other sites draw",
-                                   **said)
-                elif entry.get("smart"):
-                    said = dict(item=named, use=fact["use"], smart=smart, at=entry.get("levelName"),
-                                set=fact.get("setTo"))
-                    if entry.get("levelName") and fact.get("setTo"):
-                        text = msg("f.import.smart.at.raise", "{item}: this import needs to cover {use:,} a week and "
-                                   "{smart}; raise the Smart Delivery stock at {at} to {set:,}", **said)
-                    elif entry.get("levelName"):
-                        text = msg("f.import.smart.at", "{item}: this import needs to cover {use:,} a week and "
-                                   "{smart}; raise the Smart Delivery stock at {at}", **said)
-                    elif fact.get("setTo"):
-                        text = msg("f.import.smart.raise", "{item}: this import needs to cover {use:,} a week and "
-                                   "{smart}; raise the Smart Delivery stock to {set:,}", **said)
-                    else:
-                        text = msg("f.import.smart", "{item}: this import needs to cover {use:,} a week and "
-                                   "{smart}; raise the Smart Delivery stock", **said)
-                elif fact.get("setTo"):
-                    text = msg("f.import.order.raise", "{item}: this import needs to cover {use:,} a week and the "
-                               "import order is {order:,}; raise it to {set:,}",
-                               item=named, use=fact["use"], order=entry.get("weekly", 0), set=fact["setTo"])
-                else:
-                    text = msg("f.import.order", "{item}: this import needs to cover {use:,} a week and the import "
-                               "order is {order:,}", item=named, use=fact["use"], order=entry.get("weekly", 0))
-                notes.append(_finding(fact["lvl"], site, "feed", text, key=key,
-                                      rank=-round(fact["use"] / 7), subject=item, named=named, ev=ev, amt=amt))
-                continue
-            if st == "noplan":
-                # A depot only shops draw on, with no standing import: nothing
-                # brings it, or the routes into it cannot bring what it sends
-                # on (_supply_facts' route_fed()). Nothing upstream supplies
-                # it, as a shelf's unsourced finding says of a shelf.
-                passes = fact.get("passes")
-                said = dict(item=named, site=site, use=fact["use"], route=parts.get("route", 0),
-                            total=fact["use"] + parts.get("route", 0), set=fact.get("setTo") or 0,
-                            lasts=_lasts_msg(fact.get("lasts")),
-                            sender=businesses[passes]["name"] if passes is not None else "")
-                # Nothing brings it, or only what a sender holds: nothing
-                # upstream supplies it (unsourced). Routes that bring part of
-                # it leave an import to add (order).
-                group = "unsourced"
-                if passes is not None:
-                    text = msg("f.depot.noplan.passes", "{item}: no standing supply brings it to {site}; the route "
-                               "from {sender} only passes on what it holds, {lasts} of the {use:,} a week {site} "
-                               "sends on; import {set:,} a week", **said)
-                elif parts.get("route"):
-                    group = "order"
-                    text = msg("f.depot.noplan.route", "{item}: the routes into {site} bring {route:,} a week of "
-                               "the {total:,} a week it sends on, and no standing import brings the rest; import "
-                               "{set:,} a week", **said)
-                else:
-                    text = msg("f.depot.noplan", "{item}: nothing brings it to {site}, which sends on {use:,} a "
-                               "week; import {set:,} a week", **said)
-                said_as = dict(key=key, rank=-round(fact["use"] / 7), subject=item, named=named, ev=ev,
-                               amt=_amt(said["lasts"].p["n"], "days") if passes is not None else None)
-                notes.append(_finding(fact["lvl"], site, "order", text, **said_as) if group == "order"
-                             else _finding(fact["lvl"], site, "unsourced", text, **said_as))
-                continue
-            cover = row["cover"] if row else 0
-            if st == "paused":
-                # round() is what {cover:.0f} printed, and a whole number
-                # picks the plural a translation needs.
-                text = (msg("f.paused", {"one": "{item} import is paused: {n} day left at {rate:,}/day",
-                                         "other": "{item} import is paused: {n} days left at {rate:,}/day"},
-                            item=named, n=round(cover), rate=row.get("importPerDay", row["perDay"]))
-                        if row else msg("f.paused.bare", "{item} import is paused", item=named))
-                notes.append(_finding(fact["lvl"], site, "paused", text,
-                                      key=key, rank=cover, subject=item, named=named, ev=ev,
-                                      amt=_amt(row.get("importPerDay", row["perDay"]), "/day") if row else None))
-                continue
-            text = _order_text(businesses, fact, entry, row, named)
-            notes.append(_finding(fact["lvl"], site, "order", text,
-                                  key=key, rank=cover, subject=item, named=named, ev=ev,
-                                  amt=_amt(text.p["short"], "units short")))
-    return notes
-
-
-def _order_text(businesses: list, fact: dict, entry: dict, row: dict | None, named) -> "Msg":
-    """An import order short of its week, as its finding says it: how soon
-    it bites (the stock runs dry before the drop, the route that only passes
-    on what its sender holds, or what is held here), or the order alone."""
-    smart = _smart_words(entry.get("target") or 0, entry.get("plainAfter", 0),
-                         entry.get("plainBefore", 0)) if entry.get("smart") else ""
-    brought = entry.get("weekly", 0)
-    said = dict(item=named, smart=smart, brought=brought, use=fact["use"], short=fact["use"] - brought)
-    if row and row["coverFit"] == "short":
-        said.update(when=_runs_dry_when(row), by=row["shortBy"],
-                    arrives=row.get("coverageUntil", row["arrives"]))
-        text = (msg("f.order.smart.dry", "{item}: {smart} against a {use:,} week of use, {short:,} short; "
-                    "already runs dry {when}, {by:.1f} days before {arrives:day}'s import", **said)
-                if entry.get("smart") else
-                msg("f.order.dry", "{item} orders {brought:,} a week against a {use:,} week of use, "
-                    "{short:,} short; already runs dry {when}, {by:.1f} days before {arrives:day}'s import",
-                    **said))
-    elif fact.get("passes") is not None:
-        # The route into the depot only passes on what its sender
-        # holds: how long that lasts is how soon the order bites.
-        said.update(sender=businesses[fact["passes"]]["name"], lasts=_lasts_msg(fact.get("lasts")))
-        text = (msg("f.order.smart.passes", "{item}: {smart} against a {use:,} week of use, {short:,} "
-                    "short; the route from {sender} only passes on what it holds, {lasts} of it",
-                    **said)
-                if entry.get("smart") else
-                msg("f.order.passes", "{item} orders {brought:,} a week against a {use:,} week of use, "
-                    "{short:,} short; the route from {sender} only passes on what it holds, {lasts} "
-                    "of it", **said))
-    elif fact["lvl"] == "warn" and fact.get("lasts") is not None:
-        # Short of its week, but what is held here lasts beyond it.
-        said.update(lasts=_lasts_msg(fact["lasts"]))
-        text = (msg("f.order.smart.lasts", "{item}: {smart} against a {use:,} week of use, {short:,} "
-                    "short; what is held here lasts {lasts}", **said)
-                if entry.get("smart") else
-                msg("f.order.lasts", "{item} orders {brought:,} a week against a {use:,} week of use, "
-                    "{short:,} short; what is held here lasts {lasts}", **said))
-    elif entry.get("smart"):
-        text = msg("f.order.smart", "{item}: {smart} against a {use:,} week of use, {short:,} short", **said)
-    else:
-        text = msg("f.order", "{item} orders {brought:,} a week against a {use:,} week of use, {short:,} "
-                   "short", **said)
-    return text
-
-
-def _order_says(businesses: list, supply: dict) -> None:
-    """The order finding's sentence on each short import line whose finding
-    says how long its stock lasts or which route only passes on what it
-    holds (fact `says`, and under `dem` where Demand sizing says it
-    differently): the Supply table's status tip gives it for every line,
-    where the findings list gives one line of a site. In place."""
-    facts = supply.get("facts", {})
-    depots = supply.get("factories", {}).get("depots", {})
-    labels = _fact_labels(businesses, supply)
-    rows = {mode: {(r["s"], r["slug"]): r for r in (supply.get("importsDem", supply.get("imports", []))
-                                                    if mode == "dem" else supply.get("imports", []))}
-            for mode in SIZING_MODES}
-    for s_key in _in_order(facts):
-        s = int(s_key)
-        for slug in _in_order(facts[s_key]):
-            entry = depots.get(s, {}).get(slug) or {}
-            said = {}
-            for mode in SIZING_MODES:
-                fact = _supply_fact(facts, s, slug, mode)
-                row = rows[mode].get((s, slug))
-                if (fact.get("role") != "depot" or fact.get("cad") != "weekly" or fact.get("st") != "short"
-                        or fact.get("why") != "order" or not entry
-                        or (row and row["coverFit"] == "short")
-                        or not (fact.get("passes") is not None
-                                or (fact.get("lvl") == "warn" and fact.get("lasts") is not None))):
-                    said[mode] = None
-                    continue
-                said[mode] = _order_text(businesses, fact, entry, row, tok(slug, labels.get((s, slug), slug)))
-            base = facts[s_key][slug]
-            if said["cap"] is not None:
-                base["says"] = said["cap"]
-            if said["dem"] != said["cap"]:
-                base.setdefault("dem", {})["says"] = said["dem"]
-
-
-def _runs_dry_when(row: dict):
-    """When an import row's stock runs dry, as the findings say it: on its
-    weekday, or in so many days."""
-    if row["runsOut"]:
-        return msg("f.dry.on", "on {d:day}", d=WEEKDAYS.index(row["runsOut"]))
-    # cover is a float, printed "1.0": English keeps "days" for it.
-    return msg("f.dry.in", {"one": "in {n} days", "other": "in {n} days"}, n=row["cover"])
-
-
-def _shortfall_note(row: dict, item: str, site: str, key: str, businesses: list | None = None) -> dict:
-    """A depot's stock that will not reach its next drop, or, where a route
-    brings the week, a busy day the shelf cannot carry to the next round.
-    Where the morning rounds to a depot beside it are what runs it dry
-    before that depot's own import lands (`topsUp`), the finding names that
-    depot and the target the rounds fill it to."""
-    named = tok(row["slug"], item)
-    # The draw the import answers for; a route's share is named, not hidden.
-    said = dict(item=named, when=_runs_dry_when(row), routed=row.get("routed"),
-                rate=row.get("importPerDay", row["perDay"]))
-    if row.get("covered"):
-        text = (msg("f.shortfall.route.paused", "{item} runs dry {when}, before the route's next round; a route "
-                    "brings the week's draw ({routed:,}/day) but a busy day outruns the shelf; the import is paused",
-                    **said)
-                if row["paused"] else
-                msg("f.shortfall.route", "{item} runs dry {when}, before the route's next round; a route brings the "
-                    "week's draw ({routed:,}/day) but a busy day outruns the shelf", **said))
-    elif row.get("topsUp") and businesses and 0 <= row["topsUp"][0] < len(businesses):
-        said.update(by=row["shortBy"], arrives=row.get("coverageUntil", row["arrives"]),
-                    site=businesses[row["topsUp"][0]]["name"], target=row["topsUp"][1])
-        text = msg("f.shortfall.topup", "{item} runs dry {when}, {by:.1f} days before {arrives:day}'s import: the "
-                   "morning rounds top {site} up to {target:,} before its own import lands", **said)
-    else:
-        said.update(by=row["shortBy"], arrives=row.get("coverageUntil", row["arrives"]))
-        text = (msg("f.shortfall.routed", "{item} runs dry {when}, {by:.1f} days before {arrives:day}'s import "
-                    "({rate:,}/day beyond the {routed:,}/day a route brings)", **said)
-                if row.get("routed") else
-                msg("f.shortfall", "{item} runs dry {when}, {by:.1f} days before {arrives:day}'s import ({rate:,}/day, "
-                    "{peak:,} at peak)", peak=row["peakPerDay"], **said))
-    # How many days early it runs dry, or, where a route brings the week, the
-    # route's draw.
-    amt = (_amt(said["routed"], "/day") if row.get("covered")
-           else _amt(said["by"], "days early", places=1))
-    return _finding("critical", site, "shortfall", text,
-                    key=key, rank=row["cover"], subject=item, named=named, ev={"slug": row["slug"]}, amt=amt)
-
-
-def _unnamed_notes(businesses: list, factories: dict, silent: set) -> list:
-    """A machine whose recipe the board cannot read, and the needs it hides.
-
-    Two different things wear the same badge on the lines table. A machine with
-    no recipe selected at all is standing still and costing rent; one that is
-    running a recipe the board cannot identify may be working, but
-    every input need at that site is short by whatever it eats — which is worth
-    saying out loud, because nothing else on the board looks wrong.
-    """
-    notes = []
-    for site in factories.get("sites", []):
-        business = businesses[site["s"]]
-        if business["key"] in silent:
-            continue
-        for kind, group, level in (("idle", "unset", "critical"), ("blind", "unnamed", "warn")):
-            rows = [u for u in site["unnamed"] if u["idle"] == (kind == "idle")]
-            machines = sum(u["machines"] for u in rows)
-            if not machines:
-                continue
-            where = ", ".join(
-                sorted({f"{u['workstation']} #{s}" for u in rows for s in u["slots"]})
-            )
-            # The same places in the same order, their workstation a token.
-            spots = {f"{u['workstation']} #{s}": msg("f.unnamed.spot", "{station} #{slot}",
-                                                       station=tok(u.get("workstationKey"), u["workstation"]),
-                                                       slot=s)
-                     for u in rows for s in u["slots"]}
-            shown = _msg_list([spots[w] for w in sorted(spots)]) if spots else ""
-            if kind == "idle":
-                text = msg("f.unset", {
-                    "one": "{n} machine at {spots} has no recipe set: staffed and rented, making nothing",
-                    "other": "{n} machines at {spots} have no recipe set: staffed and rented, making nothing",
-                }, n=machines, spots=shown)
-            else:
-                text = msg("f.unnamed", {
-                    "one": "{n} machine at {spots} runs a recipe without usable details. Its inputs are missing "
-                           "from the totals; name unknown recipes or load matching game text to include them",
-                    "other": "{n} machines at {spots} run a recipe without usable details. Its inputs are missing "
-                             "from the totals; name unknown recipes or load matching game text to include them",
-                }, n=machines, spots=shown)
-            notes.append(
-                _finding(
-                    level, business["name"], group, text,
-                    key=business["key"], rank=-machines, subject=where, named=shown,
-                    amt=_amt(machines, "machine" if machines == 1 else "machines"),
-                )
-            )
-    return notes
-
-
-def _staff_notes(businesses: list, factories: dict, silent: set, mode: str = "cap") -> list:
-    """A factory machine nobody is posted to for part of the week stands still.
-
-    Sized 24/7 a machine needs all STAFF_HOURS of the week; sized for demand a
-    named line's machine needs only its `needHours.dem` a day, so it is a gap
-    only below that week. The finding's id does not change with the mode.
-    """
-    notes = []
-    for site in factories.get("sites", []):
-        business = businesses[site["s"]]
-        if business["key"] in silent:
-            continue
-        for line in site["lines"] + site["unnamed"]:
-            if mode == "dem" and line.get("demandApproximate"):
-                continue
-            name = line.get("item") or line["workstation"]
-            named = (tok(line.get("slug"), line["item"]) if line.get("item")
-                     else tok(line.get("workstationKey"), line["workstation"]))
-            week = STAFF_HOURS
-            if mode == "dem" and line.get("needHours"):
-                week = line["needHours"]["dem"] * 7
-            for machine in line.get("gaps", []):
-                if machine["hours"] >= week:
-                    continue
-                share = machine["hours"] / week
-                lost = round((week - machine["hours"]) / 7 * line.get("rate", 0))
-                subject = f"{name} at position {machine['slot']}"
-                said = dict(item=named, slot=machine["slot"], hours=machine["hours"], week=week,
-                            off=machine["off"])
-                if week < STAFF_HOURS:
-                    text = (
-                        msg("sp.py.staff.needed.lost", "{item} machine at list position {slot} is staffed "
-                            "{hours} of {week} hours needed; nobody on it {off}; {lost:,} a day not made",
-                            lost=lost, **said)
-                        if lost else
-                        msg("sp.py.staff.needed", "{item} machine at list position {slot} is staffed "
-                            "{hours} of {week} hours needed; nobody on it {off}", **said)
-                    )
-                else:
-                    text = (
-                        msg("sp.py.staff.lost", "{item} machine at list position {slot} is staffed "
-                            "{hours} of {week} hours; nobody on it {off}; {lost:,} a day not made",
-                            lost=lost, **said)
-                        if lost else
-                        msg("sp.py.staff", "{item} machine at list position {slot} is staffed "
-                            "{hours} of {week} hours; nobody on it {off}", **said)
-                    )
-                notes.append(
-                    _finding(
-                        "critical" if share < STAFF_CRITICAL else "warn",
-                        business["name"], "staff", text,
-                        key=business["key"], rank=machine["hours"], subject=subject,
-                        named=msg("sp.py.staff.named", "{item} at position {slot}",
-                                  item=named, slot=machine["slot"]),
-                        ev={"slot": machine["slot"], "slug": line.get("slug")},
-                        amt=_amt(machine["hours"], "hours staffed", of=week),
-                    )
-                )
-    return notes
-
-
-def _feed_notes(businesses: list, factories: dict, silent: set, mode: str = "cap") -> list:
-    """A factory input its top-up does not cover, with the number to change.
-
-    Read off the input's verdict (its fact, mirrored on the row, with what
-    Demand sizing changes under `dem`). An input an import brings straight to
-    the factory is judged on its week by _import_notes(), and a depot's import
-    there too, once however many factories draw on it.
-    """
-    notes = []
-    for site in factories.get("sites", []):
-        business = businesses[site["s"]]
-        if business["key"] in silent:
-            continue
-        for base in site["needs"]:
-            if base.get("directImport"):
-                continue
-            row = {**base, **base["dem"]} if mode == "dem" and base.get("dem") else base
-            status, why = row["status"], row.get("why")
-            per_day = row.get("use", base["perDay"])
-            depot = (businesses[row["from"]]["name"] if row["from"] is not None
-                     else msg("f.feed.depot", "the depot"))
-            slugs = row.get("lineSlugs") or []
-            lines = [tok(slugs[i] if i < len(slugs) else None, line) for i, line in enumerate(row["lines"][:3])]
-            item = tok(row.get("slug"), row["item"])
-            if status == "noplan" and row.get("via") is not None:
-                continue  # said once, by the depot's Not routed finding
-            # The paused own import is offered as the other way out, after
-            # whatever the sentence says first.
-            own = bool(row.get("ownPaused"))
-            said = dict(item=item, per=per_day, depot=depot, site=business["name"])
-            amt = _amt(per_day, "/day needed")
-            if status == "noplan":
-                amt = _amt(per_day, "/day")
-                said.update(lines=_msg_list(lines) if lines else "")
-                text = (msg("f.feed.noplan.resume", "{item} feeds {lines} at {per:,}/day but no depot tops it up; "
-                            "or resume the paused {item} import to {site}", **said)
-                        if own else
-                        msg("f.feed.noplan", "{item} feeds {lines} at {per:,}/day but no depot tops it up", **said))
-            elif status == "short" and why == "target":
-                raise_to = row.get("setTo", base.get("raiseTarget"))
-                # round() is what {hours:.0f} printed, and a whole number
-                # picks the plural a translation needs.
-                said.update(target=row["target"], n=round(row["target"] / per_day * 24 if per_day else 0),
-                            set=raise_to)
-                if row.get("stalled"):
-                    said.update(stock=row["depotStock"])
-                amt = _amt(said["n"], "hours covered")
-                text = _feed_target_text(bool(raise_to), bool(row.get("stalled")), own, said)
-            elif status == "short" and why == "dry":
-                said.update(arrives=row["arrives"], stock=row["depotStock"])
-                text = (msg("f.feed.dry.resume", "{item} arrives at {arrives:,}/day against {per:,} needed and "
-                            "{depot} holds {stock:,}; the import is not keeping up; or resume the paused {item} "
-                            "import to {site}", **said)
-                        if own else
-                        msg("f.feed.dry", "{item} arrives at {arrives:,}/day against {per:,} needed and {depot} "
-                            "holds {stock:,}; the import is not keeping up", **said))
-            elif status == "stalled" and why == "notDrawn":
-                said.update(arrives=row["arrives"], stock=row["depotStock"])
-                text = (msg("f.feed.notdrawn.resume", "{item} arrives at {arrives:,}/day against {per:,} needed "
-                            "while {depot} holds {stock:,}; it isn't reaching the factory; or resume the paused {item} "
-                            "import to {site}", **said)
-                        if own else
-                        msg("f.feed.notdrawn", "{item} arrives at {arrives:,}/day against {per:,} needed while "
-                            "{depot} holds {stock:,}; it isn't reaching the factory", **said))
-            else:
-                continue
-            notes.append(
-                _finding(
-                    row["level"], business["name"], "feed", text,
-                    key=business["key"], rank=-base["perDay"], subject=row["item"], named=item,
-                    ev={"slug": row["slug"]}, amt=amt,
-                )
-            )
-    return notes
-
-
-def _feed_target_text(raise_it: bool, stalled: bool, own: bool, said: dict):
-    """_feed_notes()'s sentence for a top-up short of the line: the number to
-    raise it to, the week nothing arrived and the paused own import, each
-    where it applies. `said` holds item, target, n (the hours covered), per,
-    set, depot, stock and site."""
-    if raise_it and stalled and own:
-        return msg("f.feed.target.raise.stalled.resume", {
-            "one": "{item} top-up of {target:,} covers {n} hour of a {per:,}/day line; raise it to {set:,}; and none "
-                   "arrived last week though {depot} holds {stock:,}; or resume the paused {item} import to {site}",
-            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; and "
-                     "none arrived last week though {depot} holds {stock:,}; or resume the paused {item} import to "
-                     "{site}"}, **said)
-    if raise_it and stalled:
-        return msg("f.feed.target.raise.stalled", {
-            "one": "{item} top-up of {target:,} covers {n} hour of a {per:,}/day line; raise it to {set:,}; and none "
-                   "arrived last week though {depot} holds {stock:,}",
-            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; and "
-                     "none arrived last week though {depot} holds {stock:,}"}, **said)
-    if raise_it and own:
-        return msg("f.feed.target.raise.resume", {
-            "one": "{item} top-up of {target:,} covers {n} hour of a {per:,}/day line; raise it to {set:,}; or "
-                   "resume the paused {item} import to {site}",
-            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}; or "
-                     "resume the paused {item} import to {site}"}, **said)
-    if raise_it:
-        return msg("f.feed.target.raise", {
-            "one": "{item} top-up of {target:,} covers {n} hour of a {per:,}/day line; raise it to {set:,}",
-            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; raise it to {set:,}"},
-            **said)
-    if stalled and own:
-        return msg("f.feed.target.stalled.resume", {
-            "one": "{item} top-up of {target:,} covers {n} hour of a {per:,}/day line; and none arrived last week "
-                   "though {depot} holds {stock:,}; or resume the paused {item} import to {site}",
-            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; and none arrived last week "
-                     "though {depot} holds {stock:,}; or resume the paused {item} import to {site}"}, **said)
-    if stalled:
-        return msg("f.feed.target.stalled", {
-            "one": "{item} top-up of {target:,} covers {n} hour of a {per:,}/day line; and none arrived last week "
-                   "though {depot} holds {stock:,}",
-            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; and none arrived last week "
-                     "though {depot} holds {stock:,}"}, **said)
-    if own:
-        return msg("f.feed.target.resume", {
-            "one": "{item} top-up of {target:,} covers {n} hour of a {per:,}/day line; or resume the paused {item} "
-                   "import to {site}",
-            "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line; or resume the paused {item} "
-                     "import to {site}"}, **said)
-    return msg("f.feed.target", {
-        "one": "{item} top-up of {target:,} covers {n} hour of a {per:,}/day line",
-        "other": "{item} top-up of {target:,} covers {n} hours of a {per:,}/day line"}, **said)
-
-
-def _notrouted_text(one: bool, needs: bool, held: bool, said: dict):
-    """_idle_notes()'s Not routed sentence: one site or several (`who`), that
-    sell it or, with no shop among them, need it, and how long what they hold
-    lasts where that is known. `said` holds site, stock, item, who, per and
-    days."""
-    if one and needs and held:
-        return msg("f.notrouted.one.needs.held", "{site} holds {stock:,} {item} no plan sends on; {who} needs "
-                   "{per:,}/day and holds {days}", **said)
-    if one and needs:
-        return msg("f.notrouted.one.needs", "{site} holds {stock:,} {item} no plan sends on; {who} needs {per:,}/day",
-                   **said)
-    if one and held:
-        return msg("f.notrouted.one.sells.held", "{site} holds {stock:,} {item} no plan sends on; {who} sells "
-                   "{per:,}/day and holds {days}", **said)
-    if one:
-        return msg("f.notrouted.one.sells", "{site} holds {stock:,} {item} no plan sends on; {who} sells {per:,}/day",
-                   **said)
-    if needs and held:
-        return msg("f.notrouted.need.held", "{site} holds {stock:,} {item} no plan sends on; {who} need {per:,}/day "
-                   "and hold {days}", **said)
-    if needs:
-        return msg("f.notrouted.need", "{site} holds {stock:,} {item} no plan sends on; {who} need {per:,}/day",
-                   **said)
-    if held:
-        return msg("f.notrouted.sell.held", "{site} holds {stock:,} {item} no plan sends on; {who} sell {per:,}/day "
-                   "and hold {days}", **said)
-    return msg("f.notrouted.sell", "{site} holds {stock:,} {item} no plan sends on; {who} sell {per:,}/day", **said)
-
-
-def _idle_notes(businesses: list, idle: list, silent: set, mode: str = "cap") -> list:
-    """Stock standing still, said once per cause rather than once per shelf.
-
-    Six shops holding a thousand cupcakes each is not six findings; it is one
-    top-up target set too high (targetHigh), grouped by the target. Stock with
-    nothing moving out stays one line per holding (notMoving), and so does
-    stock a Smart Delivery level or a weekly order keeps too high (importHigh)
-    or stock that is simply weeks of what leaves (overstock); all three are
-    Idle stock. Stock no plan sends on while the company's own sites sell or
-    need it is Not routed (notrouted), one finding that names those sites,
-    whose own no-plan findings then give way to it. `idle` rows carry the
-    sizing modes they hold in (`modes`) and what Demand sizing changes (`dem`).
-    """
-    rows = []
-    for row in idle:
-        if mode not in row.get("modes", ("cap",)):
-            continue
-        rows.append({**row, **row["dem"]} if mode == "dem" and row.get("dem") else row)
-    live = [r for r in rows if businesses[r["s"]]["key"] not in silent]
-    notes = []
-
-    def worth_of(row):
-        # Raw materials carry no retail price, so there is no honest dollar
-        # figure to gate them by: the units are the finding.
-        weeks = row["weeks"] if row["weeks"] else row["stock"] / max(row["perWeek"], 1)
-        return row["value"] / max(1.0, weeks * 7) if row["price"] else None
-
-    for row in live:
-        why = row.get("why") or ("notMoving" if row["dead"] else None)
-        if why in (None, "targetHigh"):
-            continue
-        name, key = businesses[row["s"]]["name"], businesses[row["s"]]["key"]
-        ev = {"slug": row["slug"]}
-        item = tok(row["slug"], row["item"])
-        if why == "notRouted":
-            unfed = row.get("unfed") or []
-            sites = [businesses[s] for s, _per_day, _days in unfed]
-            types = {b["type"] for b in sites}
-            if len(sites) == 1:
-                who = sites[0]["name"]
-            elif len(types) == 1:
-                # Several of one type: the count and the type's name, which a
-                # translation writes its own way ("Geschenkladen × 3").
-                who = msg("f.notrouted.type", {"one": "{n} {type}", "other": "{n} {type}"}, n=len(sites),
-                          type=tok(sites[0].get("typeSlug"), _plural(types.pop()).lower()))
-            else:
-                who = msg("f.notrouted.sites", {"one": "{n} sites", "other": "{n} sites"}, n=len(sites))
-            days = [u[2] for u in unfed if u[2] is not None]
-            said = dict(site=name, stock=row["stock"], item=item, who=who,
-                        per=sum(u[1] for u in unfed),
-                        days=msg("f.notrouted.days", {"one": "~{n:,} day", "other": "~{n:,} days"},
-                                 n=round(sum(days) / len(days))) if days else "")
-            text = _notrouted_text(len(sites) == 1, all(b["status"] != "retail" for b in sites), bool(days), said)
-            notes.append(_finding(
-                "warn", name, "notrouted", text,
-                key=key, rank=-row["stock"], subject=row["item"], named=item, ev=ev,
-                amt=_amt(said["per"], "/day")))
-        elif why == "notMoving":
-            # Brought here by a top-up target, with no shelf, onward route or
-            # line here to use it: most likely a target set on the wrong route.
-            # The stock may be meant for sites no plan reaches yet, so the
-            # finding offers both ways out.
-            text = (
-                msg("f.dead.route", "{stock:,} {item} held with nothing moving out; {src} tops it up to {target:,} "
-                    "here and no plan sends it on: add a plan to the shops that should get it, or stop the top-up",
-                    stock=row["stock"], item=item, target=row["target"], src=businesses[row["routedFrom"]]["name"])
-                if row.get("routedFrom") is not None else
-                msg("f.dead", "{stock:,} {item} held with nothing moving out", stock=row["stock"], item=item)
-            )
-            notes.append(_finding(
-                "info", name, "dead", text,
-                key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev))
-        elif why == "importHigh":
-            # Idle stock is IDLE_WEEKS or more of what draws on it, so neither
-            # count of weeks is ever one.
-            said = dict(stock=row["stock"], item=item, weeks=row["weeks"], level=row.get("importLevel") or 0,
-                        of=(row.get("importLevel") or 0) / max(row["perWeek"], 1))
-            text = (
-                msg("f.dead.import.smart", "{stock:,} {item} is {weeks:.0f} weeks of what it feeds; Smart Delivery "
-                    "keeps {level:,} in stock, {of:.0f} weeks of it, so lower the import", **said)
-                if row.get("smart") else
-                msg("f.dead.import", "{stock:,} {item} is {weeks:.0f} weeks of what it feeds; the import brings "
-                    "{level:,} a week, {of:.0f} weeks of it, so lower the import", **said)
-            )
-            notes.append(_finding(
-                "info", name, "dead", text,
-                key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev,
-                amt=_amt(_shown(row["weeks"]), "weeks")))
-        else:
-            notes.append(_finding(
-                "info", name, "dead",
-                msg("f.dead.weeks", "{stock:,} {item} is {weeks:.0f} weeks of what leaves",
-                    stock=row["stock"], item=item, weeks=row["weeks"]),
-                key=key, rank=-row["stock"], subject=row["item"], named=item, worth=worth_of(row), ev=ev,
-                amt=_amt(_shown(row["weeks"]), "weeks")))
-
-    # A top-up target set too high groups by the target behind it: the same
-    # number in the same plan, repeated across shops, is one setting to change.
-    by_target = collections.OrderedDict()
-    for row in live:
-        why = row.get("why") or ("notMoving" if row["dead"] else None)
-        if why in (None, "targetHigh"):
-            by_target.setdefault(row["target"] or 0, []).append(row)
-    for target, rows in by_target.items():
-        items = sorted({r["item"] for r in rows})
-        slug_of = {r["item"]: r["slug"] for r in rows}
-        shown = _msg_list([tok(slug_of[i], i) for i in items])
-        sites = len({r["s"] for r in rows})
-        daily = sum(r["perWeek"] for r in rows) / 7 / len(rows)
-        stock = sum(r["stock"] for r in rows)
-        # Value the excess at what it sells for, spread over how long it takes to
-        # sell — a rate, so it can be read against a day's profit.
-        worth = sum(
-            r["value"] / max(1.0, r["weeks"] * 7) for r in rows if r["price"]
-        ) or None
-        if target and daily:
-            amt = _amt(_shown(target / daily), "daily sales", sign="x")
-            text = msg("f.target", {
-                "one": "{items} top-up target of {target:,} is {x:.0f}x daily sales in {n} shop; lower the target",
-                "other": "{items} top-up target of {target:,} is {x:.0f}x daily sales in {n} shops; lower the target",
-            }, items=shown, target=target, x=target / daily, n=sites)
-        else:
-            # Idle stock is IDLE_WEEKS or more of what draws on it: never one week.
-            text = msg("f.target.units", {
-                "one": "{units:,} units of {items} across {n} site is {weeks:.0f} weeks of supply",
-                "other": "{units:,} units of {items} across {n} sites is {weeks:.0f} weeks of supply",
-            }, units=stock, items=shown, n=sites, weeks=stock / max(sum(r["perWeek"] for r in rows), 1))
-            amt = _amt(stock, "units")
-        one = businesses[rows[0]["s"]] if sites == 1 else None
-        site = one["name"] if one else msg("f.target.site", {"one": "{n} shop", "other": "{n} shops"}, n=sites)
-        notes.append(
-            _finding(
-                "info", site, "target", text,
-                key=one["key"] if one else None, rank=-stock, subject=items[0],
-                named=tok(slug_of[items[0]], items[0]), worth=worth, amt=amt,
-                # One target set too high can span several shops; the panel can
-                # only point at a row when a single site owns the finding, and
-                # the row it points at is the one the sentence names. Across
-                # several shops Supply still lands on a row: the named item's
-                # biggest holding (`s`, the shop's index).
-                ev={"slug": next(r["slug"] for r in rows if r["item"] == items[0])}
-                if one else {"slug": slug_of[items[0]], "s": max(
-                    (r for r in rows if r["item"] == items[0]), key=lambda r: (r["stock"], -r["s"]))["s"]},
-            )
-        )
-    return notes
-
-
-# How a pile of same-shaped findings at one site reads as a single line: n
-# findings, and the one named first. A line stands for CONDENSE_AT or more, so
-# the "one" forms are there for a translation's plural rules, not the English.
-# Registry: "A finding kind" (only if: see the checklist).
-SUMMARIES = {
-    "shortfall": lambda n, subject: msg("f.sum.shortfall", {
-        "one": "{n} item runs dry before its next delivery; soonest {subject}",
-        "other": "{n} items run dry before their next delivery; soonest {subject}"}, n=n, subject=subject),
-    "order": lambda n, subject: msg("f.sum.order", {
-        "one": "{n} weekly order cannot cover its own week; worst {subject}",
-        "other": "{n} weekly orders cannot cover their own week; worst {subject}"}, n=n, subject=subject),
-    "paused": lambda n, subject: msg("f.sum.paused", {
-        "one": "{n} import is paused; soonest to run out is {subject}",
-        "other": "{n} imports are paused; soonest to run out is {subject}"}, n=n, subject=subject),
-    "outruns": lambda n, subject: msg("f.sum.outruns", {
-        "one": "{n} product outsells its daily top-up; worst {subject}",
-        "other": "{n} products outsell their daily top-up; worst {subject}"}, n=n, subject=subject),
-    "topup": lambda n, subject: msg("f.sum.topup", {
-        "one": "{n} product outruns the depot's daily top-up; worst {subject}",
-        "other": "{n} products outrun the depot's daily top-up; worst {subject}"}, n=n, subject=subject),
-    "wholesale": lambda n, subject: msg("f.sum.wholesale", {
-        "one": "{n} product's wholesale deliveries fall short or arrive too late; worst {subject}",
-        "other": "{n} products' wholesale deliveries fall short or arrive too late; worst {subject}"},
-        n=n, subject=subject),
-    "unsourced": lambda n, subject: msg("f.sum.unsourced", {
-        "one": "{n} product nothing upstream supplies; largest {subject}",
-        "other": "{n} products nothing upstream supplies; largest {subject}"}, n=n, subject=subject),
-    "unplanned": lambda n, subject: msg("f.sum.unplanned", {
-        "one": "{n} stocked product is on no distribution plan; largest {subject}",
-        "other": "{n} stocked products are on no distribution plan; largest {subject}"}, n=n, subject=subject),
-    "dead": lambda n, subject: msg("f.sum.dead", {
-        "one": "{n} product sits idle; largest {subject}",
-        "other": "{n} products sit idle; largest {subject}"}, n=n, subject=subject),
-    "notrouted": lambda n, subject: msg("f.sum.notrouted", {
-        "one": "{n} product is held where no plan sends it on; largest {subject}",
-        "other": "{n} products are held where no plan sends them on; largest {subject}"}, n=n, subject=subject),
-    "feed": lambda n, subject: msg("f.sum.feed", {
-        "one": "{n} factory input is not fed as the machines need; largest {subject}",
-        "other": "{n} factory inputs are not fed as the machines need; largest {subject}"}, n=n, subject=subject),
-    "staff": lambda n, subject: msg("f.sum.staff", {
-        "one": "{n} factory machine is not staffed round the clock; worst {subject}",
-        "other": "{n} factory machines are not staffed round the clock; worst {subject}"}, n=n, subject=subject),
-    "unnamed": lambda n, subject: msg("f.sum.unnamed", {
-        "one": "{n} factory machine runs a recipe the board cannot name; {subject} the largest",
-        "other": "{n} factory machines run recipes the board cannot name; {subject} the largest"},
-        n=n, subject=subject),
-    "unset": lambda n, subject: msg("f.sum.unset", {
-        "one": "{n} factory machine has no recipe set; {subject} the largest",
-        "other": "{n} factory machines have no recipe set; {subject} the largest"}, n=n, subject=subject),
-    "target": lambda n, subject: msg("f.sum.target", {
-        "one": "{n} top-up target is set far above what sells; {subject} the deepest",
-        "other": "{n} top-up targets are set far above what sells; {subject} the deepest"}, n=n, subject=subject),
-}
-CONDENSE_AT = 3  # three or more of a kind at one site becomes one line
-# Registry: "A finding kind" (only if: see the checklist).
-WORST_FIRST = {"wholesale"}  # condensed by severity first, then rank
-
-
-def _condense(found: list, gate: float) -> dict:
-    # One site is one key; a synthetic site ("3 shops") has none and is its name.
-    buckets = collections.OrderedDict()
-    for item in found:
-        buckets.setdefault((item["siteKey"] or item["site"], item["group"]), []).append(item)
-
-    out = []
-    for (where, group), rows in buckets.items():
-        if len(rows) < CONDENSE_AT or group not in SUMMARIES:
-            out.extend(rows)
-            continue
-        # A kind whose rows mix severities reads out its worst severity first,
-        # the rank breaking ties within it.
-        if group in WORST_FIRST:
-            rows.sort(key=lambda r: ({"critical": 0, "warn": 1, "info": 2}.get(r["level"], 3), r["rank"]))
-        else:
-            rows.sort(key=lambda r: r["rank"])
-        worst = rows[0]
-        worths = [r["worth"] for r in rows if r["worth"] is not None]
-        out.append(
-            {
-                "level": worst["level"],
-                "site": worst["site"],
-                "siteKey": worst["siteKey"],
-                "group": group,
-                "text": SUMMARIES[group](len(rows), worst.get("named", worst["subject"])),
-                "detail": worst["text"],
-                "worth": sum(worths) if worths else None,
-                "unit": ALERT_UNITS.get(group, ""),
-                # How many findings the line stands for, where it has no money.
-                "amt": _amt(len(rows), "orders" if group == "order" else "findings"),
-                # The subject is dropped here, so the merged row is keyed on
-                # where it is alone.
-                "id": _alert_id("summary", group, where),
-                "always": any(r["always"] for r in rows),
-                # A merged line reads out the worst of its rows, so it points
-                # at that row's evidence.
-                **({"ev": worst["ev"]} if worst.get("ev") else {}),
-            }
-        )
-
-    order = {"critical": 0, "warn": 1, "info": 2}
-    lines, minor = [], []
-    for row in out:
-        for key in ("rank", "subject", "named"):
-            row.pop(key, None)
-        small = (
-            not row["always"]
-            and row["worth"] is not None
-            and abs(row["worth"]) < gate
-        )
-        row.pop("always")
-        if row["worth"] is not None:
-            row["worth"] = money(row["worth"])
-        (minor if small else lines).append(row)
-
-    lines.sort(key=lambda a: order[a["level"]])
-    minor.sort(key=lambda a: -(a["worth"] or 0))
-    return {
-        "lines": lines,
-        "minor": {
-            "count": len(minor),
-            "gate": round(gate, 2),
-            "worth": money(sum(m["worth"] or 0 for m in minor)),
-            "rows": minor,
-        },
-    }
+# The findings, _alerts() and its helpers with ALERT_UNITS and SUMMARIES, are
+# ba_alerts.py's, imported at the end of this file.
 
 
 # ------------------------------------------------------------------- render
@@ -24446,7 +22637,8 @@ def render(
 
 
 # The board's HTML and CSS (template/board.html) and its script
-# (template/board.js and the open-store/open-factory calculation models), beside this file. They are read on the first render(),
+# (template/board.js, the parts of it kept in files of their own, and the
+# open-store/open-factory calculation models), beside this file. They are read on the first render(),
 # never at import: the Pyodide worker imports this module with only its
 # fetched files on disk and never renders.
 _template = None
@@ -24455,11 +22647,14 @@ _template = None
 BOARD_SCRIPT_SLOT = "/*__BOARD_SCRIPT__*/\n"
 
 
-def splice_board_script(page: str, script: str) -> str:
-    """board.html with board.js in its slot: the page as one string again."""
-    if page.count(BOARD_SCRIPT_SLOT) != 1:
-        raise ValueError("template/board.html must carry %r once" % BOARD_SCRIPT_SLOT.strip())
-    return page.replace(BOARD_SCRIPT_SLOT, script, 1)
+def splice_board_script(page: str, script: str, slot: str = BOARD_SCRIPT_SLOT,
+                        where: str = "template/board.html") -> str:
+    """`page` with `script` in its slot, a line of its own that `where` carries
+    once: board.html with the board script in it, or board.js with one of its
+    parts back where it was taken from."""
+    if page.count(slot) != 1:
+        raise ValueError("%s must carry %r once" % (where, slot.strip()))
+    return page.replace(slot, script, 1)
 
 
 def load_template() -> str:
@@ -24469,185 +22664,25 @@ def load_template() -> str:
     global _template
     if _template is None:
         folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "template")
-        with open(os.path.join(folder, "board.html"), encoding="utf-8") as fh:
-            page = fh.read()
-        scripts = []
-        for name in ("mod-economy-model.js", "mod-demand-model.js", "open-store-model.js", "open-factory-model.js", "street-food-model.js", "board.js"):
+
+        def read(name: str) -> str:
             with open(os.path.join(folder, name), encoding="utf-8") as fh:
-                scripts.append(fh.read())
-        _template = splice_board_script(page, "\n".join(scripts))
+                return fh.read()
+
+        # The board script's parts that live in files of their own, each put
+        # back at its placeholder line in board.js: the same text in the same
+        # order as one file, so every top-level declaration is reached when it
+        # was before (a const read before its line throws).
+        board = read("board.js")
+        for slot, name in (("/*__BOARD_STAFF__*/\n", "board-staff.js"), ("/*__BOARD_WRITE__*/\n", "board-write.js")):
+            board = splice_board_script(board, read(name), slot, "template/board.js")
+        scripts = [read(name) for name in ("mod-economy-model.js", "mod-demand-model.js", "open-store-model.js",
+                                          "open-factory-model.js", "street-food-model.js")]
+        _template = splice_board_script(read("board.html"), "\n".join(scripts + [board]))
     return _template
 
 
-# ------------------------------------------------------- cli and watch server
-def newest_under(target: str) -> str:
-    """The most recently written save at or below `target`."""
-    if os.path.isfile(target):
-        return target
-    folders = [target] + [
-        os.path.join(target, n)
-        for n in os.listdir(target)
-        if os.path.isdir(os.path.join(target, n))
-    ]
-    saves = [
-        os.path.join(f, n)
-        for f in folders
-        for n in os.listdir(f)
-        if n.lower().endswith((".hsg", ".bcsave"))
-    ]
-    if not saves:
-        raise SystemExit(f"no .hsg saves under {target}")
-    return max(saves, key=os.path.getmtime)
-
-
-def read_save_meta(path: str) -> dict:
-    """The game's sidecar for a save: `<name>.hsg.meta`, a small JSON file.
-
-    It names the character and the game day without opening the save itself.
-    Missing or unreadable (very old saves have a different shape) gives {}.
-    """
-    try:
-        with open(path + ".meta", encoding="utf-8") as fh:
-            meta = json.load(fh)
-    except (OSError, ValueError):
-        return {}
-    who = meta.get("characterData") or meta.get("playerCustomizationData") or {}
-    return {
-        "character": (who.get("name") or "").strip(),
-        "day": meta.get("day"),
-        "autosave": bool(meta.get("isRecoverSave")),
-    }
-
-
-def catalogue(root: str) -> list[dict]:
-    """Every save under `root`, grouped by character folder, newest first.
-
-    Each entry: folder (the character id the game generated), character (its
-    name, from the sidecars, else from a "New <name> Save Game" file, else the
-    folder), and saves: [{path, name, day, autosave, mtime}] newest first.
-    Groups are ordered by their newest save, so the ones being played lead.
-    """
-    if os.path.isfile(root):
-        root = os.path.dirname(root) or "."  # a bare filename has no dirname
-    folders = [root] + sorted(
-        os.path.join(root, n)
-        for n in os.listdir(root)
-        if os.path.isdir(os.path.join(root, n))
-    )
-    groups = []
-    for folder in folders:
-        saves = []
-        for n in os.listdir(folder):
-            if not n.lower().endswith((".hsg", ".bcsave")):
-                continue
-            path = os.path.join(folder, n)
-            meta = read_save_meta(path)
-            saves.append(
-                {
-                    "path": path,
-                    "name": os.path.splitext(n)[0],
-                    "day": meta.get("day"),
-                    "autosave": meta.get("autosave", n.lower().startswith("recover")),
-                    "character": meta.get("character", ""),
-                    "mtime": os.path.getmtime(path),
-                }
-            )
-        if not saves:
-            continue
-        saves.sort(key=lambda s: -s["mtime"])
-        character = next((s["character"] for s in saves if s["character"]), "")
-        if not character:
-            for s in saves:
-                m = re.match(r"New (.+?) Save Game", s["name"])
-                if m:
-                    character = m.group(1).strip()
-                    break
-        groups.append(
-            {
-                "folder": folder,
-                "character": character or os.path.basename(folder),
-                "saves": saves,
-            }
-        )
-    groups.sort(key=lambda g: -g["saves"][0]["mtime"])
-    return groups
-
-
-def print_catalogue(groups: list[dict]) -> None:
-    for g in groups:
-        print(f"{g['character']}  ({os.path.basename(g['folder'])})")
-        for s in g["saves"]:
-            when = dt.datetime.fromtimestamp(s["mtime"]).strftime("%d %b %H:%M")
-            day = f"day {s['day']:>4}" if s["day"] is not None else "day    ?"
-            kind = "autosave" if s["autosave"] else "saved   "
-            print(f"    {when}  {day}  {kind}  {s['name']}")
-    print()
-    print('Pass a character or save name to open it: python ba_dashboard.py "Costy Co"')
-
-
-def default_root(lead: str = "") -> str:
-    """SAVE_ROOT, or a SystemExit saying there is no folder to look in.
-
-    Only the Windows location is found on its own: elsewhere USERPROFILE is
-    unset, so SAVE_ROOT is a bare relative string rather than a place anyone
-    could look, and naming it would send the reader after a folder that was
-    never there. `lead` is what already went wrong, so the two ways on are
-    spelled out once.
-    """
-    if os.path.isdir(SAVE_ROOT):
-        return SAVE_ROOT
-    missing = (
-        f"no save folder at {SAVE_ROOT}"
-        if os.path.isabs(SAVE_ROOT)
-        else "no save folder to look in: only the Windows one is found on its own"
-    )
-    raise SystemExit(
-        # ASCII only: a piped log under cp850 would show an em dash as an escape.
-        f"{lead}there is {missing}. Pass the save folder or a .hsg file as the "
-        "argument (the README has the Windows and macOS paths), or use "
-        "bigcopilot.com, which reads saves in the browser."
-    )
-
-
-def resolve_target(arg: str | None) -> str:
-    """Turn the positional argument into a file or folder to read.
-
-    A path that exists is taken as is. Anything else is a name: a save
-    (`Costy Co`, `Costy Co.hsg`) or a character; an exact match wins, then a
-    case-insensitive substring. A save name gives that file; a character name
-    gives its folder, so --watch follows the character's autosaves. Several
-    matches are listed and the run stops, so a guess never opens the wrong city.
-    """
-    if not arg:
-        return default_root()
-    if os.path.exists(arg):
-        return arg
-    root = default_root(f"{arg} does not exist, and ")  # a name needs the folder
-    want = arg.lower().removesuffix(".hsg")
-    groups = catalogue(root)
-    saves = [(g, s) for g in groups for s in g["saves"]]
-    # Four tiers, each tried on its own: a save named exactly so, a character
-    # named exactly so, then the same two as substrings. "Costy Co" is both a
-    # save and a character here; the save wins, and "Costy" finds the character.
-    tiers = [
-        [(f"{g['character']} - {s['name']}", s["path"]) for g, s in saves if s["name"].lower() == want],
-        [(g["character"], g["folder"]) for g in groups if g["character"].lower() == want],
-        [(g["character"], g["folder"]) for g in groups if want in g["character"].lower()],
-        [(f"{g['character']} - {s['name']}", s["path"]) for g, s in saves if want in s["name"].lower()],
-    ]
-    for hits in tiers:
-        if len(hits) == 1:
-            return hits[0][1]
-        if hits:
-            print(f"{arg!r} matches more than one save or character:")
-            for label, path in hits:
-                print(f"  {label:<40} {path}")
-            raise SystemExit("be more specific, or pass the path")
-    print(f"nothing named {arg!r} under {root}. The saves there:\n")
-    print_catalogue(groups)
-    raise SystemExit(1)
-
-
+# ------------------------------------------------ safe builds and the browser
 class SaveShapeError(Exception):
     """The save parsed, but a field the board relies on was not where expected."""
 
@@ -24699,15 +22734,15 @@ def _safely(save: Save, work):
 
 
 def _raised_at(exc: BaseException) -> str:
-    """", in fn, line N": the innermost frame of the board's own code (this file
-    or ba_save.py) that ``exc`` passed through; the worker's copy has no
-    comments and empty docstrings but keeps every line, so the line is the
-    source's at that release."""
+    """", in fn, line N": the innermost frame of the board's own code (this file,
+    ba_msg.py, ba_alerts.py or ba_save.py) that ``exc`` passed through; the
+    worker's copy has no comments and empty docstrings but keeps every line, so
+    the line is the source's at that release."""
     where = ""
     tb = exc.__traceback__
     while tb is not None:
         code = tb.tb_frame.f_code
-        if os.path.basename(code.co_filename) in ("ba_dashboard.py", "ba_save.py"):
+        if os.path.basename(code.co_filename) in ("ba_dashboard.py", "ba_msg.py", "ba_alerts.py", "ba_save.py"):
             where = f", in {code.co_name}, {os.path.basename(code.co_filename)} line {tb.tb_lineno}"
         tb = tb.tb_next
     return where
@@ -24822,609 +22857,6 @@ def browser_name(history_path: str, rid: str, slug: str | None) -> None:
     history.write()
 
 
-BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
-
-
-def backfill_history(target: str, history_path: str, names: Names) -> int:
-    """Seed demand history from the other saves of the same character.
-
-    Older saves are real snapshots of the same city, so the trend line starts
-    populated instead of waiting a week for its first comparison. Only the folder
-    holding the newest save is read: every other folder is a different character,
-    and a different city.
-    """
-    folder = os.path.dirname(newest_under(target)) or "."  # a bare filename has none
-    saves = sorted(
-        os.path.join(folder, n) for n in os.listdir(folder) if n.lower().endswith((".hsg", ".bcsave"))
-    )
-    print(f"Seeding demand history from {len(saves)} saves in {os.path.basename(folder)}")
-    recorded = 0
-    for path in saves:
-        try:
-            save = load_save(path)
-            extract(save, names, history_path)
-            print(f"  day {save.root['Day']:>4}  {os.path.basename(path)}", flush=True)
-            recorded += 1
-        except Exception as exc:
-            print(f"  skipped {os.path.basename(path)}: {exc}", flush=True)
-    return recorded
-
-
-def yield_to_the_game() -> bool:
-    """Drop below normal priority so the game always gets the core first."""
-    try:
-        if sys.platform != "win32":
-            os.nice(10)
-            return True
-        import ctypes
-
-        kernel32 = ctypes.windll.kernel32
-        kernel32.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
-        kernel32.SetPriorityClass.restype = ctypes.c_int
-        # -1 is the pseudo-handle for the current process. It has to be passed
-        # as a real pointer-width value or the call fails with a bad handle.
-        current_process = ctypes.c_void_p(-1)
-        return bool(
-            kernel32.SetPriorityClass(current_process, BELOW_NORMAL_PRIORITY_CLASS)
-        )
-    except Exception:  # priority is a nicety, never a reason to fail
-        return False
-
-
-class LinkUnavailable(Exception):
-    """The game link did not answer: the game is closed or between cities."""
-
-
-class LinkMismatch(LinkUnavailable):
-    """The mod answered, but speaks a schema version this board does not know.
-
-    An outage like any other to the watch loop (docs/game-link-api.md, the
-    clients' loop, step 5): said once under the board it keeps, and over the
-    moment a health answer of this version arrives. A one-shot run stops on it.
-    """
-
-
-def loopback_link(url: str) -> str:
-    """The mod's address with localhost and [::1] spelt 127.0.0.1.
-
-    The mod listens on http://127.0.0.1:<port>/ only, and its listener turns
-    away any other Host, so the other two names for this machine would read as
-    a game that is not there. Any other address is left as given.
-    """
-    try:
-        parts = urllib.parse.urlsplit(url)
-        port = parts.port
-    except ValueError:  # a port that is no number: urllib says so on the call
-        return url
-    if parts.hostname not in ("localhost", "::1"):
-        return url
-    host = f"127.0.0.1:{port}" if port else "127.0.0.1"
-    return urllib.parse.urlunsplit((parts.scheme, host, parts.path, parts.query, parts.fragment))
-
-
-class GameLink:
-    """The running game's save, served by the Big Copilot Link mod.
-
-    docs/game-link-api.md is the contract; this is the watcher's client of it.
-    urllib only, with 5-second timeouts: the link shares the machine with the
-    game, so a stalled call must never hold the watch loop. poll() downloads
-    a save only when /health shows a stamp this board has not built from, so
-    an idle game costs nothing.
-
-    LinkUnavailable is a normal answer, not a crash: the listener lives only
-    while a city is loaded, so the watch loop reports it once and carries on.
-    """
-
-    SCHEMA = 5  # the schema version this client speaks; see the contract
-    TIMEOUT = 5
-
-    def __init__(self, url: str, out_dir: str):
-        # --game takes a URL and nothing else; argparse would otherwise hand a
-        # save name typed after the flag to urllib, which raises ValueError.
-        if not re.match(r"^https?://", url or ""):
-            raise SystemExit(
-                f"--game takes the mod's address (default http://127.0.0.1:8322), "
-                f"not {url!r}; a save or character name does not combine with it"
-            )
-        self.url = loopback_link(url.rstrip("/"))
-        # No proxy, whatever HTTP_PROXY says: urllib would send even
-        # 127.0.0.1 through one, which fails, or hands a local intercepting
-        # proxy the player's whole save.
-        self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        self.path = os.path.join(out_dir, "game-link.hsg")
-        self.stamp = ""  # the stamp of the bytes last downloaded
-        self.character = ""
-        self.company = ""
-        self.stale = False  # why wait_for_save() returned older bytes than it asked for, or False
-        self.not_ready = 0  # /health answers in a row that were no health object (any status)
-
-    def _call(self, route: str, method: str = "GET", headers: dict | None = None):
-        try:
-            # Request() is what raises ValueError for an address urllib cannot
-            # use, so it belongs inside the try with the call.
-            req = urllib.request.Request(
-                self.url + route, method=method, headers=headers or {}
-            )
-            with self._opener.open(req, timeout=self.TIMEOUT) as res:
-                return res.status, dict(res.headers), res.read()
-        except urllib.error.HTTPError as err:
-            return err.code, dict(err.headers), err.read()
-        except (urllib.error.URLError, OSError, http.client.HTTPException, ValueError) as exc:
-            raise LinkUnavailable(
-                "the game link did not answer; start the game with the Big Copilot "
-                "Link mod enabled and load a save"
-            ) from exc
-
-    def poll(self) -> str | None:
-        """The path of a freshly downloaded game-link.hsg, else None.
-
-        Keeps the last stamp it built from and sends it as If-None-Match, so
-        a game that has moved on costs one /health and nothing more.
-        Raises LinkUnavailable while the game is not there, and its
-        LinkMismatch while the mod speaks a schema version this board does not
-        know: the next poll asks again, so a mod put right is read as ever.
-        """
-        status, _, body = self._call("/health")
-        health = None
-        if status == 200 and body:
-            try:
-                health = json.loads(body)
-            except ValueError:
-                health = None
-        if not isinstance(health, dict) or health.get("schemaVersion") is None:
-            # Answered, but not with health: a status other than 200 (the mod is
-            # there and not ready), or a 200 that is no health object, or one
-            # with no version in it (something else on that port for a moment).
-            # The next poll asks again; only a health object with a version says
-            # what it speaks. Ten in a row is an outage, said once by the watch
-            # loop and raised on every poll until a health answer, so it never
-            # looks over between two polls, and one stray answer never stops
-            # the watcher for good.
-            self.not_ready += 1
-            if self.not_ready >= 10:
-                raise LinkUnavailable(
-                    f"{self.url} answers, but not as the Big Copilot Link mod; "
-                    "is another program on that port?"
-                )
-            return None
-        self.not_ready = 0
-        version = health.get("schemaVersion")
-        if version not in (1, 2, 3, 4, self.SCHEMA):
-            raise LinkMismatch(
-                f"the Big Copilot Link mod speaks schema version {version}; this "
-                f"board needs version {self.SCHEMA}. Update the mod or the board"
-            )
-        stamp = health.get("stamp") or ""
-        if not stamp or stamp == self.stamp or health.get("busy"):
-            return None
-        headers = {"If-None-Match": f'"{self.stamp}"'} if self.stamp else {}
-        status, res_headers, data = self._call("/save", headers=headers)
-        if status != 200:  # 503 no_save_yet, or a race the next poll settles
-            return None
-        facts_enabled = "building-facts.v1" in health.get("features", [])
-        if facts_enabled:
-            import ba_facts
-            actual_stamp = res_headers.get("X-Game-Link-Stamp") or stamp
-            actual_character = res_headers.get("X-Game-Link-Character") or health.get("character")
-            code, _, body = self._call("/facts?stamp=" + urllib.parse.quote(actual_stamp, safe=""))
-            if code == 409:
-                return None
-            if code != 200:
-                raise LinkUnavailable("The game could not provide matching building facts")
-            try:
-                facts = ba_facts.validate(json.loads(body), data, actual_stamp, actual_character)
-                data = ba_facts.pack(data, facts)
-            except ValueError as exc:
-                raise LinkUnavailable(str(exc)) from exc
-        destination = os.path.splitext(self.path)[0] + (".bcsave" if facts_enabled else ".hsg")
-        pending = destination + ".tmp"
-        with open(pending, "wb") as fh:
-            fh.write(data)
-        os.replace(pending, destination)
-        self.path = destination
-        self.stamp = res_headers.get("X-Game-Link-Stamp") or stamp
-        self.character = res_headers.get("X-Game-Link-Character") or health.get("character") or ""
-        self.company = health.get("company") or ""
-        return self.path
-
-    def wait_for_save(self, seconds: float = 45.0) -> str | None:
-        """Ask the mod for fresh bytes and poll until they arrive, or time out.
-
-        The one-shot build's way in: a refresh is requested, and poll() is
-        tried every second until it hands over a path. An accepted refresh
-        (202) is waited for: the bytes must carry a stamp newer than the one
-        the mod named, or the build would show the state before the request.
-        A refusal or a throttle is not an error here: this link has downloaded
-        nothing yet, so poll() takes whatever the mod already serves. Only a
-        mod with nothing to serve inside the deadline comes back None. A
-        LinkUnavailable from the refresh surfaces.
-        """
-        self.stale = False
-        status, body = self.refresh()
-        superseded = body.get("stamp") if status == 202 else None
-        deadline = time.monotonic() + seconds
-        path = None
-        while True:
-            try:
-                got = self.poll()
-            except LinkUnavailable as exc:
-                # The game went away mid-wait, or the port stopped answering as
-                # the mod. Bytes already downloaded in this call are still a
-                # board; only an empty-handed wait surfaces it. The reason is
-                # the exception's own, whichever it was.
-                if path is None:
-                    raise
-                self.stale = str(exc)
-                return path
-            if got is not None:
-                path = got
-                if superseded is None or self.stamp != superseded:
-                    return path
-            if time.monotonic() >= deadline:
-                # The requested refresh never landed; the bytes that did are
-                # still the game's state, only a little older. The caller says so.
-                self.stale = "the mod did not finish the refresh in time" if path is not None else False
-                return path
-            time.sleep(1)
-
-    def refresh(self) -> tuple[int, dict]:
-        """Ask the mod to serialize the game now; /refresh's status and body."""
-        status, _, body = self._call("/refresh", method="POST")
-        try:
-            parsed = json.loads(body or b"{}")
-        except ValueError:
-            parsed = {}
-        # Some other local service on that port answers JSON that is no object.
-        return status, parsed if isinstance(parsed, dict) else {}
-
-
-class Board:
-    """Holds the current dashboard, and rebuilds it when the save changes."""
-
-    def __init__(self, target: str, out: str, link: GameLink | None = None, lang: str | None = None):
-        self.target = target
-        self.link = link
-        self.out = out
-        self.locale_source, locale = game_text()
-        self.names = Names(locale)
-        self.lang_names = cli_names(lang, self.locale_source, locale)
-        self.lang_ui = cli_ui_table(lang)
-        self.history = os.path.join(os.path.dirname(out) or ".", "market_history.json")
-        self.lock = threading.Lock()
-        self.html = b""
-        self.data = b"{}"
-        self.stamp = b'{"stamp":""}'
-        self.source = None
-        self.day = None
-        self.error = None
-        self._stamp = ""
-        self._instance = os.urandom(8).hex()
-        self._generation = 0
-        self._fingerprint = None
-        self.character = None
-        self.revision = 0  # bumps when the player names a line, so the page refetches
-        self.build = threading.Lock()
-
-    def name_line(self, rid: str, slug: str | None) -> None:
-        """A recipe the player named by hand; rebuild so the needs follow."""
-        with self.build:
-            history = History(self.history)
-            history.named(self.character or "default", {rid: slug})
-            if not history.write():
-                print(f"The line name was not kept: {os.path.basename(self.history)} could not be "
-                      "read or written. Name the line again once the board has rebuilt.", flush=True)
-            with self.lock:
-                self.revision += 1
-                self._fingerprint = None
-            self._refresh(settle=False)
-
-    def refresh(self, settle: bool = True) -> bool:
-        """Rebuild if a newer save has appeared. True if anything changed."""
-        with self.build:
-            return self._refresh(settle)
-
-    def _refresh(self, settle: bool) -> bool:
-        if self.link is not None:
-            # The link has no folder to scan: the mod says when its bytes have
-            # moved, and its stamp is the whole fingerprint. A cleared
-            # fingerprint (the player named a line) rebuilds from the bytes
-            # this link downloaded, since the mod has nothing newer to say. A
-            # fresh board has no fingerprint either, and no stamp: a
-            # game-link.hsg left by an earlier session is never its source.
-            # The rebuild after a name does not need the game: with the game
-            # closed, the downloaded bytes still carry the name to the board.
-            try:
-                path = self.link.poll()
-            except LinkUnavailable:
-                if (self._fingerprint is not None or not self.link.stamp
-                        or not os.path.exists(self.link.path)):
-                    raise
-                path = None
-            if path is None:
-                if (self._fingerprint is not None or not self.link.stamp
-                        or not os.path.exists(self.link.path)):
-                    return False
-                path = self.link.path
-            mark = self.link.stamp
-            if mark == self._fingerprint:
-                return False
-        else:
-            path = newest_under(self.target)
-            mark = (path, os.path.getmtime(path), os.path.getsize(path))
-            if mark == self._fingerprint:
-                return False
-            if settle:
-                # The game may still be writing; only read once the file holds still.
-                time.sleep(0.75)
-                if (os.path.getmtime(path), os.path.getsize(path)) != mark[1:]:
-                    return False
-
-        try:
-            save = load_save(path)
-            save.live_source = self.link is not None
-            data = safe_extract(save, self.names, self.history)
-            # names= only for --lang: an English board renders as it always has.
-            lang = {"names": self.lang_names} if self.lang_names else {}
-            if self.lang_ui:
-                lang["ui"] = self.lang_ui
-            live_page = render(data, live=True, **lang).encode("utf-8")
-            static_page = render(data, **lang).encode("utf-8")
-        except Exception as exc:
-            # Fingerprint it anyway. Without this a save that will not build is
-            # re-read every interval -- a 26 MB parse every few seconds, which
-            # is precisely the CPU the game is supposed to get. The next save
-            # the game writes clears the mark and we try again.
-            with self.lock:
-                self._fingerprint = mark
-                self.error = f"{os.path.basename(path)}: {exc}"
-                self._publish_stamp()
-            raise
-
-        with self.lock:
-            self._fingerprint = mark
-            self.source = path
-            self.error = None
-            self.html = live_page
-            self.data = json.dumps(data, separators=(",", ":")).encode("utf-8")
-            self.character = data["supply"].get("factories", {}).get("character")
-            self.day = data["meta"]["day"]
-            self._generation += 1
-            self._stamp = f"{self._instance}@{self._generation}#{self.revision}"
-            self._publish_stamp()
-
-        with open(self.out, "wb") as fh:
-            fh.write(static_page)
-        return True
-
-    def _publish_stamp(self) -> None:
-        """What the open page polls: the build it has, and why it is stuck.
-
-        Called with the lock already held.
-        """
-        body = {"stamp": self._stamp}
-        if self.error:
-            body["error"] = self.error
-        self.stamp = json.dumps(body).encode("utf-8")
-
-
-class BoardHandler(_RequestHandler):
-    protocol_version = "HTTP/1.1"
-    board: Board = None
-    NAME_MAX_BYTES = 16 * 1024  # a {rid, slug} is a few dozen bytes
-
-    def _this_host(self) -> bool:
-        """A request addressed to this server by a loopback name, and else
-        answered 403. The server listens on 127.0.0.1 only, but a web page on
-        a name that resolves here (DNS rebinding) would send its own Host."""
-        port = self.server.server_address[1]
-        host = (self.headers.get("Host") or "").strip().lower()
-        if host in (f"127.0.0.1:{port}", f"localhost:{port}"):
-            return True
-        self.send_error(403)
-        return False
-
-    def do_GET(self):
-        if not self._this_host():
-            return
-        route = self.path.split("?")[0].rstrip("/") or "/"
-        # Explicit allowlist: the watch server exposes no arbitrary workspace
-        # files. The wiki's catalogue is the public one beside the page, never
-        # the extractor's own working copies.
-        map_assets = {
-            "/maps/locations.json": "application/json",
-            "/maps/map-background.svg": "image/svg+xml",
-            "/maps/floor-plans.json": "application/json",
-        }
-        # The wiki's compact copy, made here from the committed catalogue: a
-        # checkout run without build_web.py has no web/wiki-data.min.json.
-        if route == "/" + WIKI_SERVED:
-            try:
-                with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "web",
-                                       "wiki-data.json"), encoding="utf-8") as fh:
-                    body = compact_wiki(fh.read()).encode("utf-8")
-            except (OSError, ValueError):
-                self.send_error(404)
-                return
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-cache")
-            self.end_headers()
-            self.wfile.write(body)
-            return
-        if route in map_assets:
-            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", route.lstrip("/"))
-            try:
-                with open(path, "rb") as fh:
-                    body = fh.read()
-            except OSError:
-                self.send_error(404)
-                return
-            self.send_response(200)
-            self.send_header("Content-Type", map_assets[route])
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-cache")
-            self.end_headers()
-            self.wfile.write(body)
-            return
-        with self.board.lock:
-            body, ctype = {
-                "/": (self.board.html, "text/html; charset=utf-8"),
-                "/index.html": (self.board.html, "text/html; charset=utf-8"),
-                "/data.json": (self.board.data, "application/json"),
-                "/stamp": (self.board.stamp, "application/json"),
-            }.get(route, (None, None))
-        if body is None:
-            self.send_error(404)
-            return
-        self.send_response(200)
-        self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(body)
-
-    def do_POST(self):
-        """The page naming a factory line by hand: {rid, slug}, slug null to clear."""
-        if not self._this_host():
-            return
-        route = self.path.split("?")[0].rstrip("/")
-        if route != "/name":
-            self.send_error(404)
-            return
-        # JSON only: a page elsewhere can send a form or text/plain POST
-        # without asking, but not this one, which needs a CORS preflight this
-        # server never answers. The body is never read past its cap.
-        if self.headers.get_content_type() != "application/json":
-            self.send_error(415)
-            return
-        try:
-            length = int(self.headers.get("Content-Length") or 0)
-        except ValueError:
-            self.send_error(400)
-            return
-        if length < 0:
-            self.send_error(400)
-            return
-        if length > self.NAME_MAX_BYTES:
-            self.send_error(413)
-            return
-        try:
-            body = json.loads(self.rfile.read(length) or b"{}")
-            rid, slug = str(body["rid"]), body.get("slug") or None
-        except (ValueError, KeyError, TypeError):
-            self.send_error(400)
-            return
-        try:
-            self.board.name_line(rid, slug)
-        except Exception as exc:  # the board keeps serving the last build
-            print(f"  naming a line failed -- {exc}", flush=True)
-        self.send_response(204)
-        self.send_header("Content-Length", "0")
-        self.end_headers()
-
-    def log_message(self, *args):
-        pass  # the watcher prints what matters
-
-
-def watch(
-    target: str,
-    out: str,
-    port: int,
-    interval: int,
-    open_browser: bool,
-    link: GameLink | None = None,
-    lang: str | None = None,
-) -> None:
-    lowered = yield_to_the_game()
-    board = Board(target, out, link=link, lang=lang)
-    try:
-        board.refresh(settle=False)
-    except LinkUnavailable as exc:
-        # The game is not up yet, or the mod is off. The poll loop below
-        # keeps trying; the server has nothing to be sorry for.
-        print(f"  {exc}", flush=True)
-    except Exception as exc:
-        # A save that will not build is no reason to stop watching: the poll
-        # loop below tries again when the game writes the next one.
-        print(f"  skipped the first build -- {board.error or exc}", flush=True)
-        traceback.print_exc()
-    if not board.html:
-        # Until a board builds, the page is the live shell with no numbers: it
-        # polls the stamp and draws the first board that does.
-        board.html = render(None, live=True).encode("utf-8")
-    BoardHandler.board = board
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), BoardHandler)
-    url = f"http://127.0.0.1:{port}/"
-
-    def poll():
-        last_failure = None
-        link_down = ""  # what was last said about the link being out, while it is
-        while True:
-            try:
-                moved = board.refresh()
-            except LinkUnavailable as exc:
-                # Once per outage, not once per interval: the game is closed
-                # or between cities, or the mod speaks another schema version,
-                # and the board on screen is still good. Polling goes on, so a
-                # game that comes back, or a mod put right, is read again.
-                if str(exc) != link_down:
-                    link_down = str(exc)
-                    print(f"  {time.strftime('%H:%M:%S')}  {exc}", flush=True)
-            except Exception as exc:
-                signature = f"{type(exc).__name__}: {exc}"
-                print(
-                    f"  {time.strftime('%H:%M:%S')}  skipped a rebuild -- "
-                    f"{board.error or signature}",
-                    flush=True,
-                )
-                # The traceback the first time each failure appears. A page of
-                # bare "skipped a rebuild: 'NetWorth'" says nothing about where
-                # it came from, and that is the only record there is.
-                if signature != last_failure:
-                    last_failure = signature
-                    traceback.print_exc()
-                    print(
-                        "  serving the last board that built; retrying when "
-                        "the game writes a new save",
-                        flush=True,
-                    )
-            else:
-                if link_down:
-                    link_down = ""
-                    print(f"  {time.strftime('%H:%M:%S')}  the game link is back", flush=True)
-                if moved:
-                    what = (
-                        f"the game (day {board.day})"
-                        if board.link is not None
-                        else os.path.basename(board.source)
-                    )
-                    print(
-                        f"  {time.strftime('%H:%M:%S')}  rebuilt from {what}",
-                        flush=True,
-                    )
-                    last_failure = None
-            time.sleep(interval)
-
-    threading.Thread(target=poll, daemon=True).start()
-
-    if board.link is not None:
-        print(f"Linked to the game at {board.link.url}", flush=True)
-    else:
-        print(f"Watching {target}", flush=True)
-    print(f"  serving {url}  (checks every {interval}s, rebuilds only on a new save)")
-    print(f"  priority {'lowered, the game gets the CPU first' if lowered else 'unchanged'}")
-    print(f"  {locale_note(board.locale_source, board.names.locale)}")
-    print("  Ctrl+C to stop", flush=True)
-    if open_browser:
-        webbrowser.open(url)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\nStopped.")
-        server.shutdown()
-
-
 def game_text() -> tuple[str | None, dict[str, str]]:
     """load_best_locale() for a local run, which stops on a non-English file.
 
@@ -25459,190 +22891,26 @@ def locale_note(source: str | None, locale: dict[str, str]) -> str:
     return f"game text: {source}"
 
 
-def cli_names(lang: str | None, source: str | None, english: dict[str, str]) -> dict | None:
-    """--lang: the game names of one language, from the installed game, for
-    render(names=...). None for English or no --lang."""
-    if not lang or lang == "en":
-        return None
-    if lang not in GAME_NAME_LANGS:
-        raise SystemExit(f"--lang {lang}: the game has no such language; one of "
-                         + ", ".join(code for code in GAME_NAME_LANGS))
-    if not source or bundled_locale(source):
-        raise SystemExit(f"--lang {lang} reads the game's own {lang}.json beside its en.json, "
-                         "and no installed game was found; set BA_LOCALE to the game's en.json")
-    other = load_locale(os.path.join(os.path.dirname(source), f"{lang}.json"))
-    if name_coverage(english, other) < NAME_COVERAGE:
-        raise SystemExit(f"--lang {lang}: {os.path.join(os.path.dirname(source), lang + '.json')} "
-                         "names too few of the game's items to use")
-    return {"lang": lang, "names": name_table(english, other)}
-
-
-def cli_ui_table(lang: str | None) -> dict | None:
-    """--lang: Big Copilot's own text in that language, for render(ui=...),
-    from the table the site ships (web/i18n/<lang>.json, which
-    `python build_web.py` writes). None for English, or for a language with
-    no table or an empty one: the page's own words then stay English."""
-    if not lang or lang == "en":
-        return None
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "i18n", f"{lang}.json")
-    try:
-        with open(path, encoding="utf-8") as fh:
-            table = json.load(fh)
-    except (OSError, ValueError):
-        return None
-    return {"lang": lang, "table": table} if isinstance(table, dict) and table else None
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    ap.add_argument(
-        "save",
-        nargs="?",
-        help="a .hsg file, a save folder, or the name of a save or character",
-    )
-    ap.add_argument(
-        "--list",
-        action="store_true",
-        help="list every save under the save folder, by character, and stop",
-    )
-    ap.add_argument(
-        "-o", "--out", default="dashboard.html", help="where to write the page"
-    )
-    ap.add_argument(
-        "--watch",
-        action="store_true",
-        help="serve the board locally and rebuild it whenever the game saves",
-    )
-    ap.add_argument(
-        "--port", type=int, default=8770, help="port for the local server in watch mode"
-    )
-    ap.add_argument(
-        "--interval",
-        type=int,
-        default=None,
-        help="seconds between checks: 5 for a save folder, 30 for the game link",
-    )
-    ap.add_argument(
-        "--no-open", action="store_true", help="with --watch, do not open a browser"
-    )
-    ap.add_argument(
-        "--game",
-        nargs="?",
-        const="http://127.0.0.1:8322",
-        default=None,
-        metavar="URL",
-        help="read the running game through the Big Copilot Link mod instead of a "
-        "save folder; URL defaults to http://127.0.0.1:8322. The bytes are kept "
-        "as game-link.hsg beside the output file",
-    )
-    ap.add_argument(
-        "--lang",
-        default=None,
-        metavar="CODE",
-        help="show the game's own names (items, business types, neighbourhoods, "
-        "skills) in one of the game's languages, e.g. de, fr, ja, zh-cn; the rest "
-        "of the page stays English, unless Big Copilot's own text has a "
-        "translation into that language (web/i18n/<code>.json)",
-    )
-    ap.add_argument(
-        "--backfill",
-        action="store_true",
-        help="seed demand history from every save on disk, then build",
-    )
-    args = ap.parse_args()
-
-    if args.game and (args.list or args.save):
-        raise SystemExit(
-            "--game reads the running game; it does not combine with --list or a "
-            "save or character name"
-        )
-    interval = args.interval if args.interval is not None else (30 if args.game else 5)
-
-    if args.list:
-        if not args.save:
-            root = default_root()
-        elif os.path.exists(args.save):
-            root = args.save  # catalogue() takes the folder of a save file
-        else:
-            raise SystemExit(
-                f"{args.save} does not exist. --list takes the save folder or a save file."
-            )
-        print_catalogue(catalogue(root))
-        return
-
-    out = os.path.abspath(args.out)
-    history = os.path.join(os.path.dirname(out) or ".", "market_history.json")
-
-    # The link needs no folder: the mod names the character and the day, so
-    # the positional argument and the save-folder search are beside the point.
-    link = GameLink(args.game, os.path.dirname(out) or ".") if args.game else None
-    target = None if link is not None else resolve_target(args.save)
-    if link is not None and args.backfill:
-        raise SystemExit(
-            "--backfill seeds history from the saves of a folder; it does not "
-            "combine with --game"
-        )
-
-    # --watch has its own Board, which resolves the text itself, so a plain
-    # watch run does not parse en.json here only to leave it behind.
-    if args.backfill or not args.watch:
-        locale_source, locale = game_text()
-        names = Names(locale)
-
-    if args.backfill:
-        recorded = backfill_history(target, history, names)
-        print(f"  merged {recorded} snapshots into {os.path.basename(history)}")
-
-    if args.watch:
-        watch(target, out, port=args.port, interval=interval, open_browser=not args.no_open, link=link,
-              lang=args.lang)
-        return
-
-    if link is not None:
-        try:
-            path = link.wait_for_save()
-        except LinkUnavailable as exc:
-            raise SystemExit(str(exc)) from None
-        if path is None:
-            raise SystemExit(
-                "the game link has no save to read yet; load a save in the game "
-                "and try again"
-            )
-        source_name = "the game link"
-    else:
-        path = newest_under(target)
-        source_name = os.path.basename(path)
-    lang_names = cli_names(args.lang, locale_source, locale)
-    save = load_save(path)
-    save.live_source = link is not None
-    data = safe_extract(save, names, history)
-    with open(out, "w", encoding="utf-8") as fh:
-        fh.write(render(data, names=lang_names, ui=cli_ui_table(args.lang)))
-
-    k = data["kpi"]
-    minor = data["minor"]
-    print(
-        f"{data['meta']['save']} - day {data['meta']['day']}  "
-        f"(from {source_name}, game build {data['meta']['build']}, "
-        f"board checked on {VERIFIED_BUILD})"
-    )
-    if link is not None and link.stale:
-        # Two lines: the reason is a sentence of its own, sometimes a question.
-        print(f"  {link.stale}", flush=True)
-        print("  the board shows the state the mod last served", flush=True)
-    worth = f"{k['netWorth']:>14,.0f}" if k["netWorth"] is not None else "   not reported"
-    print(f"  cash {k['cash']:>14,.0f}   net worth {worth}")
-    print(f"  profit yesterday {k['profitYesterday']:>+11,.0f}   7-day avg {k['profitAvg7']:>+11,.0f}")
-    print(
-        f"  {k['businesses']} businesses, {k['employees']} staff, "
-        f"{len(data['alerts'])} alerts "
-        f"({minor['count']} more below the ${minor['gate']:,.0f}/day line)"
-    )
-    print(f"  wrote {out}")
-    print(f"  {locale_note(locale_source, locale)}")
+# The findings are ba_alerts.py's. That module reads this one's helpers by
+# name, so it is imported last, once every helper exists, and it imports them
+# at its own end for the same reason: either module can then be imported
+# first. Each name is re-exported (`X as X`) for the importers and tests that
+# read it off ba_dashboard.
+from ba_alerts import (  # noqa: E402
+    ALERT_UNITS as ALERT_UNITS, CONDENSE_AT as CONDENSE_AT, SUMMARIES as SUMMARIES,
+    WORST_FIRST as WORST_FIRST, _alert_id as _alert_id, _alerts as _alerts, _amt as _amt,
+    _condense as _condense, _demand_priority as _demand_priority, _fact_labels as _fact_labels,
+    _feed_notes as _feed_notes, _feed_target_text as _feed_target_text, _finding as _finding,
+    _idle_notes as _idle_notes, _import_notes as _import_notes, _lasts_msg as _lasts_msg,
+    _msg_list as _msg_list, _notrouted_text as _notrouted_text, _order_says as _order_says,
+    _order_text as _order_text, _runs_dry_when as _runs_dry_when, _shelf_notes as _shelf_notes,
+    _shortfall_note as _shortfall_note, _shown as _shown, _staff_notes as _staff_notes,
+    _unnamed_notes as _unnamed_notes, _unsourced_note as _unsourced_note, _worked_over as _worked_over,
+)
 
 
 if __name__ == "__main__":
+    # The command line, the watch server and the game link (ba_cli.py).
+    from ba_cli import main
+
     main()

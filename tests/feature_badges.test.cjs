@@ -8,6 +8,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const {between} = require('./_slice.cjs');
+const {loadBoard} = require('./_board.cjs');
 
 const root = path.join(__dirname, '..');
 const read = name => fs.readFileSync(path.join(root, name), 'utf8');
@@ -76,8 +77,8 @@ test('without a date or a changelog the badge stays, so a missing date is notice
 function badgeIds(){
   const ids = new Set();
   const grab = (text, re) => { for (const m of text.matchAll(re)) ids.add(m[1]); };
-  for (const name of ['template/board.html', 'template/board.js', 'web/app.js', 'web/community.js',
-    'web/map.js', 'ba_dashboard.py', 'build_web.py']) {
+  for (const name of ['template/board.html', 'template/board.js', 'template/board-staff.js', 'template/board-write.js',
+    'web/app.js', 'web/community.js', 'web/map.js', 'ba_dashboard.py', 'build_web.py']) {
     const text = read(name);
     grab(text, /data-new-feature="([a-z0-9-]+)"/g);
     grab(text, /data-visit-feature="([a-z0-9-]+)"/g);
@@ -85,10 +86,11 @@ function badgeIds(){
     grab(text, /featureDiscovery\.visit\(\s*["']([a-z0-9-]+)["']/g);
     if (name === 'ba_dashboard.py') grab(text, /feature="([a-z0-9-]+)"/g);   // _sf_out(..., feature=)
   }
-  const viewNew = vm.runInNewContext('(' + between(read('template/board.js'), 'var VIEW_NEW = ', '};').slice('var VIEW_NEW = '.length) + '})');
-  Object.values(viewNew).forEach(id => ids.add(id));
-  const wiki = read('web/wiki.js');
-  const wikiNew = vm.runInNewContext('(' + between(wiki, 'const WIKI_NEW = ', '};').slice('const WIKI_NEW = '.length) + '})');
+  // The board's view badges and the wiki's, read from the board script with
+  // web/wiki.js spliced in, as render() splices it.
+  const board = loadBoard({}, {edit: source => source.replace('/*__WIKI_SCRIPT__*/', () => read('web/wiki.js'))});
+  Object.values(vm.runInContext('VIEW_NEW', board)).forEach(id => ids.add(id));
+  const wikiNew = vm.runInContext('WIKI_NEW', board);
   wikiNew.shelf.forEach(key => ids.add(`wiki-${key}`));
   wikiNew.topics.forEach(slug => ids.add(`wiki-topic-${slug}`));
   return ids;

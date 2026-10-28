@@ -15,8 +15,9 @@ from tests.i18n_check import MsgAsserts, msg_param
 from pathlib import Path
 
 import build_web
+from ba_cli import cli_names
 from ba_dashboard import (
-    GAME_NAME_LANGS, NAME_COVERAGE, NAME_PREFIXES, UI_LANGS, UI_LANGS_DRAFTED, _name_text, cli_names, footer_html,
+    GAME_NAME_LANGS, NAME_COVERAGE, NAME_PREFIXES, UI_LANGS, UI_LANGS_DRAFTED, _name_text, footer_html,
     name_coverage, name_table, render,
 )
 
@@ -165,12 +166,12 @@ class Picker(unittest.TestCase):
 
     def test_the_drafted_note_names_the_languages_still_mostly_unreviewed(self):
         # The footer's "Machine-translated" note shows for a language while more
-        # than half its table awaits a native speaker (i18n/<lang>.ai.json).
+        # than half its table awaits a native speaker (its draft marks in i18n/base.json).
+        from tools import i18n
+
         def drafted(lang):
-            table = json.loads((ROOT / f"i18n/{lang}.json").read_text(encoding="utf-8"))
-            ai = ROOT / f"i18n/{lang}.ai.json"
-            marks = json.loads(ai.read_text(encoding="utf-8")) if ai.exists() else {}
-            return len(marks) * 2 > len(table)
+            table, _ = i18n.load(lang)
+            return len(i18n.drafted(lang)) * 2 > len(table)
         self.assertEqual(sorted(UI_LANGS_DRAFTED), sorted(l for l in UI_LANGS if l != "en" and drafted(l)))
 
     def test_the_two_pickers_label_themselves_apart(self):
