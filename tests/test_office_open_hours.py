@@ -1,4 +1,4 @@
-﻿"""Opt-in office coverage uses saved hours and keeps the default independent."""
+"""Opt-in office coverage uses saved hours and keeps the default independent."""
 import copy
 import unittest
 from unittest.mock import patch

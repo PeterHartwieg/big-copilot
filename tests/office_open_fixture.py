@@ -1,4 +1,4 @@
-﻿"""Synthetic office plans shared by the browser and write-path tests."""
+"""Synthetic office plans shared by the browser and write-path tests."""
 import json
 from ba_dashboard import _hiring
 from tests.test_office_demand import plan
