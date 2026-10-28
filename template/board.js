@@ -27262,14 +27262,17 @@ function gwConfirm(spec){
     if(o.soft && (dlg.dataset.phase === "ready" || (dlg.dataset.phase === "asking" && st.soft))) quietly(o.from);
     else asking();
     const body = spec.body();
-    const sent = JSON.stringify(body), game = gwWhose();
+    const sent = JSON.stringify(body), game = gwWhose(), board = D;
     /* A write with nothing for the game to do answers here (spec.local). */
     const here = spec.local ? spec.local(body, true) : null;
     const res = here ? {status: 200, error: null, body: here}
       : await SOURCE.write(spec.kind, body, {dryRun: true, approval: view(mine), asked: typeof o.asked === "string" ? o.asked : ""});
-    if(!dlg.open || mine !== seq) return;
+    if(!dlg.open || mine !== seq || !current()) return;
     /* "Allowed." is said once: a Try again after this does not say it again. */
     if(res.error){ allowed = false; return gwFailed(dlg, spec, res, () => plan(), () => plan()); }
+    /* Approval may span a refresh. Its old dry run cannot judge the new
+       board: wait for its sections and check again before offering Apply. */
+    if(board !== D) return plan();
     /* The answer on screen and the body it judged go together. */
     const answer = last = res.body || {};
     judged = sent;
@@ -27415,6 +27418,9 @@ function gwConfirm(spec){
      dry run still in flight. Completed writes keep their result and Undo. */
   st.odBoard = () => {
     if(applying || ["applying", "done", "undone"].includes(dlg.dataset.phase)) return;
+    /* Keep the game's pending question visible while staffing recalculates.
+       plan() rechecks the new board once this request has an answer. */
+    if(dlg.dataset.phase === "approval"){ current(); return; }
     if((spec.needs || []).some(n => !odReady(n))) plan({soft: true});
   };
   plan();
