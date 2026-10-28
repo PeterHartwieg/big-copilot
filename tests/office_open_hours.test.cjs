@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
@@ -41,6 +41,17 @@ test('unavailable alternative falls back to the original plan', () => {
   run(c, 'D.officeStaffing[0].openCover = {failed: true}');
   assert.equal(c.hrVariant(payload.hiring.sites[0]), 'office');
   assert.equal(c.gwRosterPlan(key).variant, undefined);
+});
+
+test('spare people and the schedule status follow the selected plan', () => {
+  const c = board();
+  run(c, `D.businesses[0].staffIdle = ['l0', 'l1', 'l2', 'l3', 'gone'];
+    D.officeStaffing[0].shifts = D.officeStaffing[0].shifts.filter(s => D.officeStaffing[0].people[s.p].id === 'l0')`);
+  assert.deepEqual(plain(run(c, 'spSpareIds(D.businesses[0])')), ['l1', 'l2', 'l3', 'gone']);
+  assert.notEqual(run(c, 'schedStatus(D.businesses[0])'), 'Every open hour');
+  choose(c);
+  assert.deepEqual(plain(run(c, 'spSpareIds(D.businesses[0])')), ['gone']);
+  assert.equal(run(c, 'schedStatus(D.businesses[0])'), 'Every open hour');
 });
 
 test('office idle-hours summaries follow the selection even without hiring plans', () => {
@@ -95,11 +106,18 @@ test('office toggle redraws in place and survives a page reload', async t => {
     wireAll();
   }, structuredClone(payload));
   await draw();
+  await page.evaluate(() => featureDiscovery.asOf('2026-10-28'));
   const pick = page.locator('#sp-roster [data-plan="open"]');
-  assert.equal(await pick.textContent(), 'Every open hour');
+  const badge = pick.locator('[data-new-feature="office-open-hours"]');
+  assert.match(await pick.innerText(), /^Every open hour\s*New$/i);
+  assert.equal(await badge.isVisible(), true, 'the opt-in carries its New badge');
   assert.equal(await pick.getAttribute('aria-current'), null);
+  await page.locator('#sp-roster [data-plan="demand"]').click();
+  assert.equal(await badge.isVisible(), true, 'picking the default is not a visit');
   await pick.click();
   assert.equal(await pick.getAttribute('aria-current'), 'true');
+  assert.equal(await badge.isVisible(), false, 'opening the plan retires the badge');
+  assert.equal(await page.evaluate(() => localStorage.getItem('ba_dash_feature_seen:office-open-hours')), '1');
   assert.match(await page.locator('#sp-roster').innerText(), /opening hours, cleaning and other duties stay as they are/);
   await page.reload(); await draw();
   assert.equal(await pick.getAttribute('aria-current'), 'true');
