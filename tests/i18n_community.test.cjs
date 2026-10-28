@@ -2,11 +2,14 @@ const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const {loadBoard} = require('./_board.cjs');
 const source = fs.readFileSync(require('node:path').join(__dirname, '../web/i18n.js'), 'utf8');
 const rule = {allowed:['n:'], required:[['n:']], maxLength:2000};
+/* web/i18n.js as the hosted site fills it in: the site, with an Italian catalogue. */
+const hostedI18n = text => text.replace('/*__TT_SITE__*/false','/*__TT_SITE__*/true').replace('/*__TT_CATALOGUES__*/null','{"it":"catalogue"}');
 function load(hosted=true, fetch=async () => {throw Error('offline');}){
   const ctx = vm.createContext({console, Intl, URLSearchParams, setTimeout, clearTimeout, fetch});
-  vm.runInContext(hosted ? source.replace('/*__TT_SITE__*/false','/*__TT_SITE__*/true').replace('/*__TT_CATALOGUES__*/null','{"it":"catalogue"}') : source, ctx);
+  vm.runInContext(hosted ? hostedI18n(source) : source, ctx);
   return {ctx, run:s => vm.runInContext(s,ctx)};
 }
 test('current community text overrides bundled; stale, unknown and invalid text fall back', () => {
@@ -75,14 +78,18 @@ test('an older open page rejects a newer deployment manifest even when overlay m
 
 test('the actual picker cancels pending Italian overlay when its empty bundle falls back to English', async () => {
   let release;const delayed=new Promise(resolve=>release=resolve);
-  const {ctx,run}=load(true,async url => {
+  const fetch=async url => {
     if(url.startsWith('/i18n/'))return {ok:true,json:async()=>({})};
     if(url.startsWith('/translations/'))return {ok:true,json:async()=>({schemaVersion:1,lang:'it',revision:'catalogue',entries:{'comm.good':{sourceVersion:'good',validation:rule}}})};
     await delayed;return {ok:true,json:async()=>({schemaVersion:1,lang:'it',translations:{'comm.good':{text:'Italiano {n}',sourceVersion:'good'}}})};
-  });
-  Object.assign(ctx,{gnKnown:()=>true,gnLoad:async()=>({}),gnRemember:()=>{},setGameNames:async()=>true,gnPaint:()=>{},gnRedraw:()=>{}});
-  const board=fs.readFileSync(require('node:path').join(__dirname,'../template/board.js'),'utf8');
-  run(board.slice(board.indexOf('const gnUiLang ='),board.indexOf('/* "Machine-translated. Help check it"')));
+  };
+  // The whole board script on the hosted page, with Italian game names
+  // embedded (render()'s /*__NAMES__*/), so the picker knows the language.
+  const ctx=loadBoard({fetch, Intl, setTimeout, clearTimeout},
+    {i18n: hostedI18n, edit: s => s.replace('/*__NAMES__*/null', () => '{"lang":"it"}')});
+  const run=s => vm.runInContext(s,ctx);
+  // The game names' own loading and drawing are not under test.
+  Object.assign(ctx,{gnLoad:async()=>({}),gnRemember:()=>{},setGameNames:async()=>true,gnPaint:()=>{},gnRedraw:()=>{}});
   await run('gnSwitch("it")');assert.equal(run('ttLang'),'en');assert.equal(run('ttWant'),'it');
   await run('gnSwitch("en")');release();await new Promise(resolve=>setImmediate(resolve));
   assert.equal(run('ttLang'),'en');assert.equal(run('ttWant'),'en');

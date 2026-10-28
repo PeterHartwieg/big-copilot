@@ -32,7 +32,7 @@ const template = name => fs.readFileSync(path.join(ROOT, 'template', name), 'utf
 /* The board script's parts kept in files of their own, each put back at its
    placeholder line in board.js, as load_template() in ba_dashboard.py does:
    the same text in the same order as one file. */
-const BOARD_PARTS = [['/*__BOARD_WRITE__*/', 'board-write.js']];
+const BOARD_PARTS = [['/*__BOARD_STAFF__*/', 'board-staff.js'], ['/*__BOARD_WRITE__*/', 'board-write.js']];
 function boardScript(){
   let board = template('board.js');
   for (const [slot, name] of BOARD_PARTS) {
@@ -68,8 +68,9 @@ const inert = new Proxy(function(){}, {
    properties of the returned context; `const` and `let` names are reached with
    vm.runInContext(name, context). `globals` are set before either runs.
    `edit`, given, rewrites the board script's source first (a test's extra
-   registry row). */
-function loadBoard(globals = {}, {edit = null} = {}){
+   registry row, or a placeholder filled the way render() fills it), and
+   `i18n` rewrites web/i18n.js's (its hosted-site placeholders). */
+function loadBoard(globals = {}, {edit = null, i18n = null} = {}){
   const context = vm.createContext({
     document: inert, window: inert, navigator: inert, location: inert, history: inert,
     localStorage: inert, sessionStorage: inert, matchMedia: inert, getComputedStyle: inert,
@@ -82,7 +83,7 @@ function loadBoard(globals = {}, {edit = null} = {}){
     console, URL, URLSearchParams,
     ...globals,
   });
-  vm.runInContext(I18N, context, {filename: 'web/i18n.js'});
+  vm.runInContext(i18n ? i18n(I18N) : I18N, context, {filename: 'web/i18n.js'});
   vm.runInContext(edit ? edit(SOURCE) : SOURCE, context, {filename: 'template/board.js'});
   return context;
 }

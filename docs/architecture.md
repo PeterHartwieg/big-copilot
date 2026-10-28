@@ -1055,6 +1055,7 @@ without its `.git`) or inside any other git work tree.
 The board's page is `template/board.html`, a file of its own beside `ba_dashboard.py`, and
 its script is `template/board.js` beside it. Parts of the board script live in files of
 their own and go back into `board.js` at a placeholder line where they were taken out:
+`template/board-staff.js` (Company › Staff, the `hr*` names) at `/*__BOARD_STAFF__*/`, and
 `template/board-write.js` (writing to the game, the `gw*` names) at `/*__BOARD_WRITE__*/`.
 The calculation cores are
 `template/open-store-model.js` and `template/open-factory-model.js`, with the public
@@ -1196,9 +1197,9 @@ What `page_html()` produces, top of the file down:
 4. `BEFORE_SCRIPT`, filled in by `page_html()` with the stamp, the release JSON and the
    inlined `web/update.js`, in its slot just ahead of the board's own script:
    `window.LEDGER_RELEASE`, `update.js`, `app.js?v=<stamp>`, `community.js?v=<stamp>`.
-5. The board script, `template/board.js` with its parts (`template/board-write.js`) back
-   at their placeholder lines, in the last `<script>` block of the template, after the
-   calculation models.
+5. The board script, `template/board.js` with its parts (`template/board-staff.js`,
+   `template/board-write.js`) back at their placeholder lines, in the last `<script>` block
+   of the template, after the calculation models.
 
 Before any of that, `main()` refreshes `web/wiki-data.json`, copies the files `PY_CODE`
 and `PY_DATA` name (all but `gametext.json`: `PY_COPIED`) into `web/py/`, stripping
@@ -1665,7 +1666,8 @@ above its declaration (`tests/test_doc_registries.py`). The other covering tests
 today, so extend them for the new entry. Rows marked
 *only if* apply to some entries, not all. All anchors are in `ba_dashboard.py` unless a row
 says otherwise; "board script" means `template/board.js` with its parts spliced back in
-(`template/board-write.js`, [Template placeholders](#template-placeholders)), the last
+(`template/board-staff.js`, `template/board-write.js`,
+[Template placeholders](#template-placeholders)), the last
 `<script>` block of the page.
 
 ### A finding kind

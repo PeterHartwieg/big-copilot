@@ -213,7 +213,7 @@ class FindingGroupTests(unittest.TestCase):
 class RegistryPointerTests(unittest.TestCase):
     """(d) Each table a checklist under Registries names by its declaration
     carries a `Registry: "<heading>"` comment just above it, in ba_dashboard.py,
-    ba_alerts.py or template/board.js, so a reader who lands on the table finds the checklist. Only the comment
+    ba_alerts.py or the board script (template/board*.js), so a reader who lands on the table finds the checklist. Only the comment
     directly above the declaration counts, not a neighbour's."""
 
     HEADINGS = ("A finding kind", "A view or a page")

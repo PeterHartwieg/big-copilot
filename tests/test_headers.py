@@ -24,10 +24,8 @@ STAMPED_PATH = r"(?:app\.js|community\.(?:js|css)|report\.(?:js|css)|i18n/|names
 # optional leading slash or ${...} prefix.
 STAMPED_LITERAL = re.compile(r"""[`'"](?:\$\{[^}]*\})?/?""" + STAMPED_PATH)
 # The scripts that can request them, and how many requests each makes at least,
-# so a pattern that stopped matching cannot pass the check vacuously. Every
-# part of the board script (template/board*.js) is scanned.
+# so a pattern that stopped matching cannot pass the check vacuously.
 STAMPED_FETCHERS = {
-    **{p.relative_to(ROOT).as_posix(): 0 for p in sorted((ROOT / "template").glob("board*.js"))},
     "web/app.js": 2,          # report.css and report.js, on demand
     "web/i18n.js": 1,         # ttLoad(): i18n/<lang>.json
     "web/map.js": 3,          # locations.json, the background, floor-plans.json
@@ -37,6 +35,10 @@ STAMPED_FETCHERS = {
     "web/report.js": 0,
     "web/update.js": 0,
 }
+# The board script's other parts (template/board-*.js, spliced into board.js)
+# request none today, but a request moved into one is checked all the same.
+STAMPED_FETCHERS.update({path.relative_to(ROOT).as_posix(): 0
+                         for path in sorted((ROOT / "template").glob("board-*.js"))})
 
 
 def js_code(source: str) -> str:
