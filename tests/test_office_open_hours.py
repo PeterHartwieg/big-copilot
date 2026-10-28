@@ -119,6 +119,5 @@ class OfficeOpenHoursTests(unittest.TestCase):
                                  [slot[k] for k in ('d', 'f', 't')])
 
 
-
 if __name__ == '__main__':
     unittest.main()
