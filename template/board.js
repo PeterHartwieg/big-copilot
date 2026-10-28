@@ -5446,7 +5446,7 @@ const spSpareIds = b => {
      called spare. */
   const office = base ? null : [...(Array.isArray(D.officeStaffing) ? D.officeStaffing : []),
     ...(((D.factoryStaffing || {}).cap) || [])].find(r => r.key === b.key);
-  const row = base && !base.failed ? spShownRow(base) : office;
+  const row = base && !base.failed ? spShownRow(base) : b.status === "office" ? gwOfficeRow(b.key) : office;
   if(!row) return ids;
   const people = row.people || (base || {}).people || [];
   const used = new Set((row.shifts || []).filter(s => s.p !== null && s.p !== undefined)
@@ -6564,21 +6564,30 @@ function spPlanPick(base, full){
 function spOfficeRoster(b){
   if(!odNeed("officeStaffing")) return odWaitHtml("officeStaffing");
   const row = gwOfficeRow(b.key);
+  const base = spOfficeBase(b.key);
+  const every = row?.variant === "open";
+  const seg = (plan, label) => `<a href="#" data-plan="${plan}"${
+    (plan === "open") === every ? ' class="on" aria-current="true"' : ""}>${label}</a>`;
+  const pick = base?.openCover && !base.openCover.failed
+    ? `<div class="sp-pick"><span class="seg sp-plans" role="group" aria-label="${attr(tt("sp.pick.plan", "Plan"))}">${
+      seg("demand", base.demandBased ? tt("sp.pick.demand", "Demand plan") : tt("sp.gw.plan.office", "Office default"))}${
+      seg("open", tt("sp.pick.openall", "Every open hour"))}</span></div>` : "";
   /* No office default to add: Staff this site still, where people move in or out. */
-  if(!row || (!row.demandBased && !(row.shifts || []).length)){
+  if(!row || (!spOfficeReplaces(row) && !(row.shifts || []).length && !pick)){
     const staff = gwLink() ? gwStaffButton(b.key, true) : "";
     return staff ? `<section class="sec rv" data-block="roster" id="sp-roster" data-site="${attr(b.key)}">
     ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster"})}${staff}</section>` : "";
   }
   const comp = gwOfficeComputers(row);
   /* The demand plan replaces computer hours; the fallback only adds. */
-  const now = ((row.current || {}).list || []).filter(s => comp.has(s.s)), after = row.demandBased ? (row.shifts || []).filter(s => comp.has(s.s) && !spNobody(s.p)) : now.concat(gwRosterWeek(row).added);
+  const now = ((row.current || {}).list || []).filter(s => comp.has(s.s)), after = spOfficeReplaces(row) ? (row.shifts || []).filter(s => comp.has(s.s) && !spNobody(s.p)) : now.concat(gwRosterWeek(row).added);
   const people = list => new Set(list.map(s => s.p).filter(p => p !== null && p !== undefined)).size;
   const open = (row.shifts || []).filter(s => spNobody(s.p));
   const facts = [[tt("sp.off.hours", "Hours / week"), gwHours(now), gwHours(after)], [tt("sp.off.people", "People"), people(now), people(after)]];
   return `<section class="sec rv" data-block="roster" id="sp-roster" data-site="${attr(b.key)}">
-    ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", quiet: row.demandBased ? tt("sp.off.demand", "Customer demand by weekday and hour") : tt("sp.off.quiet", "the office default: {n} always on, every computer on weekdays 8 to 22", {n: row.alwaysOn || 0})})}
-    <p class="quiet">${row.demandBased ? tt("sp.off.demand.after", "Computers now → demand plan; cleaning and other duties stay as they are.") : tt("sp.off.after", "Computers now → after adding the office default where they are free")}</p>
+    ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", quiet: every ? tt("sp.off.open.quiet", "Every computer during every open hour") : row.demandBased ? tt("sp.off.demand", "Customer demand by weekday and hour") : tt("sp.off.quiet", "the office default: {n} always on, every computer on weekdays 8 to 22", {n: row.alwaysOn || 0})})}
+    ${pick}
+    <p class="quiet">${every ? tt("sp.off.open.after", "Computers now → every open hour; opening hours, cleaning and other duties stay as they are.") : row.demandBased ? tt("sp.off.demand.after", "Computers now → demand plan; cleaning and other duties stay as they are.") : tt("sp.off.after", "Computers now → after adding the office default where they are free")}</p>
     <div class="sp-offroster">${facts.map(([k, a, z]) => `<div><span>${k}</span><b>${a === z ? z : `<s>${a}</s> → ${z}`}</b></div>`).join("")}${
       open.length ? `<div><span>${tt("sp.off.open", "Waiting on a hire")}</span><b>${tt("sp.off.openh", "{n} h", {n: gwHours(open)})}</b></div>` : ""}</div>
     ${gwLink() ? gwRosterButtons(b.key) : `<p class="quiet">${tt("sp.off.link", "Link the game to write this week from here.")}</p>`}
@@ -16009,6 +16018,7 @@ function hrVariant(site){
     return plans.demand ? "demand" : null;
   }
   if(site.kind === "factory") return plans[sizing] ? sizing : Object.keys(plans)[0] || null;
+  if(site.kind === "office" && plans.open && spOfficePlanOf(site.key) === "open") return "open";
   return plans.office ? "office" : Object.keys(plans)[0] || null;
 }
 function hrPlanRow(site, variant){
@@ -16021,7 +16031,8 @@ function hrPlanRow(site, variant){
   if(site.kind === "factory") return (((D.factoryStaffing || {})[variant]) || []).find(r => r.key === site.key && !r.failed) || null;
   const offices = D.officeStaffing;
   const list = Array.isArray(offices) ? offices : ((offices || {})[variant] || []);
-  return list.find(r => r.key === site.key && !r.failed) || null;
+  const row = list.find(r => r.key === site.key && !r.failed);
+  return (variant === "open" ? row?.openCover : row) || null;
 }
 /* Who a person is: the hiring payload's own table ({name, skills, wage,
    site, hours, demands}), else the plan's (a name). Their role is their
@@ -16411,7 +16422,7 @@ function hrWeek(S, fill, away, arriving, lost, o = {}){
     if(!row.full && spCoverOnly(row)) now.filter(s => !s.k).forEach(s => kept.add(s));
   } else {
     const owned = new Set((row.shifts || []).map(s => s.s));
-    now.filter(s => row.demandBased && S.site.kind === "office"
+    now.filter(s => spOfficeReplaces(row) && S.site.kind === "office"
       ? s.k || !gwOfficeComputers(row).has(s.s)
       : !owned.has(s.s) && !((row.stations || [])[s.s] || {}).skill).forEach(s => kept.add(s));
   }
@@ -16637,7 +16648,7 @@ const hrSendable = days => days.every(({shifts}) => shifts.every(s => Number.isI
    it hires. */
 function hrSiteWeek(S, fill, away, arriving, inbound, additive){
   const lost = {hours: 0};
-  if(S.site.kind === "office" && !(S.row || {}).demandBased && !inbound){
+  if(S.site.kind === "office" && !spOfficeReplaces(S.row) && !inbound){
     const base = gwOfficeRow(S.key);
     if(!base) return {days: [], lost, changes: false};
     const gone = s => away.has(((base.people || [])[s.p] || {}).id);
@@ -16750,7 +16761,7 @@ function hrRequest(m, o = {}){
     if(!weekly){ sites.push({address, expect: null, days: null}); return; }
     const wk = hrSiteWeek(S, at ? at.fill : [], away, arriving, !!(at && at.inbound), !!(at && at.additive && !inScope(S)));
     if(!at && !wk.changes) return;
-    const unreadableOffice = S.site.kind === "office" && S.row.demandBased
+    const unreadableOffice = S.site.kind === "office" && spOfficeReplaces(S.row)
       && gwRosterWeek(Object.assign({}, S.row, {office: true})).unreadable;
     if(unreadableOffice){
       unreadableSites.push(S);
@@ -16970,7 +16981,7 @@ function hrNoHoursHtml(){
 /* The plan the site's Staffing block shows and writes (spPlanOf()): its gap of people with no hours, or undefined. */
 function hrUnstaffedOf(S){
   const u = S.site.unstaffed || {};
-  return S.site.kind === "office" ? u.office : u[spPlanOf(spRosterRow(S.key)) || "demand"];
+  return S.site.kind === "office" ? u[hrVariant(S.site)] : u[spPlanOf(spRosterRow(S.key)) || "demand"];
 }
 function hrIdleHtml(m){
   const of = hrUnstaffedOf;
@@ -17871,9 +17882,9 @@ function hrReviewSites(req, phase, gone, status){
     const plan = !weekly ? (people ? tt("co.hire.plan.none", "no hours: assigned only") : tt("co.hire.plan.same", "its week stays as it is"))
       : at.additive ? tt("co.hire.plan.add", "its week as it is, with the reassigned hours added")
       : S.variant === "full" ? tt("co.hire.plan.full", "full cover 24/7: opens every day 0 to 24")
-      : S.variant === "open" ? (S.row && S.row.complete ? tt("co.hire.plan.open", "every station, the hours it opens")
+      : S.variant === "open" ? (S.site.kind === "office" || S.row && S.row.complete ? tt("co.hire.plan.open", "every station, the hours it opens")
         : tt("co.hire.plan.unread", "every station where nothing is measured yet"))
-      : S.site.kind === "office" && !(S.row || {}).demandBased && !at.inbound ? tt("co.hire.plan.office", "the office default, added where free")
+      : S.site.kind === "office" && !spOfficeReplaces(S.row) && !at.inbound ? tt("co.hire.plan.office", "the office default, added where free")
       : tt("co.hire.plan.board", "hours from the board's plan");
     /* Each site's own outcome once the action has run. */
     const said = phase !== "done" || (!weekly && !people) ? null : at.rest ? st[S.key] || "wait" : "done";
@@ -18332,7 +18343,7 @@ function hrFewer(m, req, rewritten){
     ...(req.rest || []).map(r => [r.S.key, r.body.days])]);
   const away = new Set(req.body.moves.map(x => x.employeeId));
   const sum = (map, id, h) => map.set(id, (map.get(id) || 0) + h);
-  return m.sites.filter(S => keys.has(S.key) && !(S.site.kind === "office" && !(S.row || {}).demandBased && !((req.touched.get(S.key) || {}).inbound)))
+  return m.sites.filter(S => keys.has(S.key) && !(S.site.kind === "office" && !spOfficeReplaces(S.row) && !((req.touched.get(S.key) || {}).inbound)))
     .flatMap(S => {
       const row = S.row || {};
       /* A row that does not carry the game's week: the plan's own figures. */
@@ -20791,6 +20802,7 @@ function schedStatus(b){
   if(b.status === "office"){
     /* The office default where it plans the office (spOfficeRoster()). */
     const o = gwOfficeRow(b.key);
+    if(o?.variant === "open") return tt("sp.pick.openall", "Every open hour");
     if(o && o.demandBased) return tt("co.sched.office.demand", "Office: staffing follows customer demand");
     return o && (o.shifts || []).length && o.computers
       ? tt("co.sched.office.plan", {one: "Office default: {s} of {n} computer staffed", other: "Office default: {s} of {n} computers staffed"},
@@ -25706,7 +25718,7 @@ const wireRoster = once(() => {
       return;
     }
     const box = document.createElement("div");
-    box.innerHTML = spRosterBlock(b).trim();
+    box.innerHTML = (b.status === "office" ? spOfficeRoster(b) : spRosterBlock(b)).trim();
     const fresh = box.firstElementChild;
     fresh.classList.add("in");
     fresh.id = s.id;
@@ -27992,7 +28004,7 @@ function gwRosterPlan(key){
   /* An office: its demand plan or default, keeping its opening hours. */
   if(b.status === "office"){
     const office = gwOfficeRow(key);
-    return office && (office.demandBased || (office.shifts || []).length) ? spRowLess(office) : null;
+    return office && (spOfficeReplaces(office) || (office.shifts || []).length) ? spRowLess(office) : null;
   }
   if(b.status !== "retail") return null;
   const base = spRosterRow(key);
@@ -28163,7 +28175,7 @@ function gwRosterWeek(row){
     days.get(s.d).push({f: s.f, t: s.t, employeeId: who.id, itemInstanceId: st.id});
     return true;
   };
-  if(row.office && !row.demandBased){
+  if(row.office && !spOfficeReplaces(row)){
     /* An office's write adds, like Quick hire: every entry at the office
        stays as it stands, and the office default's entries for the office's
        own people go in only where that computer and that person are free
@@ -28194,7 +28206,7 @@ function gwRosterWeek(row){
       if(put(s)){ sent++; added.push(s); busy.push({d: s.d, f: s.f, t: s.t, p: s.p, s: s.s}); weekOf(s.p).push(entry(s)); }
     });
   } else (row.shifts || []).forEach(s => { if(!spNobody(s.p) && !bench.has(s.p) && put(s)) sent++; });
-  if(row.office && row.demandBased){
+  if(row.office && spOfficeReplaces(row)){
     unreadable += Number(row.unrepresentable) || 0;
     const computers = gwOfficeComputers(row);
     ((row.current || {}).list || []).forEach(s => {
@@ -28209,9 +28221,14 @@ function gwRosterWeek(row){
 }
 /* An office row's computers: the stations of its one role, by index. */
 const gwOfficeComputers = row => new Set((row.roles || []).flatMap(r => r.stations || []));
+const spOfficeBase = key => (Array.isArray(D.officeStaffing) ? D.officeStaffing : [])
+  .find(r => r.key === key && !r.failed) || null;
+const spOfficePlanOf = key => spPlanRead(key) === "open" && spOfficeBase(key)?.openCover
+  && !spOfficeBase(key).openCover.failed ? "open" : "office";
+const spOfficeReplaces = row => !!row && (row.demandBased || row.variant === "open");
 const gwOfficeRow = key => {
-  const list = Array.isArray(D.officeStaffing) ? D.officeStaffing : [];
-  const row = list.find(r => r.key === key && !r.failed);
+  const base = spOfficeBase(key);
+  const row = spOfficePlanOf(key) === "open" ? base.openCover : base;
   return row ? Object.assign({}, row, {full: false, office: true}) : null;
 };
 
@@ -28242,7 +28259,7 @@ function gwRosterButtons(key){
   const staff = gwStaffButton(key);
   const one = gwButton("schedule", tt("sp.gw.sch.one", "Write this schedule to the game"), `data-gw-sites="${attr(JSON.stringify([key]))}"`,
     row.office && gwRosterWeek(row).unreadable ? tt("sp.gw.sch.office.unreadable", "An entry here can't be read; change it in the game first")
-      : (row.demandBased && !(row.shifts || []).length) || gwRosterWeek(row).sent ? "" : row.office && !row.demandBased ? (gwRosterWeek(row).dropped ? tt("sp.gw.sch.office.full", "Nothing more fits: the rest of the office default is more than its staff's weeks can take")
+      : (row.demandBased && !(row.shifts || []).length) || gwRosterWeek(row).sent ? "" : row.office && !spOfficeReplaces(row) ? (gwRosterWeek(row).dropped ? tt("sp.gw.sch.office.full", "Nothing more fits: the rest of the office default is more than its staff's weeks can take")
         : tt("sp.gw.sch.office.written", "Every entry the office default can add is in the game"))
       : tt("sp.gw.sch.blocked", "Every entry in this plan waits on somebody who does not work here yet: add them first"), {icon: "hire", alt: !!staff});
   /* Every planned site at once: Staff all sites, the one action (spares
@@ -28360,9 +28377,9 @@ function gwSchedule(key){
           /* Nobody to add, and somebody to come from another site: the hours wait on them. */
           : row.fromOthers ? gwLiftCall("warn", "hire", gwFromWait(add.hoursUncovered, row.fromOthers)) : "");
       const whole = tt("sp.gw.plan.whole", "replaces the whole week");
-      const which = row.office && !row.demandBased ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.office", "Office default")}</span><span class="gw-only">${tt("sp.gw.plan.adds", "adds to the week")}</span>`
+      const which = row.office && !spOfficeReplaces(row) ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.office", "Office default")}</span><span class="gw-only">${tt("sp.gw.plan.adds", "adds to the week")}</span>`
         : row.full ? `<span class="gw-plan full">${gwSvg("sun")}${tt("sp.pick.full", "Full cover 24/7")}</span><span class="gw-only">${tt("sp.gw.plan.every", "every station, every hour")}</span>`
-        : row.variant === "open" ? `<span class="gw-plan">${gwSvg("roster")}${spOffersOpen(spRosterRow(row.key))
+        : row.variant === "open" ? `<span class="gw-plan">${gwSvg("roster")}${(row.office || spOffersOpen(spRosterRow(row.key)))
           ? tt("sp.pick.openall", "Every open hour") : tt("sp.pick.open", "Open hours")}</span><span class="gw-only">${whole}</span>`
         : !row.office && spCoverOnly(row) ? `<span class="gw-plan">${gwSvg("roster")}${tt("sp.gw.plan.cover", "Cleaning and security")}</span><span class="gw-only">${whole}</span>`
         : `<span class="gw-plan">${gwSvg("roster")}${tt("sp.pick.demand", "Demand plan")}</span><span class="gw-only">${whole}</span>`;
@@ -28394,7 +28411,7 @@ function gwSchedule(key){
         roleOf(p.employeeId) ? `<small>${roleOf(p.employeeId)}</small>` : ""}</span>`);
       /* An office's write adds: the hours and the people it adds them for. */
       let adds = "";
-      if(row.office && !row.demandBased){
+      if(row.office && !spOfficeReplaces(row)){
         const had = new Set(now.map(s => `${s.d}|${s.f}|${s.t}|${((row.people || [])[s.p] || {}).id}|${((row.stations || [])[s.s] || {}).id}`));
         const added = week.days.flatMap(({d, shifts}) => shifts.map(s => Object.assign({d}, s)))
           .filter(s => !had.has(`${s.d}|${s.f}|${s.t}|${s.employeeId}|${s.itemInstanceId}`));

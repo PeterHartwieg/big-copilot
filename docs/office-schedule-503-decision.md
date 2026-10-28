@@ -1,10 +1,10 @@
-﻿# Office scheduling decision — issue #503
+# Office scheduling decision — issue #503
 
-Status: awaiting Peter's product decision. Refs #503.
+Status: Peter approved the opt-in plan on 28 October 2026. Refs #503.
 
 The missing office option is an explicit Big Copilot planning choice, not an
-established restriction on office scheduling in the game. No implementation or
-UI copy is changed by this investigation.
+established restriction on office scheduling in the game. The investigation below records the original behavior; the implementation now
+adds the approved alternative.
 
 ## Evidence
 
@@ -45,22 +45,27 @@ and 5 at Sunday 12:00, despite every hour being open.
 assembles the site and passes all 46 tests. Existing tests cover office demand,
 nighttime capacity and the distinction between demand and the fallback.
 
-## Decision requested
+## Decision and implementation
 
-Should offices offer an explicit plan to staff every usable computer during
-every saved open hour, alongside their existing demand plan?
+Peter chose an opt-in **Every open hour** office plan, keeping the existing plan
+as the default. The selector appears in an office's Staffing block on its
+schedule under Staffing → Schedules (also reached from its business page's
+Schedule button), beside **Demand plan** (or
+**Office default** when there is no usable history).
 
-1. **Recommended: add an opt-in office open-hours plan.** Keep demand planning as
-   the default and preserve saved opening hours. Show hiring/cost implications,
-   respect employee and station constraints, and preserve cleaning/other duties.
-   Decide whether usable computers should be capped at building capacity before
-   implementation. This addresses the reporter's missing choice without making
-   higher staffing the default.
-2. **Keep the existing single office plan and explain it.** Add a translated
-   sentence saying Big Copilot uses office demand with a default for unmeasured
-   hours and does not currently offer the retail open-hours alternative. Describe
-   it as a planner limitation, never as a game restriction.
+The alternative staffs each installed computer during every saved open hour,
+including weekends and nights, just as retail's alternative covers installed
+stations. It does not infer extra opening hours or cap the workstation count by
+building capacity. Cleaning and other duties remain in place, and employee and
+station requirements still apply. An office with no saved open hours offers no
+alternative. Existing mod-compatibility blocks remain in force.
 
-Adding the alternative affects planning, hiring, selection/persistence and game
-writes; it is not just a hidden button to enable. Making that choice would
-supersede the recorded scope, so this PR deliberately implements neither option.
+Selection is remembered per company and site in this browser. The schedule
+review and Staff needs use the same selection, including its own hiring weeks
+and station/employee indices. The alternative can reuse unassigned people the
+default already reserves; additional gaps become hiring weeks which Staff needs
+can fill from the remaining pool. Merely offering the alternative does not
+reserve extra people from another site's default plan.
+
+Regression coverage: `tests/test_office_open_hours.py` and
+`tests/office_open_hours.test.cjs`, using synthetic saves only.
