@@ -128,6 +128,13 @@ with patch("builtins.open", changed):
   variants.oldBytes={...variants.a,oldBytes:true};
   variants.failedRuntime={...variants.a,failedRuntime:true};
   const oldWorker=fs.readFileSync(path.join(root,'tests/fixtures/legacy_worker_53497965.js'));
+  // Release A's own Python is not committed. Worker A fetches only ba_save.py,
+  // ba_dashboard.py and ba_facts.py; today's ba_dashboard.py also needs
+  // ba_msg.py and ba_alerts.py, which no worker of that era fetches. So the
+  // ba_dashboard.py primed into A's cache is a stand-in that, like release A's,
+  // imports with those three files: it loads the cached ba_save.py and the
+  // ba_facts.py fetched after the deploy, and offers the set_progress() hook.
+  const oldDashboard=Buffer.from('import ba_save, ba_facts\n\n\ndef set_progress(say):\n    pass\n');
   // Changes in metadata do not alter the coarse hosted JS/CSS blocks.
   for (const version of ['unrelated','python','data'])
     assert.deepEqual([...variants[version].assets.keys()].filter(u=>u.includes('/board-')),
@@ -162,6 +169,7 @@ with patch("builtins.open", changed):
     else if(pathname.startsWith('/py/')) {
       const entry=current.manifest.files[pathname.split('/').at(-1)];
       if(entry) bytes=current.assets.get('/'+entry.url);
+      if(current.oldBytes && pathname==='/py/ba_dashboard.py') bytes=oldDashboard;
       // Reproduce the actual pre-migration policy when priming old bytes;
       // new no-store headers cannot invalidate responses already cached.
       if(current.oldBytes) headers['Cache-Control']='public, max-age=31536000, immutable';

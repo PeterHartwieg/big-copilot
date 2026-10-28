@@ -527,13 +527,13 @@ details.help[open] summary::after{content:"\2013"}
 # order it lists them (downloads run together): the code, without which the worker never becomes
 # ready, and the data, written only when its fetch succeeds. The worker names
 # each file itself; tests/test_web_fresh.py holds it to these two lists.
-PY_CODE = ("ba_save.py", "ba_dashboard.py", "ba_facts.py", "ba_mods.py", "ba_street_food.py", "ba_rlo.py", "ba_companion.py", "ba_hart.py", "ba_economy.py", "ba_rlo_planning.py")
+PY_CODE = ("ba_save.py", "ba_dashboard.py", "ba_msg.py", "ba_alerts.py", "ba_facts.py", "ba_mods.py", "ba_street_food.py", "ba_rlo.py", "ba_companion.py", "ba_hart.py", "ba_economy.py", "ba_rlo_planning.py")
 PY_DATA = ("gametext.json", "ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json", "ba_store_rules.json", "ba_street_food_rules.json", "ba_street_food_stops.json")
 # The ones shipped into web/py/ from the top of the checkout. gametext.json is
 # written there from the installed game instead (main()).
 PY_COPIED = tuple(name for name in PY_CODE + PY_DATA if name != "gametext.json")
 # Strip comments and docstring contents only from these, preserving source lines.
-STRIPPED = ("ba_dashboard.py",)
+STRIPPED = ("ba_dashboard.py", "ba_msg.py", "ba_alerts.py")
 _PY_DATA_SHIPPED = tuple(f"web/py/{name}" for name in PY_DATA)
 
 # Everything the page fetches, together with the build inputs that shape it,
