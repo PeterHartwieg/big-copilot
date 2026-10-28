@@ -48,7 +48,8 @@ let gwOpen = null;      // the dialog on screen
      odCurrent       false, and closes the dialog, once the company it was
                      opened for is gone (odDialog())
      odWait          plans again once a missing section arrives (odDialog())
-     odBoard         a new board suspends an unfinished review (odBoard()) */
+     odBoard         a new board suspends an unfinished review, except while
+                     approval is pending (odBoard()) */
 const gwStates = new WeakMap();
 function gwState(dlg){
   let st = gwStates.get(dlg);
@@ -1490,14 +1491,19 @@ function gwConfirm(spec){
     if(o.soft && (dlg.dataset.phase === "ready" || (dlg.dataset.phase === "asking" && st.soft))) quietly(o.from);
     else asking();
     const body = spec.body();
-    const sent = JSON.stringify(body), game = gwWhose();
+    const sent = JSON.stringify(body), game = gwWhose(), board = D;
     /* A write with nothing for the game to do answers here (spec.local). */
     const here = spec.local ? spec.local(body, true) : null;
     const res = here ? {status: 200, error: null, body: here}
       : await SOURCE.write(spec.kind, body, {dryRun: true, approval: view(mine), asked: typeof o.asked === "string" ? o.asked : ""});
-    if(!dlg.open || mine !== seq) return;
+    if(!dlg.open || mine !== seq || !current()) return;
     /* "Allowed." is said once: a Try again after this does not say it again. */
     if(res.error){ allowed = false; return gwFailed(dlg, spec, res, () => plan(), () => plan()); }
+    /* A dry run that outlived its board (approval may span a refresh)
+       cannot judge the new one: wait for its sections and check again
+       before offering Apply. The recheck is reviewed, never auto-applied:
+       a one-click write stops at Apply on purpose. */
+    if(board !== D) return plan();
     /* The answer on screen and the body it judged go together. */
     const answer = last = res.body || {};
     judged = sent;
@@ -1639,10 +1645,13 @@ function gwConfirm(spec){
     if(typeof SOURCE.refresh !== "function") return dlg.close();
     dlg.close(); return SOURCE.refresh();
   };
-  /* A new board suspends an unfinished review immediately, including any
-     dry run still in flight. Completed writes keep their result and Undo. */
+  /* A new board suspends an unfinished review unless approval is pending.
+     Completed writes keep their result and Undo. */
   st.odBoard = () => {
     if(applying || ["applying", "done", "undone"].includes(dlg.dataset.phase)) return;
+    /* Keep the game's pending question visible while staffing recalculates.
+       plan() rechecks the new board once this request has an answer. */
+    if(dlg.dataset.phase === "approval"){ current(); return; }
     if((spec.needs || []).some(n => !odReady(n))) plan({soft: true});
   };
   plan();
