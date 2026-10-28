@@ -44,10 +44,10 @@ import unittest.mock
 
 import ba_dashboard  # noqa: E402
 from ba_dashboard import JOB_DEMANDS, SERVICE_SKILL, SHIFT_CAP, FULL_TIME  # noqa: E402
-from ba_save import Names, Save, load_save  # noqa: E402
+from ba_save import Names, load_save  # noqa: E402
 
 from tests import test_staffing as ts  # noqa: E402
-from tests.test_staffing import (CLEAN_STATION, CLEANING, FIVE_DAYS, FLAT, FOUR_DAYS, FULLTIME,  # noqa: E402
+from tests.test_staffing import (CLEAN_STATION, CLEANING, FIVE_DAYS, FOUR_DAYS, FULLTIME,  # noqa: E402
                                  GUARD, LOCKER, PARTTIME, REGISTER, SERVICE, employee)
 
 COVER = {"ba:skill_cleaning": "clean", "ba:skill_securityguard": "security"}

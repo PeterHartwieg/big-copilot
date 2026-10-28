@@ -3,7 +3,7 @@
 // are tests/_game_link_write.cjs.
 const {test} = require('node:test');
 const H = require('./_game_link_write.cjs');
-const {assert, en, enRe, textEn, textRe, ORIGIN, GIFTS, configure, applied, linked, button, holdSave, dialog, pair, ready, kept, supply, setTo, ANA, BEN, REGISTER, CLEAN, GIFTS_ADDRESS, withRosters, followPrints, dryRunOf, roster, HIRE, WRITES_WITH_HIRE, hireBody, sourceWrite, RENT_ITEM} = H;
+const {assert, en, enRe, textEn, textRe, ORIGIN, GIFTS, configure, applied, linked, holdSave, dialog, ready, supply, setTo, ANA, BEN, REGISTER, CLEAN, GIFTS_ADDRESS, withRosters, followPrints, dryRunOf, roster, HIRE, WRITES_WITH_HIRE, hireBody, sourceWrite, RENT_ITEM} = H;
 
 test('schedule: the roster is written with only the people working here, and undone', async (t) => {
   const page = await linked(t, {approved: true, data: withRosters()});

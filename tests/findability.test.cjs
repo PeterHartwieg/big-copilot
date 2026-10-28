@@ -8,8 +8,6 @@ const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
 const {en, enRe, enText, textRe} = require('./_i18n.cjs');
 // The readout renders catalogue markup as text.
-const path = require('node:path');
-const fs = require('node:fs');
 const {chromium} = require('playwright');
 
 let browser;

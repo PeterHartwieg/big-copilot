@@ -3140,7 +3140,7 @@ function drawKpiLine(){
 /* --- the finding kinds -------------------------------------------------------
    Every "group" a finding in the Needs attention panel can carry, one record
    each, in the order the kinds panel lists them. Python emits the group (note()
-   in _alerts(), _finding() in a helper such as _idle_notes(), or an
+   or _finding() in a helper _alerts() runs, such as _idle_notes(), or an
    AMENITY_DEMANDS row); the two sides share only the group key.
    - label, note: the kinds panel's words, read in the UI language every time
      (keep them literal getters: a copy would freeze one language);
@@ -3177,7 +3177,7 @@ function drawKpiLine(){
      yet it is still shown on one: `site` picks the site where it bites
      hardest, `otherwise` is where the link goes when no site has it. */
 /* Registry: "A finding kind" (docs/architecture.md, Registries). Every kind
-   needs: its group, emitted by note() in _alerts() or _finding() in a helper
+   needs: its group, emitted by note() or _finding() in a helper _alerts() runs,
    such as _idle_notes() (or an AMENITY_DEMANDS row); its FINDING_KINDS record
    with id, label, note, on, link, route and evidence (or NO_EVIDENCE in
    tests/alert_kinds.test.cjs); ALERT_UNITS if its worth is money, else
@@ -4266,7 +4266,7 @@ function bandLabel(k){
     : k === "watch" ? tt("today.band.watch2", "Warnings") : tt("today.band.opp2", "Opportunities");
 }
 function drawAlerts(){
-  const {list, below, switchedOff, smaller} = partitionFindings(
+  const {list, below, switchedOff} = partitionFindings(
     alertLines(), alertMinor().rows || [], alertGroupPrefs);
   const counts = {crit: 0, watch: 0, opp: 0};
   list.forEach(a => counts[SEV_KIND[a.level] || "opp"]++);
@@ -9003,7 +9003,7 @@ function pgEvaluate(){
     if(now !== null && made !== null && now - made > PG_KEEP_DAYS * 1440){ delete recs[id]; memo.gone.add(id); memo.mine.delete(id); touched = true; return; }
     if(!["applied", "partly", "unseen"].includes(rec.state) || !(memo.n > rec.seq)) return;
     if(now !== null && made !== null && now < made) return;
-    let v = null;
+    let v;
     try{ v = PG_CHECK[rec.family] ? PG_CHECK[rec.family](rec) : null; }catch(e){ v = null; }
     if(!v || (v.state === "changed" && now !== null && now === made)) return;
     Object.assign(rec, v, {seen: {day: D.meta.day, hour: D.meta.hour, minute: D.meta.minute}});
@@ -9327,7 +9327,7 @@ function sbData(){
      and back loses nothing, and a changed figure is a new row. */
   const other = sizing === "dem" ? "cap" : "dem";
   if(!sbOtherKeys || sbOtherKeys.D !== D || sbOtherKeys.stamp !== sbStamp || sbOtherKeys.names !== names || sbOtherKeys.mode !== other){
-    let rows = [];
+    let rows;
     try{ rows = szWith(other, () => supplyChecklistRows().rows); }catch(e){ rows = []; }
     sbOtherKeys = {D, stamp: sbStamp, names, mode: other, rows};
   }
@@ -13247,7 +13247,6 @@ function osFirmHtml(b, out, inv){
     rows.push(grp(title(), osGroupNote(g, b, out), total, lines));
     lines.forEach(l => {
       const [item, qty] = l;
-      const each = (items[item] || {}).p || 0;
       rows.push(`<tr><td class="l">${spEsc(osItemName(item))}</td><td class="w">${osShoppingTags(l)}</td><td>${qty}</td><td>${mcItemMoney(osFacts(),item)}</td><td>${mcItemMoney(osFacts(),item,qty)}</td></tr>`);
     });
   });
@@ -13329,7 +13328,7 @@ function osBreakHtml(plan){
   const big = (key, alt) => `<div${alt ? ` class="alt"` : ""}><span class="os-lab">${key === "firm" ? tt("gr.os.inv.firm", "Installation firm") : tt("gr.os.inv.self", "Self-installation")}</span><b>${
     osRange(est.days[key])}</b></div>`;
   const tax = (osFacts().game || {}).tax || 0;
-  const t = osType(plan.type), own = osOwnRatio(plan.type), cann = osCannibal(plan.type, b.hood, osProvides(plan.type, b));
+  const own = osOwnRatio(plan.type), cann = osCannibal(plan.type, b.hood, osProvides(plan.type, b));
   const row = (label, value, cls = "") => `<div class="os-site${cls}"><span><b>${label}</b></span><span class="v">${value}</span></div>`;
   const mix = (m.mix || []).length ? m.mix.map(osCampaignName).join(", ") : tt("gr.os.be.mix.none", "none");
   const detail = [
@@ -14872,7 +14871,6 @@ function ofCore(){
 }
 const ofProd = slug => ofCore().product(slug);
 const ofDiscount = () => ofCore().discount();
-const ofWholesale = slug => ofCore().wholesale(slug);
 const ofImportPrice = slug => ofCore().importPrice(slug);
 const ofExportPrice = slug => ofCore().exportPrice(slug);
 const ofRawUnit = slug => ofCore().rawUnit(slug);
@@ -14894,7 +14892,6 @@ function ofAgentLine(){
    shelves, the installation firm's fee on the floor or a delivery per store,
    the deposit and the truck. A factory the player runs adds only the new
    machines and the shelves its new plan needs beyond those standing there. */
-const ofKit = counts => ofCore().kit(counts);
 const ofBoxes = counts => ofCore().boxes(counts);
 const ofBuilding = key => key && typeof premises === "function" && premises() ? premises().buildings.find(b => b.key === key) || null : null;
 /* The company has no depot: the factory's output has nowhere to go to the
@@ -14943,7 +14940,6 @@ function ofRunning(plan, inv){
   return ofCore().running({counts: ofCounts(), owned, current: owned ? ofNow(planTarget) : {},
     building: ofBuilding(owned ? planTarget : plan && plan.key), wantsDepot: ofWantsDepot(plan)}, inv);
 }
-const ofIngredientsUncontracted = () => ofCore().uncontracted(ofCounts());
 
 /* --- the view ------------------------------------------------------------------ */
 const ofStepLabel = s => ({what: tt("gr.of.step.what", "What"), where: tt("gr.of.step.where", "Where"),
@@ -15216,12 +15212,12 @@ function ofSelfHtml(inv){
 }
 const ofAddress = key => { const v = ((ofFacts().vendors || {})[key]) || {}; const b = ofBuilding(key); return v.a || (b && b.address) || String(key || "").replace(/^ba:street_/, ""); };
 function ofFirmHtml(inv){
-  const F = ofFacts(), items = F.items || {}, g = ofG(), owned = ofIsOwned();
+  const F = ofFacts(), g = ofG(), owned = ofIsOwned();
   const grp = (title, note, total, lines = []) => `<tr class="grp"><td colspan="5">${title}${note ? `<span>${note}</span>` : ""}<b>${mcPriceMoney(F,lines,total)}</b></td></tr>`;
   const rows = [grp(tt("gr.os.inv.firm", "Installation firm"), tt("gr.of.firm.note", "the fee is per square metre of floor, whatever goes on it"), inv.fee),
     `<tr><td class="l">${tt("gr.os.inv.fee", "Installation fee")}<span class="sub">${tt("gr.os.inv.fee.sub", "{fee} × {m2} m²", {fee: num(g.installFee || 0), m2: num(inv.b.m2 || 0)})}</span></td><td class="w"></td><td></td><td></td><td>${fmt(inv.fee)}</td></tr>`,
     grp(tt("gr.of.firm.production", "Production"), tt("gr.of.firm.production.note", "workstations and storage"), inv.furniture, inv.out.lines)];
-  inv.out.lines.forEach(([item, qty, kind]) => { const each = (items[item] || {}).p || 0;
+  inv.out.lines.forEach(([item, qty, kind]) => {
     rows.push(`<tr><td class="l">${spEsc(osItemName(item))}</td><td class="w">${ofWhy(kind, inv)}</td><td>${qty}</td><td>${mcItemMoney(F,item)}</td><td>${mcItemMoney(F,item,qty)}</td></tr>`); });
   const truck = (F.vehicles || {}).truck || {};
   if(inv.truck) rows.push(grp(tt("gr.of.firm.yours", "Bought by you either way"), tt("gr.of.firm.yours.note", "the firm places no vehicle"), inv.truck),
@@ -17112,7 +17108,6 @@ function sfStopOn(stop, kind = sfKindNow()){
   if(!M || !cat || typeof M.stopLocation !== "function") return null;
   try{ return M.stopLocation(stop, kind, cat) || null; }catch(e){ return null; }
 }
-const sfSpotWord = kind => kind === "truck" ? tt("map.sf.spot.truck", "parking spot") : tt("map.sf.spot.cart", "pavement spot");
 const sfSpotTitle = kind => kind === "truck" ? tt("map.sf.spot.truckTitle", "Truck parking spot") : tt("map.sf.spot.cartTitle", "Pavement spot for carts");
 /* A checked place's name for a stop: the building it belongs to, else the
    place it is near, else its kind. */
@@ -19900,14 +19895,14 @@ function readKindChoices(saved){
   if(saved.v === 2) return Object.assign({}, saved.set || {});
   const set = {};
   Object.keys(saved).forEach(id => {
-    const was = ALERT_DEFAULTS_V1.hasOwnProperty(id) ? ALERT_DEFAULTS_V1[id] : true;
+    const was = Object.hasOwn(ALERT_DEFAULTS_V1, id) ? ALERT_DEFAULTS_V1[id] : true;
     if(!!saved[id] !== was) set[id] = !!saved[id];
   });
   return set;
 }
 function kindPrefs(choices){
   const prefs = {};
-  ALERT_GROUPS.forEach(g => { prefs[g.id] = choices.hasOwnProperty(g.id) ? !!choices[g.id] : g.on; });
+  ALERT_GROUPS.forEach(g => { prefs[g.id] = Object.hasOwn(choices, g.id) ? !!choices[g.id] : g.on; });
   return prefs;
 }
 /* A switch flipped back to its kind's default is no longer a choice: it is

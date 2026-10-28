@@ -55,7 +55,7 @@ async function loadCityMap(){
       const image = new Image(); image.src = imageUrl;
       try { await image.decode(); } catch(error){
         if(!embedded) URL.revokeObjectURL(imageUrl);
-        throw new Error(tt("map.err.bgshow", "Map background could not be displayed."));
+        throw new Error(tt("map.err.bgshow", "Map background could not be displayed."), {cause: error});
       }
       // Repainting the detailed SVG on every drag frame is expensive. Share a
       // decoded bitmap while moving; restore the original vector when settled.

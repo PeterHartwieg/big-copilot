@@ -242,7 +242,7 @@ const OpenFactoryModel = ((storeModel, economyModel, ownerModel) => {
     }
     function ofRunning({counts, owned = false, current = {}, building = null, wantsDepot = false}, inv){
       if(facts.compatibility?.factoryRunning?.length && !modded) return null;
-      const g = game, machines = Object.values(counts).reduce((n, m) => n + m, 0);
+      const machines = Object.values(counts).reduce((n, m) => n + m, 0);
       const modCosts=modded ? (inv?.modCosts || modOperating({counts,building,owned,lines:inv?.out.lines || [...ofKit(owned ? Object.fromEntries(Object.entries(counts).map(([k,n])=>[k,Math.max(0,n-(current[k]||0))])) : counts)],depot:inv?.depot,wantsDepot})) : null;
       const finish = result => {
         if(!modded) return result;

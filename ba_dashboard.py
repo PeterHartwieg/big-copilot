@@ -52,16 +52,9 @@ from ba_msg import (
     Msg as Msg, _half_away as _half_away, _js_round as _js_round, _msg_format as _msg_format,
     _wire_msgs as _wire_msgs, _wire_value as _wire_value, msg as msg, plain as plain, tok as tok,
 )
-try:
-    import ba_mods
-except ModuleNotFoundError as exc:
-    # A worker from before ba_mods.py (a tab left open across a deploy) does not
-    # fetch it; the board then reads every save as a vanilla one.
-    if exc.name not in ("ba_mods", "ba_street_food", "ba_rlo"):
-        raise
-    ba_mods = None
-ba_street_food = ba_mods.ba_street_food if ba_mods else None
-ba_economy = ba_mods.ba_economy if ba_mods else None
+import ba_mods
+ba_street_food = ba_mods.ba_street_food
+ba_economy = ba_mods.ba_economy
 
 
 class ModRules:
@@ -69,9 +62,7 @@ class ModRules:
 
     ba_mods and the adapters it loads (ba_economy, ba_street_food, ba_facts)
     make the decisions; this is the one place the planners ask them, so they
-    need neither the adapters' names nor a guard for an adapter that did not
-    load. With none loaded, a worker from before ba_mods.py, every answer is
-    the vanilla one.
+    need not know the adapters' names.
 
     Build.mod_rules is the one a build passes down. A function called without
     one (a test, mostly) makes its own over the same save: the adapters keep
@@ -86,22 +77,20 @@ class ModRules:
     @functools.cached_property
     def capabilities(self) -> dict:
         """{capability: [reason, ...]} for each planning model a mod leaves unknown."""
-        return ba_mods.capabilities(self.save) if ba_mods else {}
+        return ba_mods.capabilities(self.save)
 
     def detect(self) -> dict:
         """The `mods` payload key: the adapters this save needs, {} for a vanilla save."""
-        return ba_mods.detect(self.save) if ba_mods else {}
+        return ba_mods.detect(self.save)
 
     def vehicle_prices(self, motor: dict, non_motor) -> tuple[dict, bool]:
         """The vehicle prices wealth counts, and whether every model has one."""
-        if ba_mods:
-            return ba_mods.vehicle_prices(self.save, motor, non_motor)
-        return {**dict.fromkeys(non_motor, 0), **motor}, True
+        return ba_mods.vehicle_prices(self.save, motor, non_motor)
 
     @functools.cached_property
     def seasons(self) -> dict | None:
         """The Alcware Seasons calendar, None without one."""
-        return ba_mods.seasons(self.save) if ba_mods else None
+        return ba_mods.seasons(self.save)
 
     def sales_ratio(self, ratio: float, item: str, day: int) -> float:
         """A product's sales ratio on `day` under the seasons; the game's without them."""
@@ -111,58 +100,53 @@ class ModRules:
     @property
     def street_food(self) -> dict | None:
         """ba_street_food's read of the save, None for a save without the mod."""
-        return ba_street_food.read(self.save) if ba_street_food else None
+        return ba_street_food.read(self.save)
 
     @property
     def street_food_days(self) -> list:
         """The fleet's recorded days of sales."""
-        return ba_street_food.days(self.save) if ba_street_food else []
+        return ba_street_food.days(self.save)
 
     def is_commissary_expense(self, key) -> bool:
         """Whether a deductible expense is the fleet's shared commissary label."""
-        return bool(ba_street_food) and key == ba_street_food.COMMISSARY_EXPENSE
+        return key == ba_street_food.COMMISSARY_EXPENSE
 
     # --- the economy mods' public reports (ba_economy), by provider
-    @property
-    def economy(self) -> bool:
-        """Whether the economy adapter loaded at all."""
-        return ba_economy is not None
-
     def report(self, provider: str) -> dict | None:
         """A provider's report ("rlo", "hart"), None when the save has none."""
-        return ba_economy.report(self.save, provider) if ba_economy else None
+        return ba_economy.report(self.save, provider)
 
     def module(self, provider: str, name: str) -> dict:
         """One module of a provider's report, with its `status`."""
-        return ba_economy.module(self.save, provider, name) if ba_economy else {"status": "disabled"}
+        return ba_economy.module(self.save, provider, name)
 
     def data(self, provider: str, name: str):
         """A ready module's data, else None."""
-        return ba_economy.data(self.save, provider, name) if ba_economy else None
+        return ba_economy.data(self.save, provider, name)
 
     @property
     def planner(self) -> dict | None:
         """What the planners' sections carry of the reports, None for no report."""
-        return ba_economy.planner(self.save) if ba_economy else None
+        return ba_economy.planner(self.save)
 
     def tables(self, rules: dict, prices: dict) -> tuple[dict, dict]:
         """The store rules and item prices with the mod's registered amounts."""
-        return ba_economy.tables(self.save, rules, prices) if ba_economy else (rules, prices)
+        return ba_economy.tables(self.save, rules, prices)
 
     def price_unavailable(self, identifiers) -> list:
         """The items among `identifiers` that a mod's or the game link's price
         catalogue lacks; [] where neither replaces the game's prices."""
-        return ba_economy.price_unavailable(self.save, identifiers) if ba_economy else []
+        return ba_economy.price_unavailable(self.save, identifiers)
 
     def deduction(self, label):
         """"recurring", "once" or "unknown" for a deduction label RLO reports,
         None where it makes no claim."""
-        return ba_economy.deduction(self.save, label) if ba_economy else None
+        return ba_economy.deduction(self.save, label)
 
     @property
     def footfall(self) -> dict:
         """RLO's reported footfall per address, each row checked against the save."""
-        return ba_economy.footfall(self.save) if ba_economy else {}
+        return ba_economy.footfall(self.save)
 
     def promotion(self, addr, own):
         """The promotion RLO writes for a site whose campaigns give `own`, None
@@ -317,8 +301,8 @@ def footer_html(landing: bool = False, site: bool = False) -> str:
                           f'lang="{code}" translate="no">{html_escape(GAME_NAME_LANGS[code])}</li>'
                           for code in order)
         code, word = next(iter(GAME_NAME_LANGS.items()))
-        note = (f'<a class="gn-note" data-gn-note data-translate-link href="/translate/" target="_blank" rel="noopener" hidden>'
-                f'<span data-tt="foot.lang.drafted">Machine-translated. Help check it</span></a>')
+        note = ('<a class="gn-note" data-gn-note data-translate-link href="/translate/" target="_blank" rel="noopener" hidden>'
+                '<span data-tt="foot.lang.drafted">Machine-translated. Help check it</span></a>')
         note += '<a class="gn-note" data-translate-link href="/translate/" target="_blank" rel="noopener" data-tt="foot.lang.contribute">Help translate</a>'
         names = (f'<div class="sf-col sf-gn">\n        <h2 class="sf-head" id="{head}" data-tt="foot.lang.head">Language</h2>\n'
                  f'        <div class="gn-pick" data-gn-pick data-value="{code}" data-drafted="{" ".join(UI_LANGS_DRAFTED)}">'
@@ -595,7 +579,7 @@ GAME_NAME_LANGS = {
 #   locale   the number locale the page formats in (TT_NUM_LOCALES in
 #            web/i18n.js, whose TT_LANGS lists these codes in this order)
 #   plurals  its CLDR plural categories (PLURALS in tools/i18n.py reads them)
-#   drafted  still mostly machine-drafted (i18n/<lang>.ai.json): the footer
+#   drafted  still mostly machine-drafted (its draft marks in i18n/base.json): the footer
 #            says so under the picker, with a link to help check it
 # tests/test_i18n_languages.py holds web/i18n.js, i18n/ and Intl's plural rules
 # to it. The footer's Language list shows these first, as "Whole page"; every
@@ -2093,7 +2077,7 @@ def _premises(save: Save, names: Names, market: dict, estate: dict | None = None
         quote = ba_facts.lease_quote(row) if "newLease" in row else None
         rent = (quote["rentCents"] / 100 if quote else None) if "newLease" in row else _rent_estimate(row)
         deposit = (quote["depositCents"] / 100 if quote else None) if "newLease" in row else _deposit_estimate(row, rent)
-        if "newLease" not in row and ba_economy and ba_economy.report(save, "hart") is not None:
+        if "newLease" not in row and ba_economy.report(save, "hart") is not None:
             rent_module = ba_economy.module(save, "hart", "rent")
             # A fitted historic quote is not the unpatched native baseline.
             # It cannot safely be multiplied when leases predate today's rules.
@@ -2389,8 +2373,7 @@ def _rent_multiplier(save: Save, owned: list, last: dict | None, mods: dict) -> 
         value = ratios[mid] if len(ratios) % 2 else (ratios[mid - 1] + ratios[mid]) / 2
         return {"value": round(value, 3), "source": "measured", "buildings": len(ratios)}
     if mods.get("economyExpansion"):
-        factor = getattr(ba_mods, "ECONOMY_RENT_FACTOR", 1) if ba_mods else 1
-        return {"value": float(factor), "source": "mod", "buildings": 0}
+        return {"value": float(ba_mods.ECONOMY_RENT_FACTOR), "source": "mod", "buildings": 0}
     return {"value": 1.0, "source": "game", "buildings": 0}
 
 
@@ -3261,7 +3244,7 @@ def _rival_intel(save: Save) -> dict:
     weekly = _rival_weekly_incomes(save)
     table = load_buildings(save)
     regs = save.items(save.root.get("BuildingRegistrations"))
-    calendar = ba_mods.seasons(save) if ba_mods else None
+    calendar = ba_mods.seasons(save)
     defenses = collections.defaultdict(set)
     for state in save.items(save.root.get("specialRivalStates")):
         for defense in save.items(state.get("defenseStates")):
@@ -3859,8 +3842,7 @@ def _open_factory_section(build: Build) -> dict:
 # kept per stage in build.shared["planning"]. Nothing a warning reads is here.
 SECTIONS = {
     "streetFood": {"keys": ("streetFood",), "needs": (),
-                   "produce": lambda b: {"streetFood": ba_street_food.planner(b.save, b.names, load_buildings(b.save), _open_hours)
-                                         if ba_street_food else {"status": "unavailable", "vehicles": [], "opportunities": []}}},
+                   "produce": lambda b: {"streetFood": ba_street_food.planner(b.save, b.names, load_buildings(b.save), _open_hours)}},
     "staffing": {"keys": ("staffing",), "needs": (),
                  "produce": _staffing_section},
     "officeStaffing": {"keys": ("officeStaffing",), "needs": ("staffing",),
@@ -4373,7 +4355,7 @@ def _wage_basis(save, complete=True):
     """Ordinary hourly estimates exclude overtime, sickness and future absence."""
     if not complete:
         return {"wageUnavailable": True, "wageBasis": "native-base-only"}
-    return {"wageBasis": "ordinary-hourly"} if ba_economy and ba_economy.report(save, "rlo") is not None else {}
+    return {"wageBasis": "ordinary-hourly"} if ba_economy.report(save, "rlo") is not None else {}
 
 
 def _staff(save: Save, names: Names):
@@ -4383,7 +4365,7 @@ def _staff(save: Save, names: Names):
         char = _character(save, e)
         skills = [{"name": s["skill"], "value": s["level"]} for s in char["skills"]]
         top = max(skills, key=lambda s: s["value"], default=None)
-        hourly, wage_complete = ba_economy.hourly(save, e.get("id"), e.get("hourlyWage", 0)) if ba_economy else (e.get("hourlyWage", 0), True)
+        hourly, wage_complete = ba_economy.hourly(save, e.get("id"), e.get("hourlyWage", 0))
         rec = {
             "id": e.get("id"),
             "name": char["name"] if char["name"] is not None else "?",
@@ -4405,7 +4387,7 @@ def _staff(save: Save, names: Names):
             ),
         }
         rec["daily"] = rec["wage"] * rec["hours"] / 7
-        if ba_street_food and ba_street_food.reserved(save, e):
+        if ba_street_food.reserved(save, e):
             rec["streetFood"] = True
         staff.append(rec)
         by_addr[rec["addr"]].append(rec)
@@ -4453,7 +4435,7 @@ def _candidates(save: Save) -> list:
         skills = _skill_rows(char)
         info = save.deref(c.get("candidateInfo")) or {}
         age = char["ageDays"]
-        hourly, wage_complete = ba_economy.candidate_hourly(save, c.get("hourlyWage") or 0) if ba_economy else (c.get("hourlyWage") or 0, True)
+        hourly, wage_complete = ba_economy.candidate_hourly(save, c.get("hourlyWage") or 0)
         rows.append({
             "id": c.get("id"),
             "name": char["name"],
@@ -5429,7 +5411,7 @@ def _daily_series(save: Save, summaries: list) -> list:
                 "salary": money(s.get("salaryIncome", 0)),
             }
         )
-        food = ba_street_food.statement(save, s) if ba_street_food else None
+        food = ba_street_food.statement(save, s)
         if food is not None:
             row = out[-1]
             row["streetFood"] = food
@@ -7379,7 +7361,7 @@ def _supply_roles(save: Save, names: Names, businesses: list, factories: dict) -
         return out
 
     def kind_of(address, key):
-        if ba_street_food and ba_street_food.is_commissary(address):
+        if ba_street_food.is_commissary(address):
             return "commissary"
         if key in index:
             slug = businesses[index[key]].get("typeSlug")
@@ -9927,7 +9909,7 @@ def _supply(
         "roundTo": SUPPLY_ROUND_TO,
     }
 
-    return ba_street_food.restrict_supply(save, businesses, result) if ba_street_food else result
+    return ba_street_food.restrict_supply(save, businesses, result)
 
 
 def _below(have, figure) -> bool:
@@ -11524,7 +11506,7 @@ def _factories(
             # address decide, and then the tip reads the same either way.
             # Both figures are read to a millionth first, as `needDay` is: a
             # half in the last places follows the sites' addresses.
-            chain = None
+            chain = chain_key = None
             for at, via, brings in (merges(key, slug, dem_eats) if merges and demand else ()):
                 drawn = demand(at, slug, eats=dem_eats, shelves="sales")[0]
                 link = {"at": index[at],
@@ -13569,9 +13551,9 @@ def _lift_short_hires(rows: list, hires: list, pool: list, state: dict, here: di
     def restore(saved):
         pairs, length, weeks, rostered = saved
         del rows[length:]
-        for row, copy in pairs:
+        for row, kept in pairs:
             row.clear()
-            row.update(copy)
+            row.update(kept)
         state.update(weeks)
         here["rostered"] = rostered
 
@@ -15809,7 +15791,7 @@ def _staffing(
                     current=site["current"]["list"], keep=True,
                 )
             row = _finish_site(site, full, names, people, opened)
-            issues = ba_economy.staffing_issues(save, _address_of(site["building"]), ALL_DAY_OPEN) if ba_economy else []
+            issues = ba_economy.staffing_issues(save, _address_of(site["building"]), ALL_DAY_OPEN)
             if issues:
                 row["fullCover"] = _mod_staffing_blocked(business, issues)
         except Exception as exc:
@@ -15832,7 +15814,7 @@ def _staffing(
 
 
 def _mod_staffing_issues(save, business, building, staff, opening=None):
-    if not ba_economy or ba_economy.report(save, "rlo") is None:
+    if ba_economy.report(save, "rlo") is None:
         return []
     addr = _address_of(building)
     issues = ba_economy.staffing_issues(save, addr, opening)
@@ -17428,8 +17410,7 @@ def _plan_site(
 
 def _finish_site(site, full, names, people, opened=None) -> dict:
     """One retail site's row, from its demand plan and its full-cover plan."""
-    save, business, building, grid = (
-        site["save"], site["business"], site["building"], site["grid"])
+    business, grid = site["business"], site["grid"]
     week, current, cover_posts = site["week"], site["current"], site["coverPosts"]
     wage_of = dict(site["wage"])
     for person in full["took"] + (opened["took"] if opened else []):
@@ -17823,7 +17804,7 @@ def _unrepresentable(save: Save, building: dict) -> int:
 
 def _mod_office_fallback_issue(save, building, need, skill):
     """Measured hours already include mod clients; unread hours have no such proof."""
-    if not ba_economy or ba_economy.report(save, "rlo") is None:
+    if ba_economy.report(save, "rlo") is None:
         return False
     if not any(basis == "office" for day in need[skill]["basis"] for basis in day):
         return False
@@ -18334,7 +18315,7 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
     employees = [e for e in save.items(save.root.get("EmployeeInstances")) if isinstance(e, dict)]
     bench = _in_order({
         e.get("id") for e in employees if not save.address(e.get("assignedAddress"))
-        and not (ba_street_food and ba_street_food.reserved(save, e))
+        and not ba_street_food.reserved(save, e)
     })
     named = set(bench)
     for site in sites:
@@ -18347,7 +18328,7 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             continue
         char = _character(save, e)
         addr = save.address(e.get("assignedAddress"))
-        hourly, wage_complete = ba_economy.hourly(save, e.get("id"), e.get("hourlyWage") or 0) if ba_economy else (e.get("hourlyWage") or 0, True)
+        hourly, wage_complete = ba_economy.hourly(save, e.get("id"), e.get("hourlyWage") or 0)
         people[e.get("id")] = {
             "name": char["name"],
             "skills": _skill_rows(char),
@@ -18475,13 +18456,11 @@ def _hour_findings(grids: list, businesses: list, wages: dict) -> list:
     while a shop's counters and an office's workstations keep the words they
     have always had. Wages arrive per role, as ``{site key: {skill: wage}}``.
     """
-    by_key = {b["key"]: b for b in businesses}
     out = []
     for grid in grids:
         uncertain = grid.get("countsOnly")
         if uncertain and not grid.get("cinemaCapacity"):
             continue  # historical counts cannot diagnose current staffing
-        business = by_key[grid["key"]]
         basket = grid["basket"] or 0
         door = grid["door"]
 
@@ -20385,7 +20364,7 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
                     # The site was seen from its opening once, but the days
                     # between the kept trail and the record were lost.
                     row["rolled"] = True
-        if ba_economy and ba_economy.report(save, "rlo") is not None:
+        if ba_economy.report(save, "rlo") is not None:
             row["basis"] = "statement-profit"
             accounting = ba_economy.outside(save, addr)
             row["modAccounting"] = accounting if accounting is not None else {
@@ -20438,7 +20417,7 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
                 day = chain_window_day(rates)
                 row[mode] = {"state": "window", "day": day} if day is not None else {"state": "window"}
         kept_chains[name] = memory
-        if ba_economy and ba_economy.report(save, "rlo") is not None:
+        if ba_economy.report(save, "rlo") is not None:
             row["basis"] = "statement-profit"
             observations = [sites[k]["modAccounting"] for k in members]
             row["modAccounting"] = {
@@ -21478,39 +21457,38 @@ def _finance_facts(save: Save, daily: list, rules: dict, mod_rules: ModRules | N
             "term": per_year * (terms.get("y") or 0), "owed": money(owed.get(bank, 0)),
         })
     finance_unavailable = None
-    if mod_rules.economy:
-        owner = mod_rules.data("rlo", "bankTerms")
-        native = mod_rules.native_economy("banks")
-        if owner is not None and (owner["additionalCreditIncluded"] or owner["principalIsExpense"]):
-            # The native loan model has neither the additional credit ledger
-            # nor a principal-as-expense projection. Keep recorded totals, but
-            # do not present its native-only eligibility as a complete quote.
-            banks = []
-            finance_unavailable = ("additional-credit-eligibility" if owner["additionalCreditIncluded"]
-                                   else "principal-expense-basis")
-        elif owner is not None:
-            banks = [{"id": row["bankId"], "name": BANK_PLACES.get(row["bankId"], (row["bankId"], None))[0], "key": site_key(mod_rules.address(row)),
-                      "rate": mod_rules.amount(row["annualRatePercent"]), "interestMultiplier": 1,
-                      "years": row["termDays"] / per_year, "term": row["termDays"],
-                      "max": row["capCents"] / 100, "owed": row["nativeDebtAtBankCents"] / 100,
-                      "incomeShare": row["incomeTermShareThousandths"] / 1000,
-                      "floor": row["tutorialMinimumCents"] / 100,
-                      **({"unavailable": "secured-bank-eligibility"} if row["securedAccountRulesApply"]
-                         and row.get("securedCapTreatment") != "included-in-effective-cap" else {})}
-                     for row in owner["banks"]]
-        elif native is not None:
-            banks = [{"id": site_key(mod_rules.address(row)), "name": row["name"], "key": site_key(mod_rules.address(row)),
-                      "rate": row["annualRatePercent"], "interestMultiplier": mod_rules.amount(row["interestMultiplier"]),
-                      "years": row["yearsToPayLoan"], "term": row["paybackDays"],
-                      "max": mod_rules.amount(row["capAmount"]),
-                      "owed": money(owed.get(places.get(site_key(mod_rules.address(row))), 0)),
-                      **({"unavailable": "secured-bank-eligibility"} if row["securedAccountRules"] != "none" else {})}
-                     for row in native]
-        elif ((mod_rules.report("rlo") is not None
-               and mod_rules.module("rlo", "bankTerms")["status"] != "disabled")
-                or "nativeEconomy" in (getattr(save, "facts", None) or {})):
-            banks = []
-            finance_unavailable = "native-bank-terms"
+    owner = mod_rules.data("rlo", "bankTerms")
+    native = mod_rules.native_economy("banks")
+    if owner is not None and (owner["additionalCreditIncluded"] or owner["principalIsExpense"]):
+        # The native loan model has neither the additional credit ledger
+        # nor a principal-as-expense projection. Keep recorded totals, but
+        # do not present its native-only eligibility as a complete quote.
+        banks = []
+        finance_unavailable = ("additional-credit-eligibility" if owner["additionalCreditIncluded"]
+                               else "principal-expense-basis")
+    elif owner is not None:
+        banks = [{"id": row["bankId"], "name": BANK_PLACES.get(row["bankId"], (row["bankId"], None))[0], "key": site_key(mod_rules.address(row)),
+                  "rate": mod_rules.amount(row["annualRatePercent"]), "interestMultiplier": 1,
+                  "years": row["termDays"] / per_year, "term": row["termDays"],
+                  "max": row["capCents"] / 100, "owed": row["nativeDebtAtBankCents"] / 100,
+                  "incomeShare": row["incomeTermShareThousandths"] / 1000,
+                  "floor": row["tutorialMinimumCents"] / 100,
+                  **({"unavailable": "secured-bank-eligibility"} if row["securedAccountRulesApply"]
+                     and row.get("securedCapTreatment") != "included-in-effective-cap" else {})}
+                 for row in owner["banks"]]
+    elif native is not None:
+        banks = [{"id": site_key(mod_rules.address(row)), "name": row["name"], "key": site_key(mod_rules.address(row)),
+                  "rate": row["annualRatePercent"], "interestMultiplier": mod_rules.amount(row["interestMultiplier"]),
+                  "years": row["yearsToPayLoan"], "term": row["paybackDays"],
+                  "max": mod_rules.amount(row["capAmount"]),
+                  "owed": money(owed.get(places.get(site_key(mod_rules.address(row))), 0)),
+                  **({"unavailable": "secured-bank-eligibility"} if row["securedAccountRules"] != "none" else {})}
+                 for row in native]
+    elif ((mod_rules.report("rlo") is not None
+           and mod_rules.module("rlo", "bankTerms")["status"] != "disabled")
+            or "nativeEconomy" in (getattr(save, "facts", None) or {})):
+        banks = []
+        finance_unavailable = "native-bank-terms"
     return {
         "cash": money(root.get("Money") or 0),
         "wealth": money((root.get("Money") or 0) + funds + vehicles + boats + property_) if complete_wealth else None,

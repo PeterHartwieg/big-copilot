@@ -244,7 +244,7 @@ class Tokens(MsgAsserts, unittest.TestCase):
         self.assertNotIn("named", line)
 
     def test_an_hour_limit_names_its_role_and_keeps_its_id(self):
-        from ba_dashboard import _alert_id, _alerts, plain
+        from ba_dashboard import _alert_id
         from tests.game_names_fixture import fixture
         payload = fixture()["payload"]
         finding = next(f for f in payload["hourFindings"] if f["kind"] == "cap" and "⟦" in f["limit"])

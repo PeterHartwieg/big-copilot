@@ -3,7 +3,7 @@
 // and helpers are tests/_game_link_write.cjs.
 const {test} = require('node:test');
 const H = require('./_game_link_write.cjs');
-const {assert, en, enRe, textEn, textRe, TOKEN, ORIGIN, GIFTS, configure, applied, linked, button, holdSave, dialog, pair, WAITING, ready, kept, DEPOT_ADDRESS, supply, importRow, setTo, applyImports, drawnPayload, footOnScreen, withRosters, dryRunOf, roster} = H;
+const {assert, en, enRe, textEn, textRe, TOKEN, ORIGIN, GIFTS, configure, applied, linked, button, holdSave, dialog, pair, WAITING, ready, DEPOT_ADDRESS, supply, importRow, setTo, applyImports, drawnPayload, footOnScreen, withRosters, dryRunOf, roster} = H;
 
 test('imports: the Set to figure is written, and undone', async (t) => {
   const page = await linked(t, {approved: true});
@@ -429,7 +429,7 @@ test('imports: plain amounts take one cap budget per importer, in the game\'s de
   const page = await linked(t, {approved: true});
   const got = await page.evaluate(() => {
     const saved = gwImportRows;
-    const [gifts, corner, depot] = [D.businesses[0].key, D.businesses[1].key, D.businesses[3].key];
+    const [gifts, depot] = [D.businesses[0].key, D.businesses[3].key];
     const line = (s, value, contracts, smart = false, changed = true) => ({s, slug: 'ba:itemname_x', item: 'X', value, smart,
       changed, paused: false, total: value, impId: `x${s}`, contracts});
     const c = (id, importer, group, order, amount, {active = true, product = 0, smart = false} = {}) =>

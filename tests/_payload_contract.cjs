@@ -24,10 +24,10 @@ const SNAPSHOTS = path.join(__dirname, 'fixtures', 'payload_snapshot');
 const EXTRA_KEYS = {
   top: {},
   business: {
-    // _alerts() writes it only on a retail or office site in its first days
-    // that has booked no revenue yet (the not-trading finding); the snapshot
-    // companies have none.
-    notTrading: 'ba_dashboard.py _alerts(), b["notTrading"] = failed',
+    // _not_trading_notes() writes it only on a retail or office site in its
+    // first days that has booked no revenue yet (the not-trading finding); the
+    // snapshot companies have none.
+    notTrading: 'ba_alerts.py _not_trading_notes(), b["notTrading"] = failed',
   },
 };
 

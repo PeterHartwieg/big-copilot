@@ -19,7 +19,8 @@ The English is never kept in a file: it stays at the call site, beside its key
   (template/board.html), the landing (build_web.py's BANNER) and web/*.js;
 - markup: data-tt="key" around English, and data-tt-title, -aria-label,
   -placeholder and -tip beside the attribute they fill;
-- Python: msg("key", "English", ...) in ba_dashboard.py;
+- Python: msg("key", "English", ...) in ba_dashboard.py and ba_alerts.py
+  (the finding sentences);
 - the Wiki guides' labels: `guideUi` in tools/wiki_sample.json, one key
   `wiki.ui.<name>` per entry, the one source whose keys are not literals at
   the call site (guide_ui_calls()).

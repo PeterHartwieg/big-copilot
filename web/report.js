@@ -59,7 +59,7 @@
   // The history, typed names, searches and the game link's approval are never
   // read here.
   function brSettings(env) {
-    let theme = null;
+    let theme;
     try { theme = env.storage ? env.storage.getItem(BR_THEME_KEY) : null; } catch (e) { theme = null; }
     const lang = String((env.doc && env.doc.documentElement && env.doc.documentElement.lang) || "");
     return {
@@ -419,7 +419,7 @@
     const bytesSoon = saveOn ? brBytes : null, buildSoon = brGame, runningSoon = brRunning;
     brLock(true);
     brStatus(tt("br.sending", "Sending…"));
-    let res = null;
+    let res;
     try {
       const [bytes, gameBuild, runningBuild] = await Promise.all([bytesSoon, buildSoon, runningSoon]);
       const parts = brParts(ctx, {text, save: saveOn, details: detailsOn, bytes, gameBuild, runningBuild}, brEnv());

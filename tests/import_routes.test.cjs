@@ -49,7 +49,6 @@ async function board(data, {mode = 'cap', names = null, which = 'all', tab = 'im
   return page;
 }
 /* Every view drawn again, as a refresh would. */
-const redraw = page => page.evaluate(() => { drawSupplyStrip(); drawChangesView(); drawImportsView(); drawDeliveriesView(); drawProductionView(); wireAll(); });
 /* How far along Changes is, shown as text in place of the decorative road. */
 const counted = page => page.$eval('#sbcTop .sbc-progress', el => el.textContent);
 const actions = page => page.evaluate(() => sbData().rows.map(a =>

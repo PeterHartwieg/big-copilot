@@ -1070,7 +1070,6 @@ function hrOpenHtml(m){
   const lines = skill => groups.filter(g => g.x.skill === skill).map(hrReLine).join("");
   const skills = new Set(m.roles.map(r => r.skill));
   const stray = groups.filter(g => !skills.has(g.x.skill)).map(hrReLine).join("");
-  const t = hrTotals(m);
   const soon = m.cands.filter(c => Number(c.hoursLeft) < 24).length;
   // No candidates is the role rows' to say (declutter T5).
   const nc = m.cands.length;

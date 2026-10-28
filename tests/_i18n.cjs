@@ -59,7 +59,7 @@ let table = null;
    path:size:mtime: the extract is kept on disk under this signature, so the
    test files of one run read it once instead of once each. */
 function sources(){
-  const files = ['tools/i18n.py', 'ba_dashboard.py', 'build_web.py', 'tools/wiki_sample.json'];
+  const files = ['tools/i18n.py', 'ba_dashboard.py', 'ba_alerts.py', 'build_web.py', 'tools/wiki_sample.json'];
   for (const dir of ['template', 'web']) {
     for (const name of fs.readdirSync(path.join(ROOT, dir))) {
       if (dir === 'template' || name.endsWith('.js')) files.push(`${dir}/${name}`);

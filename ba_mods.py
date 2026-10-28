@@ -230,8 +230,6 @@ def capabilities(save) -> dict:
     An observed empty provider list proves the captured runtime had none.
     Unsupported optional models affect forecasts, not recorded accounting.
     """
-    import ba_economy
-
     facts = getattr(save, "facts", None) or {}
     out = {}
 
