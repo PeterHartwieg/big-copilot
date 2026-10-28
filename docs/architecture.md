@@ -1767,7 +1767,7 @@ the panel and fullscreen map.
 | --- | --- | --- |
 | `const finderDefaults = () =>` | The key and its "no limit" default. `finderPick`, `saveFinder`, `resetCharacter` and `savedKey` follow it | "the defaults are visibly chosen on first open …" |
 | `setFinder(preset = {}){` | The key in the reset literal | "a preset lands on the column its category ranks by …" |
-| `loadFinder(){` | Usually nothing; a retired key goes on its `delete this.fs.` line | "the filters come back with the character …" |
+| `const FINDER_KEPT = {` and `loadFinder(){` | Usually nothing: the stored filters are an open record over `finderDefaults()` (`keptRecord()` in the board script), so a stored key comes back as it was. A key whose stored value needs checking gets a rule in `FINDER_KEPT`; a retired key gets `() => undefined` there | "the filters come back with the character …"; `tests/remembered.test.cjs`, "the finder's filters read back over the defaults …" |
 | `finderPanel(){` and `const MAP_WORDS = {` | A `row('rowLabel', …)` control with `data-f="<key>"`; its words are `MAP_WORDS` getters over `tt("map.…")`, which a language switch writes again in place | "the switch is in the map window; every filter lives in the panel" |
 | `wireFinder(){`, `paintControls(){` | Nothing for a numeric chip; a new kind of control needs its handler and read-back here | "floor area is a column that sorts, and a filter on every list" |
 | `finderRows(){` and `saleRows(){` | The predicate; `const finderFits = (v, lo, hi) =>` for a range | "a type filter re-scores every row …", "the for-sale list answers to the filters still on screen" |
