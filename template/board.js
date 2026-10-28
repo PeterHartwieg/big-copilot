@@ -25820,7 +25820,8 @@ let gwOpen = null;      // the dialog on screen
      odCurrent       false, and closes the dialog, once the company it was
                      opened for is gone (odDialog())
      odWait          plans again once a missing section arrives (odDialog())
-     odBoard         a new board suspends an unfinished review (odBoard()) */
+     odBoard         a new board suspends an unfinished review, except while
+                     approval is pending (odBoard()) */
 const gwStates = new WeakMap();
 function gwState(dlg){
   let st = gwStates.get(dlg);
@@ -27414,8 +27415,8 @@ function gwConfirm(spec){
     if(typeof SOURCE.refresh !== "function") return dlg.close();
     dlg.close(); return SOURCE.refresh();
   };
-  /* A new board suspends an unfinished review immediately, including any
-     dry run still in flight. Completed writes keep their result and Undo. */
+  /* A new board suspends an unfinished review unless approval is pending.
+     Completed writes keep their result and Undo. */
   st.odBoard = () => {
     if(applying || ["applying", "done", "undone"].includes(dlg.dataset.phase)) return;
     /* Keep the game's pending question visible while staffing recalculates.

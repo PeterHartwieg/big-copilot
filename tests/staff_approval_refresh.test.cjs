@@ -4,7 +4,7 @@ const H = require('./_page.cjs');
 const {en} = require('./_i18n.cjs');
 const browser = H.suiteBrowser();
 
-async function waiting(t, oneClick = false) {
+async function waiting(t, oneClick = false, clock = false) {
   const html = H.renderBoard('tests/fixtures/payload_snapshot/link.json').replace('<script>', `<script>
     window.calls = [];
     window.LEDGER_SOURCE = {label: 'Live', data: async () => null, watch() {},
@@ -23,6 +23,10 @@ async function waiting(t, oneClick = false) {
       }};
   </script><script>`);
   const {page} = await H.openPage(t, await browser(), {html});
+  if (clock) {
+    await page.clock.install({time: new Date('2026-10-28T12:00:00Z')});
+    await page.clock.pauseAt(new Date('2026-10-28T12:00:01Z'));
+  }
   await H.loadPayload(page, require('./fixtures/payload_snapshot/link.json'));
   await page.evaluate(oneClick => {
     window.full = JSON.parse(JSON.stringify(D));
@@ -76,6 +80,25 @@ for (const arriveFirst of [false, true]) {
     assert.equal(await page.evaluate(() => calls[1].body.day), await page.evaluate(() => D.meta.day), 'recheck uses the refreshed board');
   });
 }
+
+test('approval clock and waiting guidance survive repeated staffing refreshes', async t => {
+  const page = await waiting(t, false, true);
+  const dlg = page.locator('dialog.gw-dlg');
+  await page.clock.runFor(1000);
+  assert.equal(await dlg.locator('.gw-meta').textContent(), '0:01');
+  await refresh(page);
+  await page.clock.runFor(28000);
+  assert.equal(await dlg.locator('.gw-meta').textContent(), '0:29');
+  assert.equal(await dlg.locator('.gw-scene').count(), 1);
+  await refresh(page, 3);
+  await page.clock.runFor(1000);
+  assert.equal(await dlg.locator('.gw-verdict b').textContent(), en('nav.dlg.say.still'));
+  assert.equal(await dlg.locator('.gw-meta').textContent(), '0:30');
+  await page.clock.runFor(1000);
+  assert.equal(await dlg.locator('.gw-meta').textContent(), '0:31', 'clock continues after the guidance changes');
+  assert.equal(await dlg.getAttribute('data-phase'), 'approval');
+  assert.equal(await page.evaluate(() => calls.length), 1);
+});
 
 test('staffing approval still closes and cancels when the company changes', async t => {
   const page = await waiting(t);
