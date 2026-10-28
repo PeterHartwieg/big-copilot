@@ -109,7 +109,10 @@ test('office toggle redraws in place and survives a page reload', async t => {
   await page.evaluate(() => featureDiscovery.asOf('2026-10-28'));
   const pick = page.locator('#sp-roster [data-plan="open"]');
   const badge = pick.locator('[data-new-feature="office-open-hours"]');
-  assert.match(await pick.innerText(), /^Every open hour\s*New$/i);
+  // textContent, not innerText: the plan sits in a section{content-visibility:auto},
+  // and Chromium can give innerText as '' before that section's visibility settles.
+  // The draw is synchronous, so the words are in the DOM once the evaluate returns.
+  assert.match((await pick.textContent()).trim(), /^Every open hour\s*New$/i);
   assert.equal(await badge.isVisible(), true, 'the opt-in carries its New badge');
   assert.equal(await pick.getAttribute('aria-current'), null);
   await page.locator('#sp-roster [data-plan="demand"]').click();
@@ -118,7 +121,7 @@ test('office toggle redraws in place and survives a page reload', async t => {
   assert.equal(await pick.getAttribute('aria-current'), 'true');
   assert.equal(await badge.isVisible(), false, 'opening the plan retires the badge');
   assert.equal(await page.evaluate(() => localStorage.getItem('ba_dash_feature_seen:office-open-hours')), '1');
-  assert.match(await page.locator('#sp-roster').innerText(), /opening hours, cleaning and other duties stay as they are/);
+  assert.match(await page.locator('#sp-roster').textContent(), /opening hours, cleaning and other duties stay as they are/);
   await page.reload(); await draw();
   assert.equal(await pick.getAttribute('aria-current'), 'true');
   await page.locator('#sp-roster [data-plan="demand"]').click();
