@@ -6608,7 +6608,7 @@ function spOfficeRoster(b){
   const pick = base?.openCover && !base.openCover.failed
     ? `<div class="sp-pick"><span class="seg sp-plans" role="group" aria-label="${attr(tt("sp.pick.plan", "Plan"))}">${
       seg("demand", base.demandBased ? tt("sp.pick.demand", "Demand plan") : tt("sp.gw.plan.office", "Office default"))}${
-      seg("open", tt("sp.pick.openall", "Every open hour"))}</span></div>` : "";
+      seg("open", `${tt("sp.pick.openall", "Every open hour")}<span class="feature-new" data-new-feature="office-open-hours" hidden>${tt("nav.new", "New")}</span>`)}</span></div>` : "";
   /* No office default to add: Staff this site still, where people move in or out. */
   if(!row || (!spOfficeReplaces(row) && !(row.shifts || []).length && !pick)){
     const staff = gwLink() ? gwStaffButton(b.key, true) : "";
@@ -18326,6 +18326,7 @@ function drawSchedules(){
     <div class="sch-grid"><nav class="sch-list" aria-label="${attr(tt("co.sched.list", "Businesses to schedule"))}">${group(tt("nav.sub.shops", "Shops"), shops)}${
       group(tt("co.sched.offices", "Offices"), offices)}${facs}</nav><div class="sch-detail" id="schDetail">${detail}</div></div>`;
   schedApplyView();
+  featureDiscovery.refresh();
 }
 
 /* Staffing › Staff needs: one page. First what the people ask for (the staff
@@ -23160,12 +23161,16 @@ const wireRoster = once(() => {
     spPlanWrite(site(a), a.dataset.plan);
     const b = (D.businesses || []).find(x => x.key === site(a));
     if(!b) return;
+    /* The office's Every open hour pick is its New badge's feature. */
+    const seen = () => b.status === "office" && a.dataset.plan === "open"
+      ? featureDiscovery.visit("office-open-hours") : featureDiscovery.refresh();
     /* On Staffing › Schedules the list beside the planner says the plan
        picked, so the view is drawn again, the pick keeping the keyboard. */
     if(s.closest("#schDetail")){
       drawSchedules(); wireAll();
       const back = q(`#sp-roster [data-plan="${a.dataset.plan}"]`);
       if(back) back.focus();
+      seen();
       return;
     }
     const box = document.createElement("div");
@@ -23174,6 +23179,7 @@ const wireRoster = once(() => {
     fresh.classList.add("in");
     fresh.id = s.id;
     s.replaceWith(fresh);
+    seen();
     const again = q(`[data-plan="${a.dataset.plan}"]`, fresh);
     if(again) again.focus();
   });
