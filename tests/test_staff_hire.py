@@ -607,7 +607,7 @@ class UnstaffedTest(unittest.TestCase):
         # Somebody else first in the open plan's people table: every index
         # it holds moves by one, so the default's table would misread it.
         opened["people"] = [{"id": "stranger"}] + opened["people"]
-        shift = lambda s: dict(s, p=None if s["p"] is None else s["p"] + 1)  # noqa: E731
+        shift = lambda s: dict(s, p=None if s["p"] is None else s["p"] + 1)
         opened["shifts"] = [shift(s) for s in opened["shifts"]]
         opened["current"] = dict(opened["current"], list=[shift(s) for s in opened["current"]["list"]])
         business = {"key": site_key((STREET, 10)), "name": "Halden Law", "status": "office",
