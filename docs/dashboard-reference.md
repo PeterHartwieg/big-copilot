@@ -2592,6 +2592,42 @@ in the board script; the design is `mockup/real-estate`).
   buy. Then every building for sale, cheapest first (or by Payback, where the buildings you
   rent in lead), ten then Show all; a building past your cash is dimmed, never hidden.
 
+## Street Food compatibility
+
+Street Food schema 1 records are read from the save's `foodtrucks:state` block.
+The mod badge reports readable, stale or unavailable data; it is evidence in the
+save, not a claim about which mods are installed.
+
+Recorded fleet revenue, stock costs and reconciled crew wages join the daily
+company figures. Results includes a Street Food profit row, also for a company
+with no premises. Company profit stays the game's stored total: Street Food has
+already booked its contribution there. Crew wages and parking move out of company
+costs only when the saved game rows contain them, using the mod's five-cent
+rounding tolerance. Older records without `summaryCents` use the legacy
+revenue-minus-stock booking; the tooltip shows any reconciliation difference.
+
+Tax-period sales include recorded Street Food revenue. Forecasts use finished
+days, so today's partial takings do not add to a full day's projected sales.
+The shared commissary
+expense label includes stock, delivery charges and fines as well as rent, so only
+recorded paid rent is projected as recurring. Stale or unreadable records withhold
+the tax purchase recommendations. Cart and truck purchase values use the Street
+Food 0.10.0 prices ($1,200 and $15,000).
+
+Employees assigned to vehicles are excluded from building staffing and hiring
+plans. If crew ownership cannot be read, unassigned employees are withheld from
+reassignment. Plans & contracts recognises commissaries as destinations.
+Supply sizing does not yet model commissary consumption: recommendations and idle
+stock findings are withheld for its supplying sites and their upstream suppliers,
+including factory production and staffing. Other supply networks remain usable.
+
+Live reads require both mods' read-only snapshot integration. With an older game
+link or an unavailable Street Food session, the board marks its mod records stale.
+Exported `.bcsave` files retain this requirement when reopened: their building
+facts identify a Link snapshot even when the older link supplied no mod marker.
+The fleet detail page, vehicle forecasts and commissary demand sizing are not part
+of this increment.
+
 ## What the save does not remember
 
 The save stores only today: today's demand, today's cash, today's net worth. Anything

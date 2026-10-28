@@ -11,6 +11,26 @@ Bump it on any breaking change and update the mod, the mock, the
 two clients and this file in the same commit. A client refuses a mod whose
 `schemaVersion` it does not know and says which version it needs.
 
+## Street Food save metadata
+
+This integration uses the existing `/save` bytes; endpoints and schema version 2
+are unchanged. On the main thread the link optionally calls
+`FoodTrucks.BigCopilotSnapshot.CaptureV1(GameInstance)`. A compatible session returns
+the current schema-1 `foodtrucks:state` JSON without saving the game, settling
+takings or incrementing its save counter. The link copies the root and `modData`
+and writes the returned string into that copy.
+
+The copy also carries `bigcopilot:street-food-snapshot.v1`, a JSON string containing
+`{"status":"fresh"}` or `{"status":"unavailable"}`. It travels in the same bytes
+as the game state, including the existing facts hash and portable snapshot.
+Clients explicitly mark live inputs: missing metadata on an older link is stale,
+whereas a normal saved file needs no live provider. A failed or incompatible provider
+preserves the old mod block but cannot claim freshness.
+
+Before moving an unassigned employee, hire preflight calls the optional
+`IsCrewV1(GameInstance, string employeeId)`. Reserved crew or unavailable ownership
+is refused using the existing `changed` result. There is no writable fleet endpoint.
+
 ## Building facts (schema 2)
 
 `health.features` advertises `building-facts.v1`. Read `/save`, retain its

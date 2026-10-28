@@ -2478,6 +2478,7 @@ const szRank = f => { const i = SZ_RANK.indexOf(f.st); return i < 0 ? SZ_RANK.le
    line here; `named` and `unjudged` are the board's own, for SZ_NEW and
    SZ_NONE. */
 const SZ_WHY = {
+  get "new:streetFood"(){ return tt("sb.streetFood.limited", "Street Food commissary demand is not yet included, so supply and production recommendations for its suppliers are withheld."); },
   get "paused:order"(){ return tt("sb.why.paused.order", "The import is paused, and no route from your own site brings it"); },
   get "paused:topup"(){ return tt("sb.why.paused.topup", "Paused; a depot's daily top-up feeds the line"); },
   get "noplan:target"(){ return tt("sb.why.noplan.target", "No daily top-up plan brings it"); },
@@ -2782,6 +2783,7 @@ function factoryView(){
   const f = D.supply.factories;
   if(!f || !f.sites) return {sites: [], machines: 0, unnamed: 0};
   const view = JSON.parse(JSON.stringify(f));
+  view.sites = view.sites.filter(s => !s.streetFoodRestricted);
   const names = localNames();
   syncLocalNames(view);
   const recipes = {};
@@ -2884,6 +2886,12 @@ function mdFlag(m){
       ? tt("nav.mast.mods.retail.bad", "Retail Expansion: its records could not be read, so estimates that need a building's capacity or floor area are left out.")
       : tt("nav.mast.mods.retail.tip", {one: "Retail Expansion: {n} renovated building; its building capacity and floor area come from the mod's records.",
           other: "Retail Expansion: {n} renovated buildings; their building capacity and floor area come from the mod's records."}, {n}));
+  }
+  if(m.streetFood){
+    parts.push(tt("nav.mast.mods.streetFood", "STREET FOOD"));
+    tips.push(m.streetFood.status === "ready"
+      ? tt("nav.mast.mods.streetFood.ready", "Street Food records are included in company finances, and vehicle crews are reserved for the fleet.")
+      : tt("nav.mast.mods.streetFood.unavailable", "Street Food records are unavailable or stale, so tax estimates and reassignment of unassigned employees are withheld."));
   }
   if(!parts.length) return "";
   return `<span class="flag md-flag" data-tip="${attr(tips.join(" "))}">${
@@ -4590,14 +4598,15 @@ function outsideRows(span){
   const last = days[days.length - 1];
   if(!last) return "";
   const realEstate = last.realEstate || 0, salary = last.salary || 0;
-  const income = realEstate + salary;
+  const food = last.streetFood;
+  const income = realEstate + salary + (food?.profit || 0);
   const costs = (last.business || 0) - last.profit + income;
   const earlier = (D.businesses || []).filter(b => Math.abs(b.profitBefore || 0) >= 0.005);
   const before = earlier.reduce((s, b) => s + b.profitBefore, 0);
   const gone = D.sitesGone || [];
   const goneSum = gone.reduce((s, g) => s + g.profit, 0);
   if(Math.abs(costs) < 1 && Math.abs(realEstate) < 1 && Math.abs(salary) < 1 && Math.abs(before) < 1
-     && Math.abs(goneSum) < 1) return "";
+     && Math.abs(goneSum) < 1 && !food) return "";
   const parts = [["loans", last.loans], ["insurance", last.insurance],
                  ["homes", last.homes], ["parking", last.parking]].filter(([, n]) => n >= 1);
   const other = costs - parts.reduce((s, [, n]) => s + n, 0);
@@ -4619,6 +4628,9 @@ function outsideRows(span){
     {day, sites: gone.map(g => tt("co.outside.before.site", "{site} {w:$}", {site: g.name, w: g.profit})).join(", ")});
   return (Math.abs(before) >= 1 ? row(tt("co.outside.before", "Before a site's business opened"), before, "", beforeTip) : "")
     + (Math.abs(goneSum) >= 1 ? row(tt("co.outside.gone", "Sites you no longer rent"), goneSum, "", goneTip) : "")
+    + (food ? row(tt("co.outside.streetFood", "Street Food"), food.profit, "",
+      tt("co.outside.streetFood.tip", "Day {day}: revenue {revenue:$}, stock {stock:$}, crew wages {wages:$}, parking {parking:$}, other costs {costs:$}, reconciliation {adjustment:$}.",
+        {day, revenue: food.revenue, stock: food.cogs, wages: food.wages, parking: food.parking, costs: food.otherCosts, adjustment: food.adjustment})) : "")
     + (Math.abs(costs) >= 1 ? row(tt("co.outside.costs", "Company costs outside sites"), -costs, "", tip) : "")
     + (Math.abs(realEstate) >= 1 ? row(tt("co.outside.realestate", "Real estate income"), realEstate, "",
       tt("co.outside.realestate.tip", "Day {day}: rent from the real estate you own, booked to the company, not to a site", {day})) : "")
@@ -4663,7 +4675,7 @@ function drawPortfolio(){
   });
 
   const t = $("portfolio");
-  if(!D.businesses.length){
+  if(!D.businesses.length && !(view === "pnl" && D.daily?.some(d => d.streetFood))){
     t.innerHTML = `<tbody><tr><td class="l quiet">${tt("co.port.empty", "No businesses in this save yet.")}</td></tr></tbody>`;
     return;
   }
@@ -5982,7 +5994,8 @@ function spRosterNone(row, pick, key){
   /* A shop with no cover station and nothing measured still has its demand
      test to offer, so the pick sits here too and the section carries its site. */
   return `<section class="sec rv" data-block="roster" id="sp-roster"${pick ? ` data-site="${attr(row.key)}"` : ""}>
-    ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", why: failed
+    ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", why: row?.unavailable === "streetFood"
+      ? SZ_WHY["new:streetFood"] : failed
       ? tt("sp.roster.failed.why", "This site's schedule or stations could not be read, so no week is suggested for it. Nothing else on the board is affected.")
       : tt("sp.roster.none.why", "A week is cut from the hours this site has already served, and there is no cleaning or security station here to cover in the meantime. The game's own arrival ceiling counts everyone who may walk in, not the customers a shop like this serves, so nothing is suggested from it.")})}
     ${pick || ""}
@@ -9283,6 +9296,7 @@ function impSetKeep(id, entry){
    refresh. Also leaves the import rows for the game link's write-back
    (gwImportRows). */
 function supplyChecklistRows(){
+  const restricted = new Set(D.supply.streetFoodRestricted || []);
   const f = factoryView();
   const facts = D.supply.facts || {};
   const depotsKnown = (D.supply.factories && D.supply.factories.depots) || {};
@@ -9315,7 +9329,7 @@ function supplyChecklistRows(){
   const {edits} = impSetEdits();
   Object.keys(facts).forEach(si => {
     const s = +si;
-    if(!D.businesses[s]) return;
+    if(!D.businesses[s] || restricted.has(s)) return;
     const rows = Object.keys(facts[si]).filter(slug => facts[si][slug].imp).map(slug => {
       /* A factory input topped up daily and imported too: its contract's
          week is the fact's `import`. */
@@ -9368,7 +9382,7 @@ function supplyChecklistRows(){
     .filter(x => x.rows.length);
   const factRows = test => Object.keys(facts).flatMap(si => Object.keys(facts[si]).map(slug => {
     const fact = szFact(+si, slug);
-    return D.businesses[+si] && test(fact) ? {s: +si, slug, item: label(+si, slug), fact, margin, sizedFor} : null;
+    return !restricted.has(+si) && D.businesses[+si] && test(fact) ? {s: +si, slug, item: label(+si, slug), fact, margin, sizedFor} : null;
   }).filter(Boolean)).sort((a, b) => szRank(a.fact) - szRank(b.fact) || (b.fact.use || 0) - (a.fact.use || 0));
   /* Depots only a route from your own site fills, each morning, judged on
      that top-up against their busiest day (a day's figures); and the shops
@@ -9382,7 +9396,7 @@ function supplyChecklistRows(){
   importRows.forEach(x => x.rows.forEach(r => { r.deps = r.changed && Number.isFinite(r.value) ? sbDeps(f, r) : []; }));
   const deps = importRows.flatMap(x => x.rows.flatMap(r => r.deps.map(dep => ({...dep, for: r}))));
   const rows = buildOrderChecklist(importRows, looseRows, allSites,
-    (D.supply.shops || []).map(r => ({...r, fact: szFact(r.s, r.slug), margin})),
+    (D.supply.shops || []).filter(r => !restricted.has(r.s)).map(r => ({...r, fact: szFact(r.s, r.slug), margin})),
     supplyImports().map(r => ({...r, fact: szFact(r.s, r.slug)})), D.businesses, depotTopups, wholesaleRows, lines, deps);
   return {f, importRows, looseRows, allSites, lines, rows, margin};
 }
@@ -9733,6 +9747,11 @@ function sbFill(sec, html){
   sec.innerHTML = html;
 }
 function drawSupplyView(view){
+  const notice = $("sbStreetFood");
+  if(notice){
+    notice.hidden = !(D.supply?.streetFoodRestricted || []).length;
+    notice.textContent = SZ_WHY["new:streetFood"];
+  }
   ({changes: drawChangesView, roles: drawRolesView, imports: drawImportsView, deliveries: drawDeliveriesView,
     production: drawProductionView, flow: drawFlowView}[view] || drawChangesView)();
 }
@@ -11195,7 +11214,7 @@ const srN = v => Number.isFinite(v) ? num(Math.round(v)) : srDash;
 /* One stop's stock targets, every one, in the game's order: one column up to
    12, two above. The amount's header is the game's for the plan's source. */
 function srTargets(m, d){
-  const end = d.kind === "pier" || d.kind === "other";
+  const end = d.kind === "pier" || d.kind === "other" || d.kind === "commissary";
   const amount = m.factory ? tt("sb.roles.col.upTo", "Deliver up to") : tt("sb.roles.col.minStock", "Minimum stock amount");
   const finds = srStopFinds(d), by = new Map(finds.map(a => [a.ev.slug, a]));
   const rows = (d.targets || []).map(t => {
@@ -11541,7 +11560,7 @@ function drawFactoryStaffing(keep = () => true, drawnLines = []){
     /* The factory's own page has its lines and inputs, not a staffing block. */
     const go = b ? `<a class="link go" href="${attr(siteHref(b.key))}" data-sb-lines="${attr(b.key)}">${tt("sb.staff.open", "Open factory page ›")}</a>` : "";
     if(r.failed) return `<div class="sb-sfac"><div class="sb-sfh"><span>${name}</span><span class="sb-hc">${
-      tt("sb.staff.failed", "No plan could be built for this factory's workers.")}</span><span></span>${go}</div></div>`;
+      r.unavailable === "streetFood" ? SZ_WHY["new:streetFood"] : tt("sb.staff.failed", "No plan could be built for this factory's workers.")}</span><span></span>${go}</div></div>`;
     const hc = r.headcount || {}, dl = r.delta || {};
     workers += dl.workers || 0; perDay += dl.perDay || 0;
     const chip = dl.workers ? `<span class="d ${dl.workers > 0 ? "up" : "dn"}">${dl.workers > 0 ? tt("sb.staff.hire", "hire +{n}", {n: dl.workers}) : `−${-dl.workers}`}</span>` : "";
@@ -18057,6 +18076,7 @@ function reBuyCtl(re){
 }
 function reTaxPanel(re, lit){
   const t = re.tax;
+  if(t?.unavailable === "streetFood") return `<p class="quiet">${tt("re.tax.streetFood", "Tax estimates are unavailable until Street Food records can be read from a current save.")}</p>`;
   if(!t || !t.assessed || !(t.baseEnd > 0) || !(t.pick || []).length) return "";
   const picks = t.pick.map(k => re.buy.find(x => x.key === k)).filter(Boolean);
   const hot = t.left <= 1;

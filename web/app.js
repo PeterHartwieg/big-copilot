@@ -1982,7 +1982,7 @@
       const bytes = await file.arrayBuffer();
       if (gen !== sourceGen) return;
       const data = await ask({
-        kind: "build", name: file.name, bytes, mtime: file.lastModified,
+        kind: "build", name: file.name, bytes, mtime: file.lastModified, live: !!file.linkStamp,
         locale: stored.get(LOCALE_KEY), history: stored.get(HISTORY_KEY),
       }, [bytes], gen);
       built = data;
@@ -2756,7 +2756,7 @@
     data: async () => {
       if (!lastFile) throw new Error(tt("app.reader.nosave", "no save yet"));
       const bytes = await lastFile.arrayBuffer();
-      return ask({kind: "build", name: lastFile.name, bytes, mtime: lastFile.lastModified,
+      return ask({kind: "build", name: lastFile.name, bytes, mtime: lastFile.lastModified, live: !!lastFile.linkStamp,
                   locale: stored.get(LOCALE_KEY), history: stored.get(HISTORY_KEY)}, [bytes]);
     },
     // Resolves to the rebuilt data; the board swaps it in itself. No
