@@ -439,8 +439,9 @@ def calls() -> list[dict]:
     if os.path.isfile(translate):
         with open(translate, encoding="utf-8") as fh:
             found += markup_calls(fh.read(), "template/translate.html")
-    with open(os.path.join(ROOT, "template", "board.js"), encoding="utf-8") as fh:
-        found += js_calls(fh.read(), "template/board.js")
+    for name in ("board.js", "board-write.js"):
+        with open(os.path.join(ROOT, "template", name), encoding="utf-8") as fh:
+            found += js_calls(fh.read(), "template/" + name)
     found += markup_calls(build_web.BANNER, "build_web.py", _file_line("build_web.py", "BANNER = "))
     for landing in (False, True):
         found += markup_calls(ba_dashboard.footer_html(landing=landing, site=True), "ba_dashboard.py",

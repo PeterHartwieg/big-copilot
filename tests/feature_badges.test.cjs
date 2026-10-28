@@ -76,7 +76,7 @@ test('without a date or a changelog the badge stays, so a missing date is notice
 function badgeIds(){
   const ids = new Set();
   const grab = (text, re) => { for (const m of text.matchAll(re)) ids.add(m[1]); };
-  for (const name of ['template/board.html', 'template/board.js', 'web/app.js', 'web/community.js',
+  for (const name of ['template/board.html', 'template/board.js', 'template/board-write.js', 'web/app.js', 'web/community.js',
     'web/map.js', 'ba_dashboard.py', 'build_web.py']) {
     const text = read(name);
     grab(text, /data-new-feature="([a-z0-9-]+)"/g);
