@@ -5,6 +5,10 @@ const {en} = require('./_i18n.cjs');
 const path = require('node:path');
 const {chromium} = require('playwright');
 
+// The page sets no action timeout (Pyodide can load slowly), so a wait on
+// content that a site older or newer than this checkout never draws gets one.
+const CONTENT_WAIT_MS = 30000;
+
 test('the deployed page opens the map and wiki and remembers dismissed badges', async () => {
   const browser = await chromium.launch({headless:true, channel:process.env.PLAYWRIGHT_CHANNEL});
   try {
@@ -47,7 +51,13 @@ test('the deployed page opens the map and wiki and remembers dismissed badges', 
     await page.locator('#landing [data-changelog]').click();
     assert.equal(await page.locator('#changelogDialog').evaluate(d => d.open),true);
     const changes = require('../web/changelog.json');
-    await page.waitForFunction(n => document.querySelectorAll('#changelogDialog .changelog-entry').length === n, changes.length);
+    await page.waitForFunction(n => document.querySelectorAll('#changelogDialog .changelog-entry').length === n, changes.length, {timeout:CONTENT_WAIT_MS})
+      .catch(error => { if(error.name !== 'TimeoutError') throw error; });
+    const drawn = await page.locator('#changelogDialog .changelog-entry').count();
+    assert.equal(drawn, changes.length, `live changelog shows ${drawn} entries but this checkout has ${changes.length}: `
+      + (drawn < changes.length
+        ? `the site at ${base} is older than this checkout (deploy first, or run without RELEASE_URL)`
+        : `this checkout is older than the site at ${base} (update the checkout, or run without RELEASE_URL)`));
     const first = await page.locator('#changelogDialog .changelog-entry').first();
     const newest = [...changes].sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : b.pr - a.pr)[0];
     assert.equal(await first.locator('time').getAttribute('datetime'), newest.date);
@@ -89,7 +99,7 @@ test('the deployed page opens the map and wiki and remembers dismissed badges', 
     assert.match(prices, /\$25\.63/);
     // The new topic carries its own badges; meeting it dismisses them like the rest.
     await page.evaluate(() => window.BigCopilotWiki.route('wiki/topic%2Fhow-rent-works'));
-    await page.getByRole('heading', {name:'How rent works'}).waitFor();
+    await page.getByRole('heading', {name:'How rent works'}).waitFor({timeout:CONTENT_WAIT_MS});
     await page.reload();
     // A reload drops the pinned day: pin it again before counting. A badge can
     // also be hidden by age, so the visit itself is checked in storage too.
