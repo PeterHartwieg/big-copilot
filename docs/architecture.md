@@ -1796,7 +1796,10 @@ change `PYODIDE_VERSION` in `web/worker.js`, and delete the old folder.
 The board's dependencies are the files `PY_CODE` (the Python modules) and `PY_DATA`
 (the game data tables) name in `build_web.py`. `tests/test_web_fresh.py` checks them
 against `CODE_FILES`/`DATA_FILES` in the worker, and `tests/worker_startup.test.cjs`
-reads its list from the same two tuples.
+reads its list from the same two tuples. `ba_cli.py`, the command line with the watch
+server and the game-link client, is not among them: the worker never fetches it and
+`ba_dashboard` never imports it, so the browser loads none of `http.server`, `urllib`
+or `argparse`.
 
 Live link snapshots transfer compressed save bytes and the hash-bound facts document
 separately. The worker writes the pair to its virtual filesystem and passes

@@ -16,6 +16,7 @@ import pickle
 import tempfile
 import unittest
 
+import ba_cli
 import ba_dashboard
 from ba_dashboard import Msg, _alerts, _wire_msgs, msg, plain, tok
 from tests.test_site_panel_fields import stub
@@ -363,12 +364,12 @@ class PageTests(unittest.TestCase):
             self.assertFalse("\x00" in page, "a slot was left unfilled")
 
     def test_cli_ui_table_is_none_for_english_and_an_empty_table(self):
-        self.assertIsNone(ba_dashboard.cli_ui_table(None))
-        self.assertIsNone(ba_dashboard.cli_ui_table("en"))
-        self.assertIsNone(ba_dashboard.cli_ui_table("xx"))
-        with open(os.path.join(os.path.dirname(ba_dashboard.__file__), "web", "i18n", "de.json"), encoding="utf-8") as fh:
+        self.assertIsNone(ba_cli.cli_ui_table(None))
+        self.assertIsNone(ba_cli.cli_ui_table("en"))
+        self.assertIsNone(ba_cli.cli_ui_table("xx"))
+        with open(os.path.join(os.path.dirname(ba_cli.__file__), "web", "i18n", "de.json"), encoding="utf-8") as fh:
             shipped = json.load(fh)
-        got = ba_dashboard.cli_ui_table("de")
+        got = ba_cli.cli_ui_table("de")
         self.assertEqual(got, {"lang": "de", "table": shipped} if shipped else None)
 
 
