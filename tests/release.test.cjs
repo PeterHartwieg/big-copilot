@@ -3,20 +3,21 @@ const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {en} = require('./_i18n.cjs');
 const path = require('node:path');
-const {chromium} = require('playwright');
+const {launch, collectErrors} = require('./_page.cjs');
 
 // The page sets no action timeout (Pyodide can load slowly), so a wait on
 // content that a site older or newer than this checkout never draws gets one.
 const CONTENT_WAIT_MS = 30000;
 
 test('the deployed page opens the map and wiki and remembers dismissed badges', async () => {
-  const browser = await chromium.launch({headless:true, channel:process.env.PLAYWRIGHT_CHANNEL});
+  // launch() alone: openPage() shuts out https, which RELEASE_URL needs, and
+  // serveWeb() would serve all of web/ where this route allows only the page's files.
+  const browser = await launch();
   try {
     const page = await browser.newPage({viewport:{width:1440,height:1000}});
     page.setDefaultTimeout(0);
     page.setDefaultNavigationTimeout(0);
-    const errors = [];
-    page.on('pageerror', error => errors.push(error.message));
+    const errors = collectErrors(page);
     const base = process.env.RELEASE_URL || 'http://release.test/';
     if(!process.env.RELEASE_URL) {
       const files = new Set(['/index.html','/app.js','/worker.js','/community.js','/community.css','/maps/locations.json','/maps/map-background.svg','/wiki-data.min.json','/changelog.json']);
