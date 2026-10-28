@@ -246,13 +246,13 @@ namespace BigCopilotLink
             _enabled = value;
             // Options callbacks come from the game's UI, but the listener is only ever
             // touched from the main thread, so go through the dispatcher either way.
-            MainThreadDispatcher.Enqueue(RestartListener);
+            MainThreadDispatcher.EnqueueInternal(InternalWork.ListenerRestart, RestartListener, MainThreadDispatcher.Session);
         }
 
         private void OnPortChanged(int index)
         {
             _portIndex = ClampPortIndex(index);
-            MainThreadDispatcher.Enqueue(RestartListener);
+            MainThreadDispatcher.EnqueueInternal(InternalWork.ListenerRestart, RestartListener, MainThreadDispatcher.Session);
         }
 
         private void OnBuildingLoadChanged(bool value)

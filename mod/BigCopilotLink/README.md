@@ -167,6 +167,22 @@ trying the worker thread again after 10 fallback refreshes.
 the worker thread failed again on its second chance; serializing on the main thread; the worker gets another chance after 10 fallback refreshes.
 ```
 
+## Queue validation in the SDK
+
+HTTP admission and main-thread work are bounded as described in
+[`docs/game-link-api.md`](../../docs/game-link-api.md#overload-and-pending-work).
+To run the synthetic validation after the SDK has imported game DLLs, temporarily
+link `mod/build/queue-tests/` into `Assets/Editor/BclQueueTests/`, then run Unity
+with `-batchmode -projectPath <SDK> -executeMethod BclQueueTests.Run -logFile <log>`.
+The harness enters an empty scene, runs synthetic actions and snapshot bytes,
+restores the previous scene setup and exits with a nonzero code on failure.
+It checks admission limits, CORS and HEAD overload refusals, responsive reads,
+frame budgets, reserved internal completion, cancellation, write withdrawal,
+city unload and listener stop/restart. It does not serialize a player save,
+perform gameplay writes or persist approval. Remove the temporary link and its
+Unity-generated metadata afterward. Build the runtime with the normal SDK
+packager first; repository-only compilation does not replace that check.
+
 ## Build and install (in the SDK's Unity project)
 
 1. **Get the SDK**: `git clone https://github.com/hovgaardgames/bigambitions` and open

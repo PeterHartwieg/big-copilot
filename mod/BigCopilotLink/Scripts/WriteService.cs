@@ -134,7 +134,7 @@ namespace BigCopilotLink
         /// "schedule", "hire", "marketing" or "undo". Every answer comes back as a status and a body;
         /// the listener writes it.
         /// </summary>
-        public WriteAnswer Handle(HttpListenerRequest request, string kind)
+        public WriteAnswer Handle(HttpListenerRequest request, string kind, CancellationToken cancellation = default(CancellationToken))
         {
             // The approval before the body: a caller without one learns nothing more.
             if (!_approvals.IsApproved(request)) return WriteAnswer.Error(401, "not_paired");
@@ -157,7 +157,7 @@ namespace BigCopilotLink
                 return WriteAnswer.BadRequest(e.Message);
             }
 
-            return RunOnMainThread(job, dryRun);
+            return RunOnMainThread(job, dryRun, cancellation);
         }
 
         /// <summary>HTTP thread: the parse, into plain data the main thread then checks against the game.</summary>
@@ -237,7 +237,7 @@ namespace BigCopilotLink
         /// flight. A job the main thread has not started by the deadline is withdrawn
         /// (JobBox), so a 503 always means nothing was written.
         /// </summary>
-        private WriteAnswer RunOnMainThread(Func<WriteService, bool, WriteAnswer> job, bool dryRun)
+        private WriteAnswer RunOnMainThread(Func<WriteService, bool, WriteAnswer> job, bool dryRun, CancellationToken cancellation)
         {
             var clock = System.Diagnostics.Stopwatch.StartNew();
             while (true)
@@ -247,7 +247,7 @@ namespace BigCopilotLink
                 bool done;
                 try
                 {
-                    task = MainThreadDispatcher.RunOnMainThread<WriteAnswer?>(box.Run);
+                    task = MainThreadDispatcher.RunOnMainThread<WriteAnswer?>(box.Run, cancellation);
                     var left = BusyWaitMs - (int)clock.ElapsedMilliseconds;
                     done = task.Wait(left > 0 ? left : 0);
                     if (!done)
@@ -263,7 +263,9 @@ namespace BigCopilotLink
                 }
                 catch (Exception e)
                 {
-                    // A faulted task: no city is loaded any more (the dispatcher refused it).
+                    box.TryWithdraw();
+                    if (e.GetBaseException() is DispatcherBusyException) return WriteAnswer.Error(503, "busy");
+                    // A faulted task: the city/listener is no longer available.
                     LinkMod.LogWarn("a write could not reach the main thread: " + e.GetType().Name);
                     return WriteAnswer.Error(503, "main_thread_unavailable");
                 }
@@ -413,7 +415,7 @@ namespace BigCopilotLink
             // Busy), so this is the stamp before the refresh queued next.
             var stamp = _saves.Current.Stamp;
             var saves = _saves;
-            MainThreadDispatcher.Enqueue(delegate { saves.TryStartRefreshAfterWrite(); });
+            MainThreadDispatcher.EnqueueInternal(InternalWork.PostWriteRefresh, delegate { saves.TryStartRefreshAfterWrite(); }, MainThreadDispatcher.Session);
             return stamp;
         }
 
