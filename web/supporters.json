@@ -1,7 +1,0 @@
-{
-  "about": "Donors in order of everything each has given, most first; ties by who gave first. Never write amounts here: this file is public. A name is first name plus the initial of the last name, or a nickname the donor chose, and only with that person's yes; null shows as Anonymous. Written by tools/supporters.py from the private ledger.",
-  "supporters": [
-    null,
-    null
-  ]
-}
