@@ -225,6 +225,8 @@ released. The map code is embedded in `index.html`, so checking the standalone
 Run `node --test tests/release.test.cjs` before deploying, after `python build_web.py --assemble`; set `RELEASE_URL` to
 `https://bigcopilot.com/` and run it again afterwards. It checks the generated
 page's map and guide loading, displayed prices, and persistent feature badges together.
+When this checkout has changelog entries the live site lacks, a `RELEASE_URL` run fails
+within about 30 seconds and names both counts.
 
 ## Supporters list
 
