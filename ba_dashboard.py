@@ -1120,7 +1120,8 @@ def marketing_plan(traffic, was_ids, sqm, type_slug, neighbourhood, free_ids=Non
     The cheapest mix that brings promotion to 100; when none can, the cheapest
     that brings marketing to 100 (or, in a building too big for that, to the
     most it can reach). No tolerance: 99 is short. Ties go to fewer campaigns,
-    then to the mix the site runs now (`was_ids`). Settled by Peter, 28 Sep 2026.
+    then to the mix the site runs now (`was_ids`): docs/dashboard-reference.md,
+    "What a shop's and an office's page adds".
     `free_ids` are the types the plan may use (every type when None): the ones
     the site has a switch for and the ones a contacted agency sells
     (_marketing()). They hold every type running now, so a type outside them
@@ -1708,9 +1709,8 @@ UNRENTABLE_BUILDINGS = ("residential", "special")
 
 # rent_per_day = m2 x (30 + traffic) x district rate x (1.033 in an office)
 #
-# Fitted 15 September 2026 against 48 non-residential leases across three
-# characters on build 3675, worst residual 0.6%. Residential leases do not
-# follow it and are never estimated. A game patch can rebalance rents, so the
+# Fitted to real non-residential leases (docs/dashboard-reference.md, "Estimated rent").
+# Residential leases do not follow it and are never estimated. A game patch can rebalance rents, so the
 # payload carries a live check against the player's own current leases and the
 # page can say how far the estimate is off today.
 RENT_TRAFFIC_OFFSET = 30
@@ -1727,8 +1727,8 @@ RENT_OFFICE_FACTOR = 1.033
 
 # Taking a lease costs a deposit upfront, which is what actually stops an early
 # character signing. The game bills it as a transaction and never stores it
-# against the building, so it too is a multiple of the daily rent, fitted on
-# 15 September 2026 across 21 lease deposits from three characters (build 3675).
+# against the building, so it too is a multiple of the daily rent, fitted to
+# real lease deposits (docs/dashboard-reference.md, "Deposit").
 # A deposit transaction can also be a building purchase (about 1000x the rent
 # and more) or one of the small deposits the game takes for something that is
 # not a lease, so only the band between these two factors is read as a lease.
@@ -1749,7 +1749,7 @@ DEPOSIT_TRANSACTION = "ba:transaction_deposit"
 # with the layout's number: every player cinema reads customerCapacity exactly its
 # layout's (4 Broadway S1 150, 5 Sixth Street S2 125, 15 Third Avenue S3 100) once
 # it is fitted out, and no rival cinema or theater reads above its own layout's
-# (issue #159).
+# (docs/dashboard-reference.md, "Building capacity").
 CAP_CATEGORIES = ("retail", "office", "cinema", "theater")
 FALLBACK_CAPS = {
     "retail": {"A": 15, "C": 30, "D": 40, "M": 75},
@@ -2206,7 +2206,8 @@ def _premises(save: Save, names: Names, market: dict, estate: dict | None = None
 
 # --------------------------------------------------------------- real estate
 # Buildings the player owns outright, and buildings to buy (Real estate). The
-# rules are the game's own code, build 3682, read 12 Oct 2026 from
+# rules are the game's own code on build 3682 (docs/dashboard-reference.md,
+# "Real estate"), read from
 # Buildings.Building, RealEstateHelper and TaxHelper, and the Addressables
 # NeighborhoodData and BuildingTypeData (research/real-estate-2026-10-12/rules.md):
 #
@@ -2250,7 +2251,8 @@ TAX_THRESHOLD = 150_000           # PlayerShouldDoTaxes: under this in sales not
 # one-off bill) counts once. Wages, rent, marketing, imports, fees, and
 # Economy Expansion's utilities.
 #
-# The keys real saves hold (build 3682, 12 Oct 2026, ten characters):
+# The keys real saves hold (build 3682, ten characters; docs/dashboard-reference.md,
+# "Before tax day"):
 # running costs econoview_row_salaries, tax_import, tax_marketing, tax_rent,
 # ba:transaction_licensingfee_label, _healthinsurance_label,
 # _replacementwage_label, _replacementfee_label, _privatedriver_label,
@@ -2879,7 +2881,8 @@ def _real_estate(save: Save, names: Names, estate: dict, mod_rules: ModRules | N
 
 
 # ------------------------------------------------------------------ rivalry
-# The Rivals leaderboard as the game ranks it (issue #414), read against build
+# The Rivals leaderboard as the game ranks it (docs/dashboard-reference.md,
+# "The Rivals leaderboard"), read against build
 # 3682's IL: RivalLeaderboard.Load() makes one row per rival in rivalStates plus
 # the player, sorts them by weekly income, highest first, and numbers them by
 # position. Defeated rivals keep their place in the order (they show no rank of
@@ -4527,9 +4530,9 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
     workedOver: how many, and the most hours or days the demand allows. A demand
     the table does not know, from a newer game, is left out rather than guessed at.
 
-    Somebody given no hours at the site holds no demand here at all (Peter, 30
-    September 2026: "this should not be a warning, more an opportunity. You can
-    reduce your headcount"): a full-time or four-day demand is only unmet once
+    Somebody given no hours at the site holds no demand here at all, a chance to
+    run with fewer people rather than a warning (docs/dashboard-reference.md,
+    "Staff demands"): a full-time or four-day demand is only unmet once
     they have a week, and a desk, a building or insurance only matter while
     they work, and a quit warning from one of them is somebody the site can
     do without leaving. Their ids are listed as staffIdle instead, the people
@@ -5154,11 +5157,9 @@ def _marketing(save, b, building, status, neighbourhood, promo, agencies=None,
     known; anything else gets None. `on` and `was` are enum names, as the write
     sends them.
 
-    Peter's rule (28 Sep 2026): a type the site already has an entry for (a
-    switch in BizMan) is turned on or off at any time, whatever its agency. A
-    type with no entry needs a new one, which only an agency that is a phone
-    contact adds, and only while it is open. So the plan may switch the types
-    with an entry and the types a contacted agency sells; any other stays off.
+    The plan may switch the types the site already has an entry for (a switch
+    in BizMan) and the types a contacted agency sells; any other stays off
+    (docs/dashboard-reference.md, "What a shop's and an office's page adds").
     With no type free and a change wanted the plan's `on` is None.
     `visit` names the agencies, not contacts yet, whose types would make a
     better plan (a higher promotion, or the same for less); `visitRaises`, that
@@ -6592,7 +6593,8 @@ def _supply_walk(index: dict, edges: dict, leaves: dict, eats: dict, steady: dic
 
     `routed(site, item)`, given, is {sender: its part of all the site hands
     on and uses} where Demand sizing solved the split of a chain the site is
-    in (#521, _DemandSizing.walk_split()), else None. Such a site asks each
+    in (_DemandSizing.walk_split(), docs/dashboard-reference.md, "The supply
+    chain view"), else None. Such a site asks each
     route for that part of its need and its own supply (its lines, its
     import) brings the rest: a top-up route brings what the site's stock
     lost, and the lines making it there run steadily, so the routes bring
@@ -7754,7 +7756,8 @@ class _DemandSizing:
     set_made().
 
     A site whose own lines make an item that routes from the company's
-    other sites also bring it (a factory fed the product by another, #521)
+    other sites also bring it (a factory fed the product by another;
+    docs/dashboard-reference.md, "The supply chain view")
     shares what the ends draw from it between the two (made_share()), so the
     same shop sale is never asked of both."""
 
@@ -7997,7 +8000,8 @@ class _DemandSizing:
     def made_share(self, site: str, item: str, eats=None) -> float | None:
         """The share of what the ends draw of `item` from `site` that its own
         lines make, where routes from the company's other sites bring it
-        there too (#521): Factory 2 makes soda and is topped up with Factory
+        there too (docs/dashboard-reference.md, "The supply chain view"):
+        Factory 2 makes soda and is topped up with Factory
         1's, and the shops past it sell 10,000 a week; the two make it
         between them, never 10,000 each. Every such split of the item is
         worked out together (_splits()), and so is a site with no route
@@ -8345,7 +8349,8 @@ class _DemandSizing:
         [(merge site, [the sites whose routes bring it there], what the
         lines there and those routes bring a day together)]. Where a line
         falls short, one of them is the link of the chain it shares with
-        others (#521). A share within MERGE_SHARE_SLACK of nothing or of
+        others (docs/dashboard-reference.md, "The supply chain view"). A share
+        within MERGE_SHARE_SLACK of nothing or of
         all of it counts as that: a route carrying a billionth of a unit a
         day meets nothing."""
         seen, ring = {site}, [site]
@@ -9078,7 +9083,7 @@ def _supply_graph(save: Save, names: Names, businesses: list, index: dict, *, ed
         factor, _peak_day = peak_of(business)
         for line in business["lines"]:
             # A ticket is issued at the booth, never held: no stock, need or
-            # refill belongs on the node (issue #159).
+            # refill belongs on the node (docs/dashboard-reference.md, "Reading the numbers").
             if line.get("issued"):
                 continue
             shop = shop_need[business["key"]].get(line["item"])
@@ -9407,7 +9412,7 @@ def _supply_factory_flow(save: Save, names: Names, businesses: list, *, index: d
         "day": day,
         "demand": sizing.demand,
         # The share of a site's draw its own lines make, where routes bring
-        # the same item there too (#521).
+        # the same item there too (docs/dashboard-reference.md, "The supply chain view").
         "madeShare": sizing.made_share,
         "merges": sizing.merges,
         # The chain whose split a line shares, for the sold days to add up.
@@ -11197,7 +11202,8 @@ def _unnamed_hours(machines_posted: list) -> dict:
 
 def _rounded_together(exacts: list) -> list | None:
     """Whole units for figures that add up together (a chain's lines' sold
-    days, #521): each one's whole units, and one more for those with the
+    days; docs/dashboard-reference.md, "The supply chain view"): each one's whole
+    units, and one more for those with the
     largest fractions until they add up to the rounded total. None where
     the last unit would fall between fractions within a ten-thousandth of
     each other, which only a site's name could tell apart: each then keeps
@@ -11378,7 +11384,7 @@ def _factories(
     def lines_share(key, slug):
         """The share of what the ends draw from `key` that its own lines
         make: all of it unless routes from other sites bring the product
-        there too (made_share(), #521)."""
+        there too (made_share(); docs/dashboard-reference.md, "The supply chain view")."""
         got = made_share(key, slug, dem_eats) if made_share else None
         return 1.0 if got is None else got
 
@@ -11413,7 +11419,8 @@ def _factories(
     chained_sold = []
 
     def named_by(site):
-        """A site's order where a chain's tip ties (#521): its business
+        """A site's order where a chain's tip ties (docs/dashboard-reference.md,
+        "The supply chain view"): its business
         name as a player reads a list (case aside, then case), then its
         key."""
         name = (businesses[index[site]].get("name") or "") if site in index else ""
@@ -11505,7 +11512,8 @@ def _factories(
             else:
                 group = None
             # Where the product meets another site's of it on the way to the
-            # shops (#521), the link this line shares: the merge site, the
+            # shops (docs/dashboard-reference.md, "The supply chain view"), the link
+            # this line shares: the merge site, the
             # sites whose routes bring it there, what they and the lines
             # there make a day together, and what is drawn from it with the
             # margin, on the same reading as `needDay`. Of the nearest
@@ -11728,7 +11736,8 @@ def _factories(
             }
         )
 
-    # Lines sharing a chain's split (#521) each read their share of what
+    # Lines sharing a chain's split (docs/dashboard-reference.md, "The supply
+    # chain view") each read their share of what
     # the shops past them sell, rounded so that together they add up to
     # the chain's own rounded total: each line's whole units, and one more
     # for those with the largest fractions until they do (one line rounded
@@ -14219,7 +14228,8 @@ def _place_hires(shifts: list, pool: list, state: dict, here: dict, before: dict
     return rows, dict(weeks)
 
 
-# --- the rule for the people a site already has (Peter, 28-29 September 2026)
+# --- the rule for the people a site already has (docs/dashboard-reference.md,
+# "The week the board would copy into BizMan")
 # Somebody already working here may be given no hours (they are spare, and
 # the Staff page offers to move them), or a week that still meets every
 # schedule demand they hold; somebody it does not meet now may be moved any
@@ -14245,7 +14255,8 @@ def _worse_off(person: dict, entry: dict, before: tuple, now: dict) -> bool:
     """Whether a planned week cuts somebody short of a demand the week they have meets better.
 
     No hours at all is never worse off: the person is spare, and the Staff
-    page offers to move them (Peter, 29 September 2026: "0 h is fine"). A
+    page offers to move them (docs/dashboard-reference.md, "The week the board
+    would copy into BizMan"). A
     week with hours in it has to keep the hours band's floor (its ceiling and
     the rest are never broken by the placer) and an exact day count, or leave
     them no further from it than now: a person with no hours demand may be cut
@@ -14317,7 +14328,8 @@ def _without_pins(slots: list, pins: list) -> list:
     return out
 
 
-# --- while the plan waits on somebody (issue #446)
+# --- while the plan waits on somebody (docs/dashboard-reference.md, "The week
+# the board would copy into BizMan")
 # A write sends the plan's entries for the people already here and leaves the
 # ones that wait on a hire or a bench member empty until the player adds them.
 # A plan that moved somebody off an hour they work now, and gave that hour to
@@ -15764,8 +15776,8 @@ def _staffing(
         scratch = {pid: _copy_state(entry) for pid, entry in site["before"].items()
                    if pid not in free}
         scratch.update({pid: _copy_state(shared[pid]) for pid in free})
-        # The Staff page's plan for the shop (Peter, 26 September 2026:
-        # "Staff the hours it's open, never change opening"): the hours it
+        # The Staff page's plan for the shop, which never changes its opening
+        # (docs/dashboard-reference.md, "What's on the board"): the hours it
         # opens now and never more, placed from the same starting week as the
         # full-cover plan, as the other choice to it. See _open_need().
         opened_scratch = {pid: _copy_state(entry) for pid, entry in scratch.items()}
@@ -15773,7 +15785,8 @@ def _staffing(
         offered = any(s["skill"] for s in grid["stations"]) and any(grid["open"])
         try:
             # Full cover keeps the people here on the hours they work now while
-            # it waits on a hire (issue #446) only where the shop is open around
+            # it waits on a hire (docs/dashboard-reference.md, "The week the board
+            # would copy into BizMan") only where the shop is open around
             # the clock already, so the week is the hours it runs: holding them
             # in every shop's longest week cost the board most of a second
             # placement of it (+84% extract on the largest save). Elsewhere the
@@ -15890,7 +15903,8 @@ def _open_need(site: dict) -> dict:
     A shop without: its demand curve, with every open hour nothing has read
     (basis `none`) given every station of the role (_open_floor()), which the
     page uses in place of the demand plan -- an open hour needs its stations
-    before anything is measured (Peter, 26 September 2026). Hours the shop is
+    before anything is measured (docs/dashboard-reference.md, "What's on the
+    board"). Hours the shop is
     shut are left out by the placer either way.
     """
     if site["run"] >= DEMAND_RUN_DAYS:
@@ -16304,7 +16318,8 @@ def _factory_site_plan(save, building, site, business, posts_of, pool, people, m
 
 
 # How many finished days since the shop first opened make the demand data good
-# enough for the demand plan (Peter, 23 September 2026): nine covers every
+# enough for the demand plan (docs/dashboard-reference.md, "The week the board
+# would copy into BizMan"): nine covers every
 # weekday once and two of them twice, a week and a bit of game time rather than
 # the fortnight HOUR_WEEKS_THIN would take. Not nine in a row: a nightclub shut
 # every Monday still completes on its ninth day, and its Mondays are no demand.
@@ -16387,8 +16402,9 @@ def _run_measured(grid: dict, run: int, daily: list | None = None) -> dict:
     The demand plan calls a weekday thin below HOUR_WEEKS_THIN weeks and reads
     a thin weekday off another through the game's day curve, or not at all; an
     hour with no report it reads off another weekday the same way. Nine days
-    since the shop first opened are what Peter decided is enough (23 September
-    2026). So for such a shop no weekday is thin, and every hour with no report
+    since the shop first opened are enough (DEMAND_RUN_DAYS, docs/dashboard-reference.md,
+    "The week the board would copy into BizMan"). So for such a shop no weekday
+    is thin, and every hour with no report
     on file counts as no customers: the shop was shut then, or empty, and
     either way nobody is staffed for it. A weekday it never opened is no demand
     all day. `daily`, from _open_day_average(), replaces each hour's average
@@ -16481,8 +16497,9 @@ def _full_cover_in_game(current: list, stations: list, slots: list) -> bool:
     """Whether the schedule in the game is full cover of the shop's own hours.
 
     Every serving station staffed every hour the shop is open, whatever those
-    hours are (Peter, 23 September 2026: the player may keep a shorter day, and
-    the plan counts its shut hours as no demand). Nothing less inside them: an
+    hours are: the player may keep a shorter day, and the plan counts its shut
+    hours as no demand (docs/dashboard-reference.md, "The week the board would
+    copy into BizMan"). Nothing less inside them: an
     hour a register stands empty is an hour whose customers were turned away by
     the schedule rather than by demand. A site with no serving station, or one
     open no hour at all, has no demand to test, so it never is one.
@@ -16538,7 +16555,8 @@ def _place_week(grid, need, slots_open, cover_posts, pool, people, business, ben
     for snap in (True, False):
         trial = {pid: _copy_state(entry) for pid, entry in kept.items()}
         # With `keep`, each re-cut week is held against its own re-cut plain
-        # week (issue #446), not against the plain cut above; the rank then
+        # week, the hold of docs/dashboard-reference.md, "The week the board would
+        # copy into BizMan", not against the plain cut above; the rank then
         # picks among weeks that each passed that guard.
         other = _place_cut_week(*args, trial, cuts=cuts, snap=snap, **kwargs)
         moved = other.pop("snapMoved")
@@ -16845,7 +16863,7 @@ def _week_d_place(ctx: dict) -> None:
     )
 
     shifts, hire_weeks, here = _week_d_fill(ctx, [])
-    # Issue #446: a write leaves out every entry that waits on somebody not
+    # A write leaves out every entry that waits on somebody not
     # here yet, so a plan that moved a person off an hour they work now and
     # gave the hour to a hire is a week with fewer people in that hour until
     # the hire comes. Where the plain week does that, it is placed again with
@@ -16856,7 +16874,7 @@ def _week_d_place(ctx: dict) -> None:
     # week is kept only if it puts nobody to work the plain week leaves at
     # 0 h, draws the same bench members, hires no more people, and leaves
     # fewer hours short; the first that does is kept. Otherwise the plain
-    # week stands.
+    # week stands (docs/dashboard-reference.md, "The week the board would copy into BizMan").
     dropped, missing = _waiting_drops(shifts, standing, role_keys) if standing else ([], 0)
     if dropped:
         start, keys = ctx["start"], ctx["keys"]
@@ -17527,7 +17545,8 @@ def _finish_site(site, full, names, people, opened=None) -> dict:
     }
 
 
-# --- hiring: the Staff page (issue #89; docs/architecture.md, the payload contract)
+# --- hiring: the Staff page (docs/dashboard-reference.md, "What's on the board";
+# docs/architecture.md, the payload contract)
 #
 # The skills a business accepts when the player assigns somebody to it, as the
 # game's own check has them (AssignToBusinessAndHireMassAction and
@@ -17576,7 +17595,7 @@ ASSIGN_SKILLS = {
 }
 FACTORY_TYPES = COST_CENTRE_TYPES - OVERHEAD_TYPES
 
-# Peter's office default (25 Sep 2026; docs/dashboard-reference.md): "computers
+# The office default (docs/dashboard-reference.md, "What's on the board"): "computers
 # staffed 24/7 = 3 in a 50-capacity building, proportionally fewer in smaller
 # ones (at least 1); every computer 8 to 22 on weekdays; half the computers 8 to
 # 22 on weekends." For every office: round(3 x door / 50) computers, at least 1
@@ -17659,7 +17678,8 @@ def _office_recent(save: Save, building: dict) -> list:
 # An office hour is cut only when both of its latest readings sit this far
 # under today's computers. The plan adds one computer at a time, so a reading
 # one under today's may be from before its own last step up; two under cannot
-# be (Peter, 11 October 2026). From 20 computers an hour a reading one under is
+# be (docs/dashboard-reference.md, "What's on the board"). From 20 computers an
+# hour a reading one under is
 # already full (AT_CAP), so the cut also asks that the readings were not full
 # one computer down: otherwise it would undo the step that reading caused.
 OFFICE_CUT_GAP = 2
@@ -18222,8 +18242,9 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             full = take((row or {}).get("fullCover"))
             opened = take((row or {}).get("openCover"))
             if row and not row.get("failed") and demand is not None:
-                # Peter (26 September 2026): "Staff the hours it's open, never
-                # change opening." The Staff page never uses full cover, whose
+                # The Staff page staffs the hours a shop is open and never changes
+                # its opening (docs/dashboard-reference.md, "What's on the board"),
+                # so it never uses full cover, whose
                 # write opens a shop 0 to 24: it has the open-hours plan
                 # (`open`, _open_need()) instead. Without complete data that
                 # plan replaces the demand plan, whose unread open hours had
@@ -18239,7 +18260,8 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
                     if opened is not None:
                         plans["open"] = opened
             # Full cover (24/7), for a shop whose Staffing block the player
-            # put on it (29 September 2026): the page hires into it and its
+            # put on it (docs/dashboard-reference.md, "What a shop's and an office's
+            # page adds"): the page hires into it and its
             # write opens the shop 0 to 24 there, and nowhere else.
             if row and not row.get("failed") and full is not None:
                 plans["full"] = full
@@ -19285,8 +19307,8 @@ def _counts_only(grids: list) -> None:
 
     Old counts cannot name today's bottleneck, so the hour findings stay off
     for them (_hour_findings()); the demand plans read them as they are
-    (_need_curve() over _run_measured()), with no measurement to start (Peter,
-    9 and 10 October 2026). An office whose save holds no opening hours is
+    (_need_curve() over _run_measured()), with no measurement to start
+    (docs/dashboard-reference.md, "What's on the board"). An office whose save holds no opening hours is
     open around the clock, as the office default plans it.
     """
     for grid in grids:
@@ -19887,7 +19909,7 @@ def _site_trends(businesses: list, day: int) -> list:
 # ------------------------------------------------------------------- payback
 # What a site cost to set up, and when its profit paid that back
 # (docs/dashboard-reference.md, "Payback"). The rules are the game's own, read
-# from its code on 28 Sep 2026 and checked against six real bills to the coin:
+# from its code and checked against six real bills to the coin:
 #   installation firm  586 x the building's m² + every item at its default
 #                      price; walls and floors cost nothing
 #                      (InteriorInstallationFirmHelper.GetInstallationFee)
@@ -20911,7 +20933,8 @@ def outfit_lines(type_slug: str, rules: dict, prices: dict, cap, sqm, copied=Non
         shows = catalogue.displays.get(p, ())
         # A main product, or one a requirement names, with no display made
         # for the type takes any that works in it: a fast food restaurant's
-        # ice cream stands in the coffee shop's counter (issue #497). An extra
+        # ice cream stands in the coffee shop's counter (docs/dashboard-reference.md,
+        # "Open a store"). An extra
         # (weight under 1) is left to outfit_optional(), which allows the same.
         item, qty = sized(shows)
         if not item and (main.get(p, 0) >= 1 or p in shelf_products):
@@ -21716,8 +21739,9 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
 
 
 # ----------------------------------------------------------- plan a factory
-# Expansion › Plan a factory (issue #172, mockup/factory-flow/NOTES.md on the
-# factory-flow-canvas branch): the facts a factory plan is priced from. As for
+# Expansion › Plan a factory (docs/dashboard-reference.md, "Plan a factory";
+# mockup/factory-flow/NOTES.md on the factory-flow-canvas branch): the facts a
+# factory plan is priced from. As for
 # a store, Python says what the save and the game's tables hold and the board
 # does the arithmetic the reader moves (the lines, the building, the install
 # mode, the loan). No break-even: a factory is a cost centre of its chain.
