@@ -14,7 +14,7 @@ and `template/board.js` (the board script, with the game writes in `template/boa
 The calculation models beside them, `template/open-store-model.js`,
 `template/open-factory-model.js`, `template/mod-economy-model.js`,
 `template/mod-demand-model.js` and `template/street-food-model.js`, are explicit-input
-arithmetic that `load_template()` embeds ahead of the board script. The eighth file in
+arithmetic that `load_template()` embeds ahead of the board script. The ninth file in
 `template/`, `translate.html`, is the translation page (below).
 Find each part by its anchor, never by line number — the files are long and
 the numbers drift.
@@ -22,7 +22,7 @@ the numbers drift.
 | Part | Anchor |
 | --- | --- |
 | Extraction (save → numbers) | `def build_core(` (the core), `SECTIONS` (the sections) and the `_` helpers before `def render(`, in `ba_dashboard.py`; `def extract(` is both. The findings are `ba_alerts.py`'s (below) |
-| The findings (save numbers → what to act on) | `ba_alerts.py`: `def _alerts(` (the coordinator) and the helpers after it, `def _finding(`, `ALERT_UNITS`, `SUMMARIES`, `def _condense(` |
+| The findings (save numbers → what to act on) | `ba_alerts.py`: `ALERT_UNITS` and `def _finding(` at the top, `def _alerts(` (the coordinator) with the helpers it runs, then `SUMMARIES` and `def _condense(` |
 | Big Copilot's own sentences and game-name tokens | `ba_msg.py`: `def msg(`, `class Msg`, `def tok(`, `def plain(`, `def _wire_msgs(`; `ba_dashboard` re-exports them |
 | The board's HTML and CSS | `template/board.html`, read on the first `render()` by `load_template()` |
 | The board script | `template/board.js`, which `load_template()` splices into `/*__BOARD_SCRIPT__*/`, the body of the page's last `<script>` block, before any other placeholder is filled. Parts of it live in files of their own and go back in at a placeholder line where they were taken out (below). A branch from before the split (1 Oct 2026), with the script still inline in `board.html`, needs the retired tool and its `--resolve` from history: `git show ecabe57c:tools/split_board_script.py` |
@@ -254,7 +254,7 @@ stale one fails them.
 | `marketing_score()`, `MARKETING_REACH` or the neighbourhood factors (the promotion formula) | `python -m unittest tests.test_marketing_plan`; then `python tools/check_marketing.py`, which holds the formula against the promotion each save stores (owner only: it reads every save on the machine; never commit its output) |
 | `_open_store()` and its helpers, `ba_store_rules.json`, or the board's `os*` functions (Open a store) | `python -m unittest tests.test_open_store` and `node --test tests/open_store.test.cjs tests/open_store_checklist.test.cjs tests/open_store_opened.test.cjs tests/finder_plan.test.cjs`; after a change to the profit model, `python check_profit_model.py` and compare its numbers with `docs/dashboard-reference.md`, "Open a store" |
 | `make_item_prices.py`, `ba_item_prices.json`, or the payback figures (`_payback()`, the Payback column, `spPayback()`) | `python -m unittest tests.test_payback` and `node --test tests/payback.test.cjs` |
-| Added or changed UI text (`tt()`, `data-tt*`, `msg()`), `web/i18n.js`, `tools/i18n.py`, `i18n/` | `python -m unittest discover -s tests -p "test_i18n*.py"` and `node --test tests/i18n_*.test.cjs tests/global_names.test.cjs`, plus the rows for the files the text is in; after removing or renaming a key, run `python tools/i18n.py prune`. A branch from before `i18n/base.json` keeps its copies of the old `i18n/<lang>.base.json` and `.ai.json` when it merges main and runs `python tools/i18n.py fold` |
+| Added or changed UI text (`tt()`, `data-tt*`, `msg()`), `web/i18n.js`, `tools/i18n.py`, `i18n/` | `python -m unittest discover -s tests -p "test_i18n*.py"` and `node --test tests/i18n_*.test.cjs tests/global_names.test.cjs`, plus the rows for the files the text is in; after removing or renaming a key, run `python tools/i18n.py prune`. A branch from before `i18n/base.json` runs `python tools/i18n.py fold` while its merge of main is still open, before committing it: fold reads the branch's old `i18n/<lang>.base.json` and `.ai.json` from git and folds their marks into `base.json` |
 | `tools/Invoke-ZaiClaude.ps1` | `python -m unittest tests.test_agent_cli` |
 | `tools/game_update/` | no tests: run the script you changed against the installed game (`docs/game-update.md`) |
 | `tools/game_link_mock.py`, `docs/game-link-api.md` | `python -m unittest tests.test_game_link_mock tests.test_watch_game` and `node --test tests/game_link.test.cjs`; a contract change bumps `schemaVersion` in the doc, the mock, the mod and both clients in one commit |
@@ -332,8 +332,7 @@ and never attach one to an issue.
   (`tests/global_names.test.cjs`, `tests/number_locale.test.cjs`, `tests/feature_badges.test.cjs`),
   `tests/test_doc_registries.py` over `ba_dashboard.py` and `ba_alerts.py`, and slices between
   anchors through `between()`/`at()` in `tests/_slice.cjs` or a bare `indexOf`
-  (`template/board.html`'s markup, `web/worker.js`, `web/wiki.js`, and the board slices left in
-  `tests/feature_badges.test.cjs` and `tests/i18n_community.test.cjs`). When you change a comment
+  (`template/board.html`'s markup, `web/worker.js`, `web/wiki.js`). When you change a comment
   or declaration in a source file, update the tests that read it:
   `rg -l "board\.js|board-staff\.js|board-write\.js|_board\.cjs" tests` lists them (put the file's name in the
   pattern: `board\.html`, `app\.js`, `map\.js`, `worker\.js`, `ba_dashboard\.py`, `ba_alerts\.py`);

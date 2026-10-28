@@ -828,7 +828,7 @@ name; the footer's Language sets both.
 | --- | --- |
 | A script (board script, `web/*.js`) | `tt("sp.tile.size", "Size")`, `tt("f.x", "{n:,} units short", {n})`, `tt("f.m", {one: "{n} machine", other: "{n} machines"}, {n})` |
 | Markup (`template/board.html`, `BANNER`, `footer_html()`) | `<span data-tt="nav.today">Today</span>`; `data-tt-title`, `data-tt-aria-label`, `data-tt-placeholder` and `data-tt-tip` (for `data-tip`) name the key beside the attribute they fill |
-| Python (`ba_dashboard.py`) | `msg("f.loss", "Lost {w:$} yesterday", w=abs(b["profit"]))` |
+| Python (`ba_alerts.py` for the findings, `ba_dashboard.py` for the rest) | `msg("f.loss", "Lost {w:$} yesterday", w=abs(b["profit"]))` |
 
 With no table loaded every one of these gives its English, so an English page is byte for
 byte what it was: `tests/i18n_layout.test.cjs` checks the page asks for no table without
@@ -1000,12 +1000,28 @@ and marks from `base.json` (git history keeps their text). `status --complete` a
 missing and stale keys, for a translation pull request.
 
 Before `base.json` each language had an `i18n/<lang>.base.json` and an `i18n/<lang>.ai.json`.
-A branch from before the change that merges main gets a modify/delete conflict on those it
-touched: keep the branch's copies and run `python tools/i18n.py fold`, which takes them into
-`base.json` and deletes them. Until then `load()` and `drafted()` refuse to read, so the
-build and every command that reads the translations stop and name `fold`. The old file
-fills every key `base.json` records no English for in that language, draft mark included.
-Where both record one, `base.json`'s stays unless only the old file's is today's English.
+A branch from before the change that merges main resolves any conflict in `i18n/<lang>.json`
+first, then runs `python tools/i18n.py fold` before it commits the merge (or right after, or
+during a rebase); `fold` stops on a `<lang>.json` that still holds conflict markers. `fold` reads the branch's old files
+and its own `<lang>.json` from the branch's commit and main's `<lang>.json` from main's
+(`merge_sides()`: `HEAD` and `MERGE_HEAD`, `REBASE_HEAD` and the rebase's onto, or a merge
+commit's two parents), because git deletes an old file the branch did not change, and drops
+`<lang>.ai.json` altogether once a branch reviewed its last draft. With none of those it
+stops and asks for `--branch REF --main REF`. It deletes any old file the merge left in the
+work tree; while one is there, `load()` and `drafted()` refuse to read, so the build and every
+command that reads the translations stop and name `fold`.
+
+Where the merged `<lang>.json` holds the branch's words for a key, the branch's English wins
+when those words differ from main's (they were made from it), fills the key when `base.json`
+records none in that language, and wins where only it is today's English; such a key takes
+the branch's draft mark too. Where the merge kept other words,
+main's English and mark stay. For
+every other key both sides record the same English for, a mark follows the wording
+`<lang>.json` kept: the branch's mark (or its lack) when the merge kept the branch's words
+and they differ from main's, as after a redraft or a review with an edit on the branch, and
+no mark when all three wordings agree and the branch has none, since only a review takes a
+mark off and keeps the words. Anything else keeps main's mark, so no guess reverses a
+reviewer's. `fold` lists every mark it took or dropped, for the author to check.
 
 `glossary de --out <path>` and `draft-sheet de --out <path>` read the installed game's
 `en.json` and `de.json` for the game's own words (address form: du, as the game's German
@@ -1203,7 +1219,7 @@ What `page_html()` produces, top of the file down:
 
 Before any of that, `main()` refreshes `web/wiki-data.json`, copies the files `PY_CODE`
 and `PY_DATA` name (all but `gametext.json`: `PY_COPIED`) into `web/py/`, stripping
-comments and docstring contents only from `ba_dashboard.py` while preserving its lines, and
+comments and docstring contents only from the files `STRIPPED` names (`ba_dashboard.py`, `ba_msg.py`, `ba_alerts.py`) while preserving their lines, and
 writes `web/py/gametext.json` and `web/names/<lang>.json` (`write_name_tables()`) from the installed locale — everything `stamp()` hashes has to be in place before
 `release_info()` runs. `main()` then writes `web/index.html` and `web/version.json`.
 
@@ -1676,9 +1692,10 @@ A kind needs its group (from `note()`, a `_finding()` call or `AMENITY_DEMANDS`)
 Python side, and on the board one record in `FINDING_KINDS`; then `ALERT_UNITS` if its
 worth is money (else `NOT_MONEY` in `tests/alert_kinds.test.cjs`), and its player-facing
 line under "What counts as a finding" in `docs/dashboard-reference.md`. Every other row is
-*only if*. The same summary sits above `ALERT_UNITS` and `_alerts()` in `ba_alerts.py`, where
-every finding anchor below lives (`def _alerts(`, `_finding(`, the `_*_notes` helpers,
-`SUMMARIES`, `WORST_FIRST`, `def _condense(`), and above `FINDING_KINDS` in `template/board.js`.
+*only if*. The same summary sits above `ALERT_UNITS` and `_alerts()` in `ba_alerts.py`, which
+holds `def _alerts(`, `_finding(`, the supply `_*_notes` helpers, `ALERT_UNITS`, `SUMMARIES`,
+`WORST_FIRST` and `def _condense(`; `AMENITY_DEMANDS = {`, `_estate_notes()` and `def _business(`
+stay in `ba_dashboard.py`. The summary also sits above `FINDING_KINDS` in `template/board.js`.
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
