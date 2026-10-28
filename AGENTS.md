@@ -22,7 +22,7 @@ the numbers drift.
 | Part | Anchor |
 | --- | --- |
 | Extraction (save → numbers) | `def build_core(` (the core), `SECTIONS` (the sections) and the `_` helpers before `def render(`, in `ba_dashboard.py`; `def extract(` is both. The findings are `ba_alerts.py`'s (below) |
-| The findings (save numbers → what to act on) | `ba_alerts.py`: `def _alerts(` (the coordinator) and the helpers after it, `def _finding(`, `ALERT_UNITS`, `SUMMARIES`, `def _condense(` |
+| The findings (save numbers → what to act on) | `ba_alerts.py`: `ALERT_UNITS` and `def _finding(` at the top, `def _alerts(` (the coordinator) with the helpers it runs, then `SUMMARIES` and `def _condense(` |
 | Big Copilot's own sentences and game-name tokens | `ba_msg.py`: `def msg(`, `class Msg`, `def tok(`, `def plain(`, `def _wire_msgs(`; `ba_dashboard` re-exports them |
 | The board's HTML and CSS | `template/board.html`, read on the first `render()` by `load_template()` |
 | The board script | `template/board.js`, which `load_template()` splices into `/*__BOARD_SCRIPT__*/`, the body of the page's last `<script>` block, before any other placeholder is filled. Parts of it live in files of their own and go back in at a placeholder line where they were taken out (below). A branch from before the split (1 Oct 2026), with the script still inline in `board.html`, needs the retired tool and its `--resolve` from history: `git show ecabe57c:tools/split_board_script.py` |

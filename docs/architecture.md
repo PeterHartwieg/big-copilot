@@ -828,7 +828,7 @@ name; the footer's Language sets both.
 | --- | --- |
 | A script (board script, `web/*.js`) | `tt("sp.tile.size", "Size")`, `tt("f.x", "{n:,} units short", {n})`, `tt("f.m", {one: "{n} machine", other: "{n} machines"}, {n})` |
 | Markup (`template/board.html`, `BANNER`, `footer_html()`) | `<span data-tt="nav.today">Today</span>`; `data-tt-title`, `data-tt-aria-label`, `data-tt-placeholder` and `data-tt-tip` (for `data-tip`) name the key beside the attribute they fill |
-| Python (`ba_dashboard.py`) | `msg("f.loss", "Lost {w:$} yesterday", w=abs(b["profit"]))` |
+| Python (`ba_alerts.py` for the findings, `ba_dashboard.py` for the rest) | `msg("f.loss", "Lost {w:$} yesterday", w=abs(b["profit"]))` |
 
 With no table loaded every one of these gives its English, so an English page is byte for
 byte what it was: `tests/i18n_layout.test.cjs` checks the page asks for no table without
@@ -1179,7 +1179,7 @@ What `page_html()` produces, top of the file down:
 
 Before any of that, `main()` refreshes `web/wiki-data.json`, copies the files `PY_CODE`
 and `PY_DATA` name (all but `gametext.json`: `PY_COPIED`) into `web/py/`, stripping
-comments and docstring contents only from `ba_dashboard.py` while preserving its lines, and
+comments and docstring contents only from the files `STRIPPED` names (`ba_dashboard.py`, `ba_msg.py`, `ba_alerts.py`) while preserving their lines, and
 writes `web/py/gametext.json` and `web/names/<lang>.json` (`write_name_tables()`) from the installed locale — everything `stamp()` hashes has to be in place before
 `release_info()` runs. `main()` then writes `web/index.html` and `web/version.json`.
 
@@ -1647,10 +1647,10 @@ A kind needs its group (from `note()`, a `_finding()` call or `AMENITY_DEMANDS`)
 Python side, and on the board one record in `FINDING_KINDS`; then `ALERT_UNITS` if its
 worth is money (else `NOT_MONEY` in `tests/alert_kinds.test.cjs`), and its player-facing
 line under "What counts as a finding" in `docs/dashboard-reference.md`. Every other row is
-*only if*. The same summary sits above `ALERT_UNITS` and `_alerts()` in `ba_alerts.py`, where
-every Python anchor below lives (`def _alerts(`, `_finding(`, the `_*_notes` helpers,
-`SUMMARIES`, `WORST_FIRST`, `def _condense(`) except `AMENITY_DEMANDS = {`, which stays in
-`ba_dashboard.py`, and above `FINDING_KINDS` in `template/board.js`.
+*only if*. The same summary sits above `ALERT_UNITS` and `_alerts()` in `ba_alerts.py`, which
+holds `def _alerts(`, `_finding(`, the supply `_*_notes` helpers, `ALERT_UNITS`, `SUMMARIES`,
+`WORST_FIRST` and `def _condense(`; `AMENITY_DEMANDS = {`, `_estate_notes()` and `def _business(`
+stay in `ba_dashboard.py`. The summary also sits above `FINDING_KINDS` in `template/board.js`.
 
 | Anchor | What goes in it | Test that covers it |
 | --- | --- | --- |
