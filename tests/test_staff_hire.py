@@ -595,7 +595,7 @@ class UnstaffedTest(unittest.TestCase):
         save = save_of({"EmployeeInstances": {"$items": [lawyer("l1")]},
                         "BuildingRegistrations": {"$items": [office_registration(2, [[[8, 20]] for _ in range(7)])]}})
         [site] = _hiring(save, [business], [], {}, [row])["sites"]
-        self.assertEqual(list(site["unstaffed"]), ["office"])
+        self.assertEqual(list(site["unstaffed"]), ["office", "open"])
         self.assertEqual([(r["skill"], r["idle"]) for r in site["unstaffed"]["office"]["roles"]], [(LAWYER, 1)])
 
 
