@@ -279,7 +279,7 @@ class FindLocaleTests(unittest.TestCase):
         # The binding is conditional on --watch/--backfill, so a combination
         # that skipped it would raise NameError at the first use. Driven for
         # real rather than read off the source, which drifts.
-        import ba_dashboard
+        import ba_cli
 
         for argv, watching, backfilling in (
             ([], False, False),
@@ -288,8 +288,8 @@ class FindLocaleTests(unittest.TestCase):
             (["--backfill", "--watch"], True, True),
         ):
             with self.subTest(argv=argv):
-                with mock.patch.object(sys, "argv", ["ba_dashboard.py", *argv]),                         mock.patch.object(ba_dashboard, "resolve_target", return_value="T"),                         mock.patch.object(ba_dashboard, "newest_under", return_value="s.hsg"),                         mock.patch.object(ba_dashboard, "load_save"),                         mock.patch.object(ba_dashboard, "render", return_value=""),                         mock.patch.object(ba_dashboard, "watch") as watch,                         mock.patch.object(ba_dashboard, "backfill_history", return_value=0) as bf,                         mock.patch.object(ba_dashboard, "safe_extract", return_value=SAVE_SHAPE),                         mock.patch("builtins.open", mock.mock_open()),                         mock.patch("builtins.print"):
-                    ba_dashboard.main()
+                with mock.patch.object(sys, "argv", ["ba_dashboard.py", *argv]),                         mock.patch.object(ba_cli, "resolve_target", return_value="T"),                         mock.patch.object(ba_cli, "newest_under", return_value="s.hsg"),                         mock.patch.object(ba_cli, "load_save"),                         mock.patch.object(ba_cli, "render", return_value=""),                         mock.patch.object(ba_cli, "watch") as watch,                         mock.patch.object(ba_cli, "backfill_history", return_value=0) as bf,                         mock.patch.object(ba_cli, "safe_extract", return_value=SAVE_SHAPE),                         mock.patch("builtins.open", mock.mock_open()),                         mock.patch("builtins.print"):
+                    ba_cli.main()
                 self.assertEqual(watch.called, watching)
                 self.assertEqual(bf.called, backfilling)
 

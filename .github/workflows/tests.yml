@@ -19,7 +19,8 @@ jobs:
   # Python and Node lanes take their suites from tests/shard-weights.json
   # (tools/verify.mjs assignShards; refresh with tools/shard_weights.mjs).
   # Six Node lanes, two Python lanes and freshness: nine runners per run, so
-  # two runs fit in the 20 GitHub-hosted slots.
+  # two runs fit in the 20 GitHub-hosted slots. Lint waits for freshness and
+  # takes its slot.
   python:
     name: Python (${{ matrix.shard }})
     runs-on: ubuntu-latest
@@ -147,3 +148,24 @@ jobs:
           git diff --exit-code --stat
           test -z "$(git status --porcelain)" || { git status --porcelain; exit 1; }
           npm run verify:check
+
+  # Ruff and ESLint (npm run lint). It starts when freshness frees its runner,
+  # pass or fail, so a run never holds more than nine.
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    needs: web-fresh
+    if: ${{ !cancelled() }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      # The same Ruff as RUFF_VERSION in tools/verify.mjs and docs/contributing.md.
+      - run: pip install ruff==0.16.10
+      - run: npm ci
+      - run: npm run lint

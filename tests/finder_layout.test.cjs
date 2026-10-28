@@ -3,7 +3,7 @@
    tests/_finder.cjs. */
 const {test} = require('node:test');
 const H = require('./_finder.cjs');
-const {assert, en, enRe, path, at, HK, MT, CLOTHES, COFFEE, LAW, CINEMA_AT, HK_HOOD, fixture, openMap, chip, turnOn, pick, rowKeys, facts, saved, scrolledFinderToGrowthCell, PLANNED, tags, layoutToggle, layoutOption, openLayouts, layoutOptions, pickLayout, plan} = H;
+const {assert, en, enRe, HK, MT, CLOTHES, COFFEE, LAW, CINEMA_AT, HK_HOOD, fixture, openMap, chip, turnOn, pick, rowKeys, scrolledFinderToGrowthCell, PLANNED, tags, layoutToggle, layoutOption, openLayouts, layoutOptions, pickLayout, plan} = H;
 
 test('a Growth cell opens its popover, whose Find a location opens the finder on its own type and neighbourhood', async () => {
   const {page, errors} = await fixture();

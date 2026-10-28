@@ -338,7 +338,7 @@
     setStatus(tt("comm.loading", "Loading features…"));
     if (!more) { cardsEl.replaceChildren(); rows = []; nextAfter = null; moreEl.hidden = true; }
     moreEl.disabled = true;
-    let list = null, continuation = null;
+    let list, continuation = null;
     try {
       // Reopening during a vote waits for its result before the on-open read.
       await Promise.allSettled([...pendingVotes]);

@@ -6,7 +6,7 @@ saying the whole of that shop's lift rides on it.
 """
 import unittest
 
-from ba_dashboard import plain, _alerts, site_key
+from ba_dashboard import _alerts, site_key
 from tests.test_site_panel_fields import stub
 from tests.i18n_check import MsgAsserts, list_items
 

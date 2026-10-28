@@ -1,6 +1,5 @@
 """Reviewed route writes using synthetic ES3 snapshots, never a player save."""
 import copy
-import json
 import tempfile
 import unittest
 from pathlib import Path

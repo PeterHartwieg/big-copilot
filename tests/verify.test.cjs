@@ -152,12 +152,17 @@ function fixture(t) {
   fs.mkdirSync(path.join(root, 'node_modules', 'wrangler', 'bin'), {recursive: true});
   fs.writeFileSync(path.join(root, 'node_modules', 'wrangler', 'package.json'), JSON.stringify({bin: {wrangler: './bin/wrangler.js'}}));
   fs.writeFileSync(path.join(root, 'node_modules', 'wrangler', 'bin', 'wrangler.js'), '');
+  fs.mkdirSync(path.join(root, 'node_modules', 'eslint', 'bin'), {recursive: true});
+  fs.writeFileSync(path.join(root, 'node_modules', 'eslint', 'package.json'), JSON.stringify({bin: {eslint: './bin/eslint.js'}}));
+  fs.writeFileSync(path.join(root, 'node_modules', 'eslint', 'bin', 'eslint.js'), '');
   fs.writeFileSync(path.join(root, 'unrelated.txt'), 'preserve this dirty file');
   return root;
 }
+// Python and Ruff probes answer without being recorded: Ruff is on PATH.
 function fakeSpawn(calls, failAt = -1, result = {status: 7}) {
   return (command, args, options) => {
     if (args[0] === '-c') return {status: 0, stdout: '/Python path/python3\n'};
+    if (args.at(-1) === '--version') return {status: 0, stdout: 'ruff 0.0.0\n'};
     calls.push({command, args, options});
     return calls.length === failAt ? result : {status: 0};
   };
@@ -182,7 +187,10 @@ test('full gate order, bounded portable enumeration and child environment', asyn
   const {verify, OPTIMIZED_NODE_SUITES} = await runner; const root = fixture(t); const calls = [];
   assert.equal(verify([], {root, env: {PLAYWRIGHT_CHANNEL: 'chrome'}, spawn: fakeSpawn(calls), log: () => {}}), 0);
   assert.deepEqual(calls.map(c => c.args), [
-    ['build_web.py', '--assemble'], ['-m', 'unittest', 'discover', '-s', 'tests'],
+    ['build_web.py', '--assemble'],
+    ['check', '.'],
+    [path.join(root,'node_modules','eslint','bin','eslint.js'), '.', '--max-warnings=0'],
+    ['-m', 'unittest', 'discover', '-s', 'tests'],
     ['--test', '--test-concurrency=2', 'tests/a.test.cjs', 'tests/z.test.cjs'],
     [path.join(root,'tools','optimize_web.mjs')],
     [path.join(root,'tools','optimize_web.mjs'), '--check'],
@@ -191,24 +199,26 @@ test('full gate order, bounded portable enumeration and child environment', asyn
     [path.join(root,'node_modules','wrangler','bin','wrangler.js'), 'deploy', '--dry-run'],
     ['build_web.py', '--check'],
   ]);
+  assert.equal(calls[1].command, 'ruff');
+  assert.equal(calls[2].command, process.execPath);
   for (const call of calls) {
     assert.equal(call.options.env.PYTHON, '/Python path/python3');
     assert.equal(call.options.env.PLAYWRIGHT_CHANNEL, 'chrome');
     assert.equal(call.options.cwd, root); assert.equal(call.options.shell, undefined);
   }
-  assert.equal(calls[5].options.env.BOARD_TARGET,'web');
-  assert.equal(calls[2].options.env.BOARD_TARGET,undefined);
-  assert.equal(calls[6].options.env.BOARD_TARGET,undefined);
+  assert.equal(calls[7].options.env.BOARD_TARGET,'web');
+  assert.equal(calls[4].options.env.BOARD_TARGET,undefined);
+  assert.equal(calls[8].options.env.BOARD_TARGET,undefined);
   assert.equal(fs.readFileSync(path.join(root,'unrelated.txt'),'utf8'), 'preserve this dirty file');
 });
 
 test('each failure stops later stages; spawn errors and signals fail safely', async t => {
   const {verify} = await runner; const root = fixture(t);
-  for (let stage = 1; stage <= 9; stage++) {
+  for (let stage = 1; stage <= 11; stage++) {
     const calls = [];
     assert.equal(verify([], {root, spawn: fakeSpawn(calls,stage), log: () => {}}), 7);
-    // Stages 4-6 leave the minified page behind, so the readable assembly still runs.
-    const restores = stage >= 4 && stage <= 6;
+    // Stages 6-8 leave the minified page behind, so the readable assembly still runs.
+    const restores = stage >= 6 && stage <= 8;
     assert.equal(calls.length, restores ? stage + 1 : stage);
     if (restores) assert.deepEqual(calls.at(-1).args, ['build_web.py', '--assemble']);
   }
@@ -286,7 +296,7 @@ test('the CI matrix shards execute every discovered file once and propagate a re
     (name === 'h' ? `require('./_defines.cjs')();\n` : ''));
   fs.writeFileSync(path.join(root,'tests','_defines.cjs'),`module.exports = () => require('node:test')('from a helper', () => {});\n`);
   const workflow = fs.readFileSync(path.join(__dirname,'../.github/workflows/tests.yml'),'utf8').replace(/\r\n/g, '\n');
-  const matrix = /^        suite: \[([^\]\n]+)\]/m.exec(workflow);
+  const matrix = /^ {8}suite: \[([^\]\n]+)\]/m.exec(workflow);
   assert.ok(matrix, 'the workflow has a static suite matrix');
   const shards = [...matrix[1].matchAll(/'(\d+\/\d+)'/g)].map(match=>match[1]);
   assert.deepEqual(shards,['1/6','2/6','3/6','4/6','5/6','6/6']);
@@ -325,14 +335,14 @@ test('two CI runs fit within eighteen runner slots, including the aggregate chec
   assert.ok(source, 'the workflow has jobs');
   // Read this workflow's static jobs, scalar/list dependencies and flat suite
   // matrix. Reject an unfamiliar matrix instead of undercounting its runners.
-  const jobs = [...source.matchAll(/^  ([\w-]+):\n([\s\S]*?)(?=^  [\w-]+:\n|(?![\s\S]))/gm)].map(([,id,body]) => {
-    assert.match(body, /^    runs-on:/m, `${id}: reusable workflows need their own runner accounting`);
-    const block = /^      matrix:\n((?: {8,}.+\n)+)/m.exec(body);
-    const matrix = block && /^        (?:suite|shard): \[([^\]\n]+)\]\n$/.exec(block[1]);
-    assert.ok(!/^      matrix:/m.test(body) || matrix, `${id}: uncounted matrix`);
-    const needs = /^    needs: (.+)$/m.exec(body)?.[1];
+  const jobs = [...source.matchAll(/^ {2}([\w-]+):\n([\s\S]*?)(?=^ {2}[\w-]+:\n|(?![\s\S]))/gm)].map(([,id,body]) => {
+    assert.match(body, /^ {4}runs-on:/m, `${id}: reusable workflows need their own runner accounting`);
+    const block = /^ {6}matrix:\n((?: {8,}.+\n)+)/m.exec(body);
+    const matrix = block && /^ {8}(?:suite|shard): \[([^\]\n]+)\]\n$/.exec(block[1]);
+    assert.ok(!/^ {6}matrix:/m.test(body) || matrix, `${id}: uncounted matrix`);
+    const needs = /^ {4}needs: (.+)$/m.exec(body)?.[1];
     return {id, body, slots: matrix ? matrix[1].split(',').length : 1,
-      needs: needs ? needs.replace(/[\[\]'" ]/g,'').split(',') : []};
+      needs: needs ? needs.replace(/[[\]'" ]/g,'').split(',') : []};
   });
   assert.ok(jobs.length);
   for(const job of jobs) for(const need of job.needs) assert.ok(jobs.some(j => j.id === need), need);
@@ -352,12 +362,18 @@ test('two CI runs fit within eighteen runner slots, including the aggregate chec
   assert.doesNotMatch(python, /freshness|verify:check/);
   for(const stage of ['verify:assemble', 'verify:check']) assert.ok(freshness.includes(`npm run ${stage}`), stage);
   assert.deepEqual(jobs.find(j => j.id === 'web-fresh').needs,[]);
+  // Lint takes the freshness runner's slot once it is free, whatever its result.
+  const lint = jobs.find(j => j.id === 'lint');
+  assert.ok(lint, 'the workflow has a lint job');
+  assert.deepEqual(lint.needs,['web-fresh']);
+  assert.ok(lint.body.includes('if: ${{ !cancelled() }}'));
+  assert.ok(lint.body.includes('run: npm run lint'));
   for (const [id, dependency, name] of [['python-suite','python','Python suite'],['node','node-tests','Node suites']]) {
     const job = jobs.find(j => j.id === id);
     assert.deepEqual(job.needs,[dependency]);
     assert.ok(job.body.includes(`name: ${name}\n`));
     assert.match(job.body,/if: always\(\)/);
-    assert.ok(job.body.includes(`RESULT: \$\{\{ needs.${dependency}.result \}\}`));
+    assert.ok(job.body.includes('RESULT: ${{ needs.' + dependency + '.result }}'));
     assert.ok(job.body.includes('run: test "$RESULT" = success'));
   }
   const node = jobs.find(j => j.id === 'node-tests').body;
@@ -384,6 +400,74 @@ test('standalone Worker check needs no Python and preserves the environment', as
   assert.equal(calls[0].command,process.execPath);
   assert.equal(calls[0].options.env.PYTHON,'invalid Python override');
   assert.deepEqual(calls[0].args.slice(1),['deploy','--dry-run']);
+});
+
+test('lint runs Ruff then ESLint, and needs no Python while Ruff is on PATH', async t => {
+  const {verify} = await runner; const root = fixture(t);
+  const eslint = path.join(root,'node_modules','eslint','bin','eslint.js');
+  const seen = [], notes = [];
+  const spawn = (command, args, options) => {
+    seen.push({line: [command, ...args], options});
+    return args.at(-1) === '--version' ? {status: 0, stdout: 'ruff 0.0.1\n'} : {status: 0};
+  };
+  assert.equal(verify(['lint'], {root, env: {PYTHON: 'invalid Python override'}, spawn, log: line => notes.push(line)}), 0);
+  assert.deepEqual(seen.map(call => call.line), [
+    ['ruff', '--version'], ['ruff', 'check', '.'], [process.execPath, eslint, '.', '--max-warnings=0'],
+  ]);
+  for (const call of seen) {
+    assert.equal(call.options.cwd, root); assert.equal(call.options.shell, undefined);
+    assert.equal(call.options.env.PYTHON, 'invalid Python override');
+  }
+  // Another Ruff still runs, with a note naming the version CI pins.
+  assert.ok(notes.some(line => /ruff 0\.0\.1 found; CI runs ruff \d/.test(line)), notes.join('\n'));
+  assert.throws(() => verify(['lint', 'tools/verify.mjs'], {root, spawn}), /lint does not accept extra arguments/);
+  const failed = [];
+  assert.equal(verify(['lint'], {root, spawn: fakeSpawn(failed, 1), log: () => {}}), 7);
+  assert.equal(failed.length, 1, 'a Ruff failure stops ESLint');
+});
+
+test('lint falls back to python -m ruff, and names the install when neither runs', async t => {
+  const {verify, RUFF_VERSION} = await runner; const root = fixture(t);
+  const seen = [], notes = [];
+  const spawn = withRuffModule => (command, args) => {
+    seen.push([command, ...args]);
+    if (command === 'ruff') return {error: new Error('spawn ruff ENOENT')};
+    if (args[0] === '-c') return {status: 0, stdout: '/Python path/python3\n'};
+    if (args.at(-1) === '--version') return withRuffModule ? {status: 0, stdout: `ruff ${RUFF_VERSION}\n`} : {status: 1, stderr: 'No module named ruff'};
+    return {status: 0};
+  };
+  assert.equal(verify(['lint'], {root, env: {}, spawn: spawn(true), log: line => notes.push(line)}), 0);
+  assert.deepEqual(seen.filter(line => line[1] !== '-c'), [
+    ['ruff', '--version'], ['/Python path/python3', '-m', 'ruff', '--version'], ['/Python path/python3', '-m', 'ruff', 'check', '.'],
+    [process.execPath, path.join(root,'node_modules','eslint','bin','eslint.js'), '.', '--max-warnings=0'],
+  ]);
+  assert.ok(!notes.some(line => line.startsWith('note:')), 'the pinned version needs no note');
+  seen.length = 0;
+  assert.throws(() => verify(['lint'], {root, env: {}, spawn: spawn(false), log: () => {}}), new RegExp(`install ruff: pip install ruff==${RUFF_VERSION.replace(/\./g, '\\.')}`));
+  assert.ok(seen.every(line => line.includes('--version') || line[1] === '-c'), 'nothing ran');
+  // In the full gate the missing Ruff fails its own stage, after assembly.
+  seen.length = 0;
+  assert.throws(() => verify([], {root, env: {}, spawn: spawn(false), log: () => {}}), /install ruff/);
+  assert.deepEqual(seen.filter(line => !line.includes('--version') && line[1] !== '-c'), [['/Python path/python3', 'build_web.py', '--assemble']]);
+  // Without ESLint nothing runs; NODE_PATH would find the runner's own.
+  if (process.env.NODE_PATH) return;
+  fs.rmSync(path.join(root,'node_modules','eslint'), {recursive: true});
+  seen.length = 0;
+  assert.throws(() => verify(['lint'], {root, env: {}, spawn: spawn(true), log: () => {}}), /ESLint is missing; run npm ci or point NODE_PATH/);
+  assert.deepEqual(seen, []);
+});
+
+test('the pinned Ruff is the one CI installs and the docs name, and npm run lint is the stage', async () => {
+  const {RUFF_VERSION} = await runner;
+  const read = rel => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
+  assert.match(RUFF_VERSION, /^\d+\.\d+\.\d+$/);
+  const pins = text => [...text.matchAll(/ruff==([\w.]+)/g)].map(m => m[1]);
+  assert.deepEqual([...new Set(pins(read('.github/workflows/tests.yml')))], [RUFF_VERSION]);
+  assert.deepEqual([...new Set(pins(read('docs/contributing.md')))], [RUFF_VERSION]);
+  const {scripts, devDependencies} = JSON.parse(read('package.json'));
+  assert.equal(scripts.lint, 'node tools/verify.mjs lint');
+  // ESLint and its config's packages are pinned exactly, like the Ruff.
+  for (const name of ['eslint', '@eslint/js', 'globals']) assert.match(devDependencies[name] || '', /^\d+\.\d+\.\d+$/, name);
 });
 
 test('Worker CLI resolves NODE_PATH dependencies without local node_modules or Python', t => {

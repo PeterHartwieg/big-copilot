@@ -226,7 +226,7 @@ const ModDemandModel = (() => {
           }
         }
       }
-      let issue=0,ambient=0,base=building.baseMultiplier,current=null,city=0,priceResult=null;
+      let issue=0,ambient=0,base=building.baseMultiplier,current=null,city,priceResult=null;
       if(ready(footfall)){
         if(existing){
           current=footfallSites.get(building.key);

@@ -9,7 +9,7 @@ import urllib.request
 from http.server import ThreadingHTTPServer
 from types import SimpleNamespace
 
-from ba_dashboard import BoardHandler
+from ba_cli import BoardHandler
 
 ROOT = Path(__file__).resolve().parents[1]
 

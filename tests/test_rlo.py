@@ -127,7 +127,7 @@ class RloTests(unittest.TestCase):
 
     def test_malformed_envelopes_and_bounds_fail_closed(self):
         for raw in (None, "{", "[]", '{"schemaVersion":1,"schemaVersion":1}', '{"x":NaN}',
-                    "x" * (rlo.MAX_BYTES + 1), "[" * 1100 + "]" * 1100):
+                    "x" * (rlo.companion.MAX_BYTES + 1), "[" * 1100 + "]" * 1100):
             root = company()
             root["modData"][rlo.KEY] = raw
             self.assertEqual(rlo.read(load(root))["status"], "unavailable")

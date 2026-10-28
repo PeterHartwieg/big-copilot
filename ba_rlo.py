@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import ba_companion as companion
 import ba_rlo_planning
-from ba_companion import MAX_BYTES, MAX_ROWS, MAX_INT, STATES
+from ba_companion import MAX_INT
 from ba_companion import integer as _int, text as _text, boolean as _bool, rows as _rows
 
 KEY = "reallife:companion"
