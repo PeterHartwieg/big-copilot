@@ -1008,9 +1008,10 @@ stops and asks for `--branch REF --main REF`. It deletes any old file the merge 
 work tree; while one is there, `load()` and `drafted()` refuse to read, so the build and every
 command that reads the translations stop and name `fold`.
 
-Where the merged `<lang>.json` holds the branch's words for a key, the branch's English
-fills it when `base.json` records none in that language, and wins where only it is today's
-English; such a key takes the branch's draft mark too. Where the merge kept other words,
+Where the merged `<lang>.json` holds the branch's words for a key, the branch's English wins
+when those words differ from main's (they were made from it), fills the key when `base.json`
+records none in that language, and wins where only it is today's English; such a key takes
+the branch's draft mark too. Where the merge kept other words,
 main's English and mark stay. For
 every other key both sides record the same English for, a mark follows the wording
 `<lang>.json` kept: the branch's mark (or its lack) when the merge kept the branch's words

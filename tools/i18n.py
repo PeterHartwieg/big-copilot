@@ -832,10 +832,12 @@ def fold(english: dict | None = None, root: str = ROOT, branch: str | None = Non
     keys whose base.json mark went}, so the author can check what changed.
 
     Where the merged <lang>.json holds the branch's words for a key, the
-    branch's English fills it when base.json records none in that language,
-    and replaces base.json's where only the branch's is today's English; such
-    a key takes the branch's draft mark, or loses base.json's. Where the merge
-    kept other words, main's English and mark stay. For every other key both sides record the same English for (or none), a
+    branch's English wins when those words differ from main's (they were
+    made from it), fills the key when base.json records none in that
+    language, and replaces base.json's where only the branch's is today's
+    English; such a key takes the branch's draft mark, or loses base.json's.
+    Where the merge kept other words, main's English and mark stay. For every
+    other key both sides record the same English for (or none), a
     mark follows the wording <lang>.json kept: the branch's when it kept the
     branch's words and they differ from main's (a redraft or a review on the
     branch), and no mark when all three wordings agree and the branch has
@@ -866,7 +868,7 @@ def fold(english: dict | None = None, root: str = ROOT, branch: str | None = Non
             raise CatalogueError(f"i18n/{lang}.json is not JSON, likely still in conflict; "
                                  "resolve the conflict in it first, then run fold") from None
         ours, theirs = _at(root, branch, f"{lang}.json"), _at(root, main, f"{lang}.json")
-        got = {"bases": [], "marked": [], "unmarked": []}
+        got, taken = {"bases": [], "marked": [], "unmarked": []}, set()
 
         def mark(key, model):
             if model is None and key in marks:
@@ -879,11 +881,15 @@ def fold(english: dict | None = None, root: str = ROOT, branch: str | None = Non
         for key, text in sorted(old.items()):
             now = _english_text(key, english)
             # Only where the merge kept the branch's words: main's words keep main's base and mark.
-            if words.get(key) == ours.get(key) and (key not in base or (text == now and base[key] != now)):
-                base[key] = text
-                got["bases"].append(key)
+            # The branch's own words, unlike main's, keep the English they were made from.
+            kept = words.get(key) == ours.get(key)
+            if kept and (ours.get(key) != theirs.get(key) or key not in base or (text == now and base[key] != now)):
+                if base.get(key) != text:
+                    base[key] = text
+                    got["bases"].append(key)
                 mark(key, old_marks.get(key))
-        for key in sorted((set(base) | set(marks) | set(old_marks)) - set(got["bases"])):
+                taken.add(key)
+        for key in sorted((set(base) | set(marks) | set(old_marks)) - taken):
             if base.get(key) != old.get(key):
                 continue
             if words.get(key) == ours.get(key) != theirs.get(key):

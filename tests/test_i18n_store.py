@@ -257,6 +257,22 @@ class FoldTests(unittest.TestCase):
         self.assertEqual(i18n._legacy(repo.root), ["de.ai.json", "de.base.json"])
         self.assertEqual(i18n._store(repo.root), reviewed["base.json"])
 
+    def test_the_branch_s_own_words_keep_the_older_english_they_were_made_from(self):
+        # Main accepted f.d for today's English without touching the German.
+        # The branch rewrote the German by hand against the older English, and
+        # the merge kept the branch's words, so they stay stale and do not ship.
+        english = {"f.d": "Closed"}
+        point = {"de.json": {"f.d": "Geschlossen"}, "de.base.json": {"f.d": "Closed before"}, "de.ai.json": {}}
+        main = {"base.json": {"f.d": {"en": "Closed", "of": ["de"]}}}
+        repo = Repo.merged(self, point, main, {"de.json": {"f.d": "Zu"}})
+        self.assertEqual(i18n.fold(english, repo.root)["de"]["bases"], ["f.d"])
+        self.assertEqual(i18n.load("de", repo.root), ({"f.d": "Zu"}, {"f.d": "Closed before"}))
+        self.assertEqual(i18n.shipped("de", english, repo.root), {})
+        # Where main's words stand, main's record of them does.
+        repo = Repo.merged(self, point, main, {})
+        self.assertEqual(i18n.fold(english, repo.root)["de"]["bases"], [])
+        self.assertEqual(i18n.shipped("de", english, repo.root), {"f.d": "Geschlossen"})
+
     def test_a_mistyped_ref_stops_fold_before_it_touches_anything(self):
         repo = Repo(self)
         repo.commit({**POINT, "base.json": STORE}, "both")
