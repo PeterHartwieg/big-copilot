@@ -258,9 +258,7 @@ def main():
             for key, row in overlay['translations'].items():
                 table[key], base[key] = row['text'], entries[key]['en']
                 marks.pop(key, None)
-            i18n._write(f'{args.lang}.json', table)
-            i18n._write(f'{args.lang}.base.json', base)
-            i18n._write(f'{args.lang}.ai.json', marks)
+            i18n.save(args.lang, table, base, marks)
             print(f'Imported {len(overlay["translations"])} community translations for {args.lang}.')
     except (i18n.CatalogueError, ValueError, OSError) as exc:
         parser.exit(1, f'{exc}\n')

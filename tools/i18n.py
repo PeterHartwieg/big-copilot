@@ -9,6 +9,7 @@
     python tools/i18n.py draft-sheet LANG [--out PATH] [--review]  what a translator has to do, with context
     python tools/i18n.py import-draft LANG FILE --model M  take a machine draft in, marked unreviewed
     python tools/i18n.py reviewed LANG KEY ... | --all  a native speaker has checked KEY
+    python tools/i18n.py fold [--branch REF --main REF]  take in an older branch's per-language base and draft files
 
 The English is never kept in a file: it stays at the call site, beside its key
 (docs/architecture.md, "UI text"), and `extract` reads it from there:
@@ -24,8 +25,20 @@ The English is never kept in a file: it stays at the call site, beside its key
   the call site (guide_ui_calls()).
 
 A translation lives in i18n/<lang>.json (flat; plurals as key_one, key_other,
-in the language's CLDR categories), and i18n/<lang>.base.json keeps the English
-each one was translated from, which is how a changed English shows up as stale.
+in the language's CLDR categories). i18n/base.json, one file for every
+language, keeps the English each translation was made from, which is how a
+changed English shows up as stale. It holds one line per key:
+
+    "f.loss": {"en": "Lost {w:$}", "of": ["de", "es"], "was": {"fr": "Lost {w:$} yesterday"}, "ai": {"de": "gpt-6-sol"}}
+
+`en` is an English translations were made from and `of` the languages made
+from it, `was` the English of each language made from another one, and `ai`
+the machine drafts nobody has reviewed yet, with the model that wrote each.
+`en` is whichever English most languages were made from, so it is stored
+once; a language named in neither `of` nor `was` has no English recorded for
+the key. The commands read and write one language's share through load(),
+drafted() and save().
+
 The build ships i18n/<lang>.json minus orphans, placeholder mismatches and
 stale keys (English changed, or none recorded) as web/i18n/<lang>.json.
 Missing and stale translations never fail the build: the page falls back to
@@ -33,14 +46,22 @@ English per key. `status --strict` fails on what is never right: an orphan
 (a key no source names any more, with its base and any draft mark) and a
 mismatch. The test suite holds main to it (tests/test_i18n_status.py), so a
 change that drops or renames a key runs `prune`, which deletes the orphans
-from all three files; git history keeps their text should a key come back.
-`status --complete` fails on missing and stale keys too, for a translation
-pull request.
+from <lang>.json and base.json; git history keeps their text should a key
+come back. `status --complete` fails on missing and stale keys too, for a
+translation pull request.
 
-A machine draft (`import-draft`) ships like any translation, and
-i18n/<lang>.ai.json names each drafted key and the model that wrote it until a
-native speaker checks it (`reviewed`, which also accepts it). `status` counts
-the drafts awaiting review; they never fail it.
+A machine draft (`import-draft`) ships like any translation, and its `ai`
+mark names the model that wrote it until a native speaker checks it
+(`reviewed`, which also accepts it). `status` counts the drafts awaiting
+review; they never fail it.
+
+Before base.json each language had an i18n/<lang>.base.json and an
+i18n/<lang>.ai.json. A branch from before the change runs `fold` when it
+merges main, once the conflicts in <lang>.json are resolved: it reads those
+files from the branch's commit, since the merge may have deleted them
+(fold()). While one is left in the work tree, load()
+and drafted() refuse to read, so every command that reads the translations
+(the build's ship() too) stops and names `fold`.
 
 `glossary` and `draft-sheet` read the installed game's text. That text is the
 game's, so neither writes into this repository.
@@ -60,9 +81,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-SOURCE_DIR = os.path.join(ROOT, "i18n")
-# Beside <lang>.json and <lang>.base.json: the machine-drafted keys awaiting review.
-AI_SUFFIX = ".ai.json"
+# Beside the <lang>.json translations: every language's English and draft
+# marks, per key (the module docstring).
+BASE_FILE = "base.json"
+# The files base.json replaced, one pair per language; `fold` takes them in.
+LEGACY_SUFFIXES = (".base.json", ".ai.json")
 # The scripts a page runs, beside the board script in template/board.js.
 JS_FILES = ("web/i18n.js", "web/app.js", "web/update.js", "web/community.js", "web/report.js", "web/map.js", "web/wiki.js", "web/translate.js")
 # A key is <area>.<thing>[.<part>]; the area names the page, and the pull
@@ -607,42 +630,155 @@ def fits(key: str, text: str, english: dict, lang: str, params: dict | None = No
     return got <= names and (m.group(1) != "other" or own <= got)
 
 
-def load(lang: str, root: str = ROOT) -> tuple[dict, dict]:
-    """i18n/<lang>.json and i18n/<lang>.base.json."""
-    def read(name):
-        path = os.path.join(root, "i18n", name)
-        if not os.path.isfile(path):
-            return {}
-        with open(path, encoding="utf-8") as fh:
-            data = json.load(fh)
-        if not isinstance(data, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in data.items()):
-            raise CatalogueError(f"i18n/{name} is not a flat object of strings")
-        return data
-    return read(f"{lang}.json"), read(f"{lang}.base.json")
-
-
-def drafted(lang: str, root: str = ROOT) -> dict:
-    """i18n/<lang>.ai.json: {key: model} for every machine-drafted key nobody
-    has reviewed yet."""
-    path = os.path.join(root, "i18n", f"{lang}{AI_SUFFIX}")
+def _flat(root: str, name: str) -> dict:
+    """i18n/<name>, a flat object of strings; {} when it is not there."""
+    path = os.path.join(root, "i18n", name)
     if not os.path.isfile(path):
         return {}
     with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
     if not isinstance(data, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in data.items()):
-        raise CatalogueError(f"i18n/{lang}{AI_SUFFIX} is not a flat object of strings")
+        raise CatalogueError(f"i18n/{name} is not a flat object of strings")
     return data
 
 
-def _write(name: str, data: dict) -> None:
-    """One of i18n/'s files, sorted, one key a line; an empty .ai.json is removed."""
-    path = os.path.join(SOURCE_DIR, name)
-    if not data and name.endswith(AI_SUFFIX):
+def _legacy(root: str = ROOT) -> list[str]:
+    """The per-language files base.json replaced that are still under i18n/."""
+    folder = os.path.join(root, "i18n")
+    if not os.path.isdir(folder):
+        return []
+    return sorted(n for n in os.listdir(folder) if n.endswith(LEGACY_SUFFIXES))
+
+
+def _current(root: str) -> None:
+    """Refuse to read the translations while an old per-language file is
+    there: base.json alone would leave out what it holds."""
+    left = _legacy(root)
+    if left:
+        raise CatalogueError(f"i18n/{left[0]} is from before i18n/{BASE_FILE}; "
+                             "run python tools/i18n.py fold to take it in")
+
+
+def _entry_ok(entry) -> bool:
+    """One line of base.json: `en` with the languages made from it (`of`),
+    and `was` and `ai`, each {lang: string}."""
+    if not isinstance(entry, dict) or not entry or not set(entry) <= {"en", "of", "was", "ai"}:
+        return False
+    of, was, ai = entry.get("of", []), entry.get("was", {}), entry.get("ai", {})
+    return (("en" in entry) == bool(of) and isinstance(entry.get("en", ""), str)
+            and isinstance(of, list) and all(isinstance(lang, str) for lang in of)
+            and isinstance(was, dict) and isinstance(ai, dict) and not set(of) & set(was)
+            and all(isinstance(v, str) for v in (*was.values(), *ai.values())))
+
+
+def _store(root: str = ROOT) -> dict:
+    """i18n/base.json as it stands: {key: {"en": ..., "of": [...], "was": {...}, "ai": {...}}}."""
+    path = os.path.join(root, "i18n", BASE_FILE)
+    if not os.path.isfile(path):
+        return {}
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    if not isinstance(data, dict) or not all(_entry_ok(e) for e in data.values()):
+        raise CatalogueError(f'i18n/{BASE_FILE} is not an object of {{"en", "of", "was", "ai"}} entries')
+    return data
+
+
+def _base_of(entry: dict, lang: str) -> str | None:
+    """The English `lang` made its translation of a key from, as the key's
+    entry records it: its own under `was`, or `en` when `of` names it."""
+    was = entry.get("was", {})
+    if lang in was:
+        return was[lang]
+    return entry["en"] if lang in entry.get("of", ()) else None
+
+
+def _shares(store: dict, lang: str) -> tuple[dict, dict]:
+    """One language's share of base.json: {key: English} and {key: model}."""
+    base, marks = {}, {}
+    for key, entry in store.items():
+        text = _base_of(entry, lang)
+        if text is not None:
+            base[key] = text
+        if lang in entry.get("ai", {}):
+            marks[key] = entry["ai"][lang]
+    return base, marks
+
+
+def load(lang: str, root: str = ROOT) -> tuple[dict, dict]:
+    """i18n/<lang>.json, and {key: the English it was made from} out of
+    i18n/base.json. A base for a key the language does not translate is a
+    leftover, which prune drops."""
+    _current(root)
+    return _flat(root, f"{lang}.json"), _shares(_store(root), lang)[0]
+
+
+def drafted(lang: str, root: str = ROOT) -> dict:
+    """{key: model} for every key of `lang` a machine drafted and nobody has
+    reviewed yet: its `ai` marks in i18n/base.json."""
+    _current(root)
+    return _shares(_store(root), lang)[1]
+
+
+def save(lang: str, table: dict | None = None, base: dict | None = None, marks: dict | None = None,
+         root: str = ROOT) -> None:
+    """Write one language's share: its translation (i18n/<lang>.json), the
+    English each key was made from ({key: English}, the shape load() gives)
+    and its draft marks ({key: model}, as drafted() gives them). What is None
+    stays as it was, and so does every other language's share of base.json."""
+    _rewrite(root, {lang: (table, base, marks)})
+
+
+def _rewrite(root: str, changes: dict) -> None:
+    """Write i18n/base.json afresh from every language's share, with
+    `changes` ({lang: (table, base, marks)}, None for what stays) put in,
+    and the tables `changes` gives."""
+    store = _store(root)
+    langs = sorted({lang for entry in store.values() for part in ("of", "was", "ai") for lang in entry.get(part, ())}
+                   | set(changes))
+    bases, drafts = {}, {}
+    for lang in langs:
+        bases[lang], drafts[lang] = _shares(store, lang)
+    for lang, (table, base, marks) in changes.items():
+        if table is not None:
+            _write_table(root, lang, table)
+        if base is not None:
+            bases[lang] = dict(base)
+        if marks is not None:
+            drafts[lang] = dict(marks)
+    out = {}
+    for key in sorted(set().union(*bases.values(), *drafts.values())):
+        # `en` is the English most languages were made from; on a tie, the
+        # first language's (alphabetically). The others keep theirs under `was`.
+        made = {lang: bases[lang][key] for lang in langs if key in bases[lang]}
+        votes = collections.Counter(made.values())
+        top = max(votes.values(), default=0)
+        en = next((text for text in made.values() if votes[text] == top), None)
+        entry = {} if en is None else {"en": en, "of": [lang for lang, text in made.items() if text == en]}
+        was = {lang: text for lang, text in made.items() if text != en}
+        ai = {lang: drafts[lang][key] for lang in langs if key in drafts[lang]}
+        entry.update({name: part for name, part in (("was", was), ("ai", ai)) if part})
+        if entry:
+            out[key] = entry
+    path = os.path.join(root, "i18n", BASE_FILE)
+    if not out:
         if os.path.isfile(path):
             os.remove(path)
         return
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
-        json.dump(dict(sorted(data.items())), fh, ensure_ascii=False, indent=1)
+        fh.write(_dump_store(out))
+
+
+def _dump_store(store: dict) -> str:
+    """base.json's text: sorted, one key a line, so a key's change is one line of a diff."""
+    lines = (f" {json.dumps(key, ensure_ascii=False)}: {json.dumps(entry, ensure_ascii=False)}"
+             for key, entry in sorted(store.items()))
+    return "{\n" + ",\n".join(lines) + "\n}\n"
+
+
+def _write_table(root: str, lang: str, table: dict) -> None:
+    """i18n/<lang>.json, sorted, one key a line."""
+    with open(os.path.join(root, "i18n", f"{lang}.json"), "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(dict(sorted(table.items())), fh, ensure_ascii=False, indent=1)
         fh.write("\n")
 
 
@@ -652,7 +788,121 @@ def languages(root: str = ROOT) -> list[str]:
     if not os.path.isdir(folder):
         return []
     return sorted(n[:-5] for n in os.listdir(folder)
-                  if n.endswith(".json") and not n.endswith((".base.json", AI_SUFFIX)))
+                  if n.endswith(".json") and n != BASE_FILE and not n.endswith(LEGACY_SUFFIXES))
+
+
+def _git(root: str, *args: str):
+    import subprocess
+    return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True, encoding="utf-8")
+
+
+def _at(root: str, ref: str, name: str) -> dict:
+    """i18n/<name> as commit `ref` has it; {} when it has none."""
+    got = _git(root, "show", f"{ref}:i18n/{name}")
+    return json.loads(got.stdout) if got.returncode == 0 else {}
+
+
+def merge_sides(root: str = ROOT) -> tuple[str, str] | None:
+    """(the branch's commit, main's): HEAD and MERGE_HEAD during a merge,
+    REBASE_HEAD and the rebase's onto during a rebase, HEAD^1 and HEAD^2 on a
+    merge commit; None when git shows none of those."""
+    def has(ref):
+        return _git(root, "rev-parse", "-q", "--verify", ref).returncode == 0
+    if has("MERGE_HEAD"):
+        return "HEAD", "MERGE_HEAD"
+    if has("REBASE_HEAD"):
+        for kind in ("rebase-merge", "rebase-apply"):
+            path = os.path.join(root, _git(root, "rev-parse", "--git-path", f"{kind}/onto").stdout.strip())
+            if os.path.isfile(path):
+                with open(path, encoding="utf-8") as fh:
+                    return "REBASE_HEAD", fh.read().strip()
+    if has("HEAD^2"):
+        return "HEAD^1", "HEAD^2"
+    return None
+
+
+def fold(english: dict | None = None, root: str = ROOT, branch: str | None = None, main: str | None = None) -> dict:
+    """Take a branch's files from before base.json (i18n/<lang>.base.json and
+    <lang>.ai.json) into base.json after it merged main, and delete any left
+    in the work tree. They and the branch's own <lang>.json are read from the
+    branch's commit, and main's <lang>.json from main's (merge_sides(), or
+    `branch` and `main` as given), because a merge deletes the old files it
+    sees no change in. Returns, per language, {"bases": keys whose English
+    came from the branch, "marked": keys whose draft mark did, "unmarked":
+    keys whose base.json mark went}, so the author can check what changed.
+
+    Where the merged <lang>.json holds the branch's words for a key, the
+    branch's English wins when those words differ from main's (they were
+    made from it), fills the key when base.json records none in that
+    language, and replaces base.json's where only the branch's is today's
+    English; such a key takes the branch's draft mark, or loses base.json's.
+    Where the merge kept other words, main's English and mark stay. For every
+    other key both sides record the same English for (or none), a
+    mark follows the wording <lang>.json kept: the branch's when it kept the
+    branch's words and they differ from main's (a redraft or a review on the
+    branch), and no mark when all three wordings agree and the branch has
+    none (only a review takes a mark off and keeps the words). Otherwise
+    main's mark stays, so a reviewer's mark is never reversed by a guess.
+
+    <lang>.json must be resolved first: fold() stops on one that still holds
+    conflict markers."""
+    sides = None if branch and main else merge_sides(root)
+    if not (branch and main) and sides is None:
+        raise CatalogueError("no merge, rebase or merge commit shows which side is the branch; "
+                             "give --branch REF and --main REF")
+    branch, main = branch or sides[0], main or sides[1]
+    for side, ref in (("branch", branch), ("main", main)):
+        if _git(root, "rev-parse", "-q", "--verify", f"{ref}^{{commit}}").returncode != 0:
+            raise CatalogueError(f"--{side} {ref} is not a commit in {root}")
+    names = [os.path.basename(n) for n in _git(root, "ls-tree", "--name-only", f"{branch}:i18n").stdout.split()]
+    langs = sorted({n[:-len(s)] for n in names for s in LEGACY_SUFFIXES if n.endswith(s)})
+    english = catalogue() if english is None else english
+    store = _store(root)
+    changes, report = {}, {}
+    for lang in langs:
+        base, marks = _shares(store, lang)
+        old, old_marks = _at(root, branch, f"{lang}.base.json"), _at(root, branch, f"{lang}.ai.json")
+        try:
+            words = _flat(root, f"{lang}.json")
+        except json.JSONDecodeError:
+            raise CatalogueError(f"i18n/{lang}.json is not JSON, likely still in conflict; "
+                                 "resolve the conflict in it first, then run fold") from None
+        ours, theirs = _at(root, branch, f"{lang}.json"), _at(root, main, f"{lang}.json")
+        got, taken = {"bases": [], "marked": [], "unmarked": []}, set()
+
+        def mark(key, model):
+            if model is None and key in marks:
+                del marks[key]
+                got["unmarked"].append(key)
+            elif model is not None and marks.get(key) != model:
+                marks[key] = model
+                got["marked"].append(key)
+
+        for key, text in sorted(old.items()):
+            now = _english_text(key, english)
+            # Only where the merge kept the branch's words: main's words keep main's base and mark.
+            # The branch's own words, unlike main's, keep the English they were made from.
+            kept = words.get(key) == ours.get(key)
+            if kept and (ours.get(key) != theirs.get(key) or key not in base or (text == now and base[key] != now)):
+                if base.get(key) != text:
+                    base[key] = text
+                    got["bases"].append(key)
+                mark(key, old_marks.get(key))
+                taken.add(key)
+        for key in sorted((set(base) | set(marks) | set(old_marks)) - taken):
+            if base.get(key) != old.get(key):
+                continue
+            if words.get(key) == ours.get(key) != theirs.get(key):
+                mark(key, old_marks.get(key))
+            elif words.get(key) == ours.get(key) == theirs.get(key) and key not in old_marks:
+                mark(key, None)
+        changes[lang] = (None, base, marks)
+        report[lang] = {kind: sorted(keys) for kind, keys in got.items()}
+    _rewrite(root, changes)
+    # Only the old files read from the branch go; any other stays for _current() to name.
+    for name in set(_legacy(root)) & set(names):
+        os.remove(os.path.join(root, "i18n", name))
+    return report
 
 
 def status(lang: str, english: dict | None = None, params: dict | None = None) -> dict:
@@ -671,24 +921,30 @@ def status(lang: str, english: dict | None = None, params: dict | None = None) -
     return {"missing": missing, "stale": stale, "orphan": orphan, "mismatch": mismatch}
 
 
+# What prune() drops from, by the name its result gives each.
+PRUNED = {"table": "i18n/{lang}.json", "base": "{lang}'s English in i18n/base.json",
+          "marks": "{lang}'s draft marks in i18n/base.json"}
+
+
 def prune(lang: str, english: dict | None = None, write: bool = True) -> dict:
-    """Drop from i18n/<lang>.json, .base.json and .ai.json every key no source
-    names any more (status()'s orphans), every base of a key not translated,
-    and every draft mark of a key not translated or orphaned. Returns
-    {file name: [dropped keys]} for the files that change; with write=False
-    it writes nothing, which is how `status --strict` asks."""
+    """Drop from i18n/<lang>.json every key no source names any more
+    (status()'s orphans), and from the language's share of i18n/base.json
+    the English of those and of every key it does not translate, and their
+    draft marks. Returns {"table" | "base" | "marks": [dropped keys]} for what
+    changes (PRUNED names each); with write=False it writes nothing, which is
+    how `status --strict` asks."""
     english = catalogue() if english is None else english
     table, base = load(lang)
     marks = drafted(lang)
     live = {k: v for k, v in table.items() if _english_for(k, english)[0] is not None}
     out = {}
-    for name, data in ((f"{lang}.json", table), (f"{lang}.base.json", base), (f"{lang}{AI_SUFFIX}", marks)):
+    for kind, data in (("table", table), ("base", base), ("marks", marks)):
         gone = sorted(k for k in data if k not in live)
-        if not gone:
-            continue
-        out[name] = gone
-        if write:
-            _write(name, {k: v for k, v in data.items() if k in live})
+        if gone:
+            out[kind] = gone
+    if out and write:
+        save(lang, {k: v for k, v in table.items() if k in live}, {k: v for k, v in base.items() if k in live},
+             {k: v for k, v in marks.items() if k in live})
     return out
 
 
@@ -704,7 +960,7 @@ def _english_text(key: str, english: dict) -> str | None:
 def shipped(lang: str, english: dict, root: str = ROOT, params: dict | None = None) -> dict:
     """The table the page gets: the translation minus orphans, mismatches and
     stale keys (whose English changed since, or which have no recorded
-    English in <lang>.base.json). Those show their English until the
+    English in i18n/base.json). Those show their English until the
     translation is redone and `accept`ed."""
     table, base = load(lang, root)
     return {k: v for k, v in sorted(table.items())
@@ -777,10 +1033,8 @@ def accept(lang: str, keys: list[str], english: dict | None = None) -> list[str]
             raise CatalogueError(f"{k!r} is no longer in the English")
         base[k] = text
         done.append(k)
-    _write(f"{lang}.base.json", base)
-    if marks:
-        _write(f"{lang}{AI_SUFFIX}", {k: m for k, m in marks.items() if k not in set(done)
-                                      and k in table and _english_for(k, english)[0] is not None})
+    save(lang, base=base, marks={k: m for k, m in marks.items() if k not in set(done)
+                                 and k in table and _english_for(k, english)[0] is not None})
     return done
 
 
@@ -840,9 +1094,7 @@ def import_draft(lang: str, draft: dict, model: str, english: dict | None = None
             continue
         table[k], base[k], marks[k] = text, _english_text(k, english), model
         taken.append(k)
-    _write(f"{lang}.json", table)
-    _write(f"{lang}.base.json", base)
-    _write(f"{lang}{AI_SUFFIX}", marks)
+    save(lang, table, base, marks)
     return {"taken": taken, "kept": kept, "refused": refused}
 
 
@@ -953,8 +1205,11 @@ def main(argv=None) -> int:
                      help="fail on orphans (and their leftover base or draft marks) and mismatches")
     how.add_argument("--complete", action="store_true",
                      help="fail on anything but a complete, current translation")
-    p = sub.add_parser("prune", help="drop orphaned keys from i18n/<lang>.json, .base.json and .ai.json")
+    p = sub.add_parser("prune", help="drop orphaned keys from i18n/<lang>.json and i18n/base.json")
     p.add_argument("lang", nargs="?")
+    p = sub.add_parser("fold", help="take an older branch's i18n/<lang>.base.json and .ai.json into i18n/base.json")
+    p.add_argument("--branch", help="the branch's commit, when no merge or rebase shows it")
+    p.add_argument("--main", help="main's commit, when no merge or rebase shows it")
     p = sub.add_parser("ship", help="write web/i18n/<lang>.json")
     p.add_argument("--check", action="store_true", help="write nothing; fail when web/i18n/ is stale")
     p = sub.add_parser("accept", help="record the current English as the base of translated keys")
@@ -1003,10 +1258,9 @@ def main(argv=None) -> int:
                     models = collections.Counter(marks.values())
                     print(f"  {len(marks)} machine-drafted, awaiting review ("
                           + ", ".join(f"{n} by {m}" for m, n in sorted(models.items())) + ")")
-                left = {name: keys for name, keys in prune(lang, english, write=False).items()
-                        if name != f"{lang}.json"}
-                for name, keys in left.items():
-                    print(f"  {len(keys)} left in i18n/{name} for keys not translated or orphaned")
+                left = {kind: keys for kind, keys in prune(lang, english, write=False).items() if kind != "table"}
+                for kind, keys in left.items():
+                    print(f"  {len(keys)} left in {PRUNED[kind].format(lang=lang)} for keys not translated or orphaned")
                 if args.strict or args.complete:
                     orphans += len(st["orphan"]) + sum(len(v) for v in left.values())
                     mismatches += len(st["mismatch"])
@@ -1023,8 +1277,15 @@ def main(argv=None) -> int:
             english = catalogue()
             for lang in [args.lang] if args.lang else languages():
                 dropped = prune(lang, english)
-                print(f"{lang}: " + (", ".join(f"{len(v)} dropped from i18n/{k}" for k, v in dropped.items())
-                                     or "nothing to prune"))
+                print(f"{lang}: " + (", ".join(f"{len(v)} dropped from {PRUNED[k].format(lang=lang)}"
+                                               for k, v in dropped.items()) or "nothing to prune"))
+        elif args.cmd == "fold":
+            for lang, got in fold(branch=args.branch, main=args.main).items():
+                print(f"{lang}: from its old files, {len(got['bases'])} English bases and {len(got['marked'])} "
+                      f"draft marks taken into i18n/{BASE_FILE}, {len(got['unmarked'])} marks dropped as reviewed")
+                for kind, label in (("marked", "mark taken"), ("unmarked", "mark dropped")):
+                    for k in got[kind]:
+                        print(f"  {label}: {k}")
         elif args.cmd == "ship":
             stale = ship(check=args.check)
             for path in stale:
@@ -1032,7 +1293,7 @@ def main(argv=None) -> int:
             return 1 if stale else 0
         elif args.cmd == "accept":
             done = accept(args.lang, args.keys)
-            print(f"i18n/{args.lang}.base.json: {len(done)} keys accepted")
+            print(f"i18n/{BASE_FILE}: {len(done)} {args.lang} keys accepted")
         elif args.cmd == "import-draft":
             with open(args.file, encoding="utf-8") as fh:
                 draft = json.load(fh)
@@ -1049,7 +1310,7 @@ def main(argv=None) -> int:
                 raise CatalogueError("name the reviewed keys, or give --all")
             english = catalogue()
             done = reviewed(args.lang, args.keys, english)
-            print(f"i18n/{args.lang}{AI_SUFFIX}: {len(done)} keys reviewed, "
+            print(f"i18n/{BASE_FILE}: {len(done)} {args.lang} keys reviewed, "
                   f"{len(live_marks(args.lang, english))} left")
         elif args.cmd == "glossary":
             path = _outside_repo(args.out)
