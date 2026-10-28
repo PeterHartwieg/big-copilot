@@ -3713,9 +3713,9 @@ def _take_hires(rows) -> dict:
     """Each plan row's private `_hire` part, taken off it: {id(part): hire}.
 
     A shop's row carries one on itself, on its `fullCover` and on its
-    `openCover`; an office has its row and optional `openCover`, and a factory's
-    is on the row. _hiring() reads them
-    by the row, which the build keeps alive.
+    `openCover`; an office has its row and optional `openCover`, and a
+    factory's is on the row. _hiring() reads them by the row, which the build
+    keeps alive.
     """
     out = {}
     for row in rows:
