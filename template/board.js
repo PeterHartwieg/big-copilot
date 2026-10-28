@@ -3379,40 +3379,42 @@ const ALERT_SITE_PICK = findingKindsWith("sitePick");
    section. */
 /* Registry: "A view or a page" (docs/architecture.md, Registries). Author
    shared identity in VIEW_META; navigation labels/items, every SEC_PAGE row,
-   area views, route identity, route needs and HOST_ROUTES derive from it.
-   Keep markup, draw rows, search entries, aliases and route hooks explicit. */
+   area views, route identity, route needs, the draw rows' sections, search's
+   default entries and HOST_ROUTES derive from it. Keep markup, draw rows,
+   search's own words, aliases and route hooks explicit. */
 /* Shared canonical view identity: host, primary `section`, the sections
-   `also` on it (a block a finding or an old link reveals) and its translated
-   navigation label. A route's lazy sections are its host's PAGE_DRAWS tags;
-   `needs` adds only what no draw row declares (the finder: the map draws
-   itself). Route hooks, legacy aliases, draw rows and search entries keep
-   their distinct behaviour. */
+   `also` on it (a block a finding or an old link reveals), the payload
+   sections it reads (`needs`, the one place they are declared: the route asks
+   for them, and its host's PAGE_DRAWS rows read them unless a row says it
+   reads none) and its translated navigation label. Route hooks, legacy
+   aliases and draw rows keep their distinct behaviour; search entries fill in
+   from here (ssViews()). */
 const VIEW_META = [
-  {route: "overview", host: ["today"], also: ["alertSection", "secMoves"], label: () => tt("nav.area.overview", "Overview")},
+  {route: "overview", host: ["today"], also: ["alertSection", "secMoves"], needs: ["staffing"], label: () => tt("nav.area.overview", "Overview")},
   {route: "businesses/results", host: ["company", "results"], section: "secDaily", also: ["secPortfolio", "secDetail"], label: () => tt("nav.view.results", "Results")},
-  {route: "businesses/prices", host: ["company", "products"], section: "secProducts", also: ["secPrices"], label: () => tt("nav.view.prices", "Products & prices")},
+  {route: "businesses/prices", host: ["company", "products"], section: "secProducts", also: ["secPrices"], needs: ["products"], label: () => tt("nav.view.prices", "Products & prices")},
   {route: "businesses/standards", host: ["company", "standards"], section: "secStandards", label: () => tt("nav.view.standards", "Standards")},
-  {route: "businesses/milestones", host: ["company", "milestones"], section: "secGoals", label: () => tt("nav.view.milestones", "Milestones")},
+  {route: "businesses/milestones", host: ["company", "milestones"], section: "secGoals", needs: ["goals"], label: () => tt("nav.view.milestones", "Milestones")},
   {route: "supply/changes", host: ["supply", "changes"], section: "secChanges", label: () => tt("nav.view.changes", "Changes")},
   {route: "supply/roles", host: ["supply", "roles"], section: "secRoles", label: () => tt("nav.view.roles", "Plans & contracts")},
   {route: "supply/imports", host: ["supply", "imports"], section: "secImports", label: () => tt("nav.view.imports", "Imports")},
-  {route: "supply/deliveries", host: ["supply", "deliveries"], section: "secDeliveries", label: () => tt("nav.view.deliveries", "Deliveries")},
-  {route: "supply/production", host: ["supply", "production"], section: "secProduction", label: () => tt("nav.view.production", "Production")},
+  {route: "supply/deliveries", host: ["supply", "deliveries"], section: "secDeliveries", needs: ["wholesale"], label: () => tt("nav.view.deliveries", "Deliveries")},
+  {route: "supply/production", host: ["supply", "production"], section: "secProduction", needs: ["factoryStaffing"], label: () => tt("nav.view.production", "Production")},
   {route: "supply/flow", host: ["supply", "flow"], section: "secFlow", label: () => tt("nav.view.flow", "Goods flow")},
-  {route: "staffing/schedules", host: ["staffing", "schedules"], section: "secSchedules", label: () => tt("nav.view.schedules", "Schedules")},
-  {route: "staffing/needs", host: ["staffing", "needs"], section: "secStaff", also: ["secNeeds"], label: () => tt("nav.view.needs", "Staff needs")},
+  {route: "staffing/schedules", host: ["staffing", "schedules"], section: "secSchedules", needs: ["hiring"], label: () => tt("nav.view.schedules", "Schedules")},
+  {route: "staffing/needs", host: ["staffing", "needs"], section: "secStaff", also: ["secNeeds"], needs: ["hiring"], label: () => tt("nav.view.needs", "Staff needs")},
   {route: "staffing/payroll", host: ["staffing", "payroll"], section: "secPayroll", label: () => tt("nav.view.payroll", "Payroll")},
   {route: "expansion/demand", host: ["growth", "market"], section: "secMarket", label: () => tt("nav.view.demand", "Demand")},
   {route: "expansion/finder", host: ["map"], needs: ["premises"], defaultHost: false, label: () => tt("nav.view.finder", "Find a location")},
-  {route: "expansion/open", host: ["growth", "open"], section: "secOpen", label: () => tt("nav.view.open", "Open a store")},
-  {route: "expansion/factory", host: ["growth", "plan"], section: "secPlan", also: ["secIngredients", "secPlanFlow"], label: () => tt("nav.view.factory", "Plan a factory")},
-  {route: "expansion/rivals", host: ["growth", "rivals"], section: "secRivals", label: () => tt("nav.view.rivals", "Rivals")},
-  {route: "estate/buildings", host: ["estate", "buildings"], section: "secEstate", label: () => tt("nav.view.estate.buildings", "My buildings")},
-  {route: "estate/buy", host: ["estate", "buy"], section: "secBuy", label: () => tt("nav.view.estate.buy", "Buy a building")},
+  {route: "expansion/open", host: ["growth", "open"], section: "secOpen", needs: ["openStore"], label: () => tt("nav.view.open", "Open a store")},
+  {route: "expansion/factory", host: ["growth", "plan"], section: "secPlan", also: ["secIngredients", "secPlanFlow"], needs: ["openFactory", "openStore"], label: () => tt("nav.view.factory", "Plan a factory")},
+  {route: "expansion/rivals", host: ["growth", "rivals"], section: "secRivals", needs: ["rivalIntel"], label: () => tt("nav.view.rivals", "Rivals")},
+  {route: "estate/buildings", host: ["estate", "buildings"], section: "secEstate", needs: ["realEstate"], label: () => tt("nav.view.estate.buildings", "My buildings")},
+  {route: "estate/buy", host: ["estate", "buy"], section: "secBuy", needs: ["realEstate"], label: () => tt("nav.view.estate.buy", "Buy a building")},
   {route: "mods/browse", host: ["mods", "browse"], section: "secMods", label: () => tt("nav.view.mods.browse", "Browse mods")},
-  {route: "mods/street-food", host: ["mods", "streetfood"], section: "secStreetFood", label: () => tt("nav.view.mods.streetFood", "Street Food")},
+  {route: "mods/street-food", host: ["mods", "streetfood"], section: "secStreetFood", needs: ["streetFood"], label: () => tt("nav.view.mods.streetFood", "Street Food")},
   {route: "map", host: ["map"], label: () => tt("nav.ref.map", "City map")},
-  {route: "wiki", host: ["wiki"], label: () => tt("nav.ref.wiki2", "Wiki")},
+  {route: "wiki", host: ["wiki"], needs: ["products"], label: () => tt("nav.ref.wiki2", "Wiki")},
 ];
 const viewMetaForRoute = id => VIEW_META.find(v => v.route === id);
 /* Sections that have gone, and the section that took their place: an old
@@ -21213,8 +21215,9 @@ const hasData = () => !!D;
 /* The views of each page. */
 /* Registry: "A view or a page" (docs/architecture.md, Registries). Author
    shared identity in VIEW_META; navigation labels/items, every SEC_PAGE row,
-   area views, route identity, route needs and HOST_ROUTES derive from it.
-   Keep markup, draw rows, search entries, aliases and route hooks explicit. */
+   area views, route identity, route needs, the draw rows' sections, search's
+   default entries and HOST_ROUTES derive from it. Keep markup, draw rows,
+   search's own words, aliases and route hooks explicit. */
 const navItems = host => VIEW_META.filter(v => v.host[0] === host && v.section)
   .map(v => navView(v.host[1], v.label, v.section));
 /* Registry: "A view or a page" (navigation items from VIEW_META; host settings below). */
@@ -21296,8 +21299,9 @@ const REFS = [
 ];
 /* Registry: "A view or a page" (docs/architecture.md, Registries). Author
    shared identity in VIEW_META; navigation labels/items, every SEC_PAGE row,
-   area views, route identity, route needs and HOST_ROUTES derive from it.
-   Keep markup, draw rows, search entries, aliases and route hooks explicit. */
+   area views, route identity, route needs, the draw rows' sections, search's
+   default entries and HOST_ROUTES derive from it. Keep markup, draw rows,
+   search's own words, aliases and route hooks explicit. */
 const ROUTE_BEHAVIOR = {
   /* The portfolio is one table on two views: Standards shows its
      Operations comparison, and Results gets back the view it had before. */
@@ -21381,12 +21385,10 @@ const ROUTE_BEHAVIOR = {
 /* Registry: "A view or a page" (identity from VIEW_META; hooks from ROUTE_BEHAVIOR). */
 const ROUTES = Object.fromEntries(VIEW_META.map(v => [v.route,
   {host: v.host, get needs(){ return routeNeeds(v); }, ...ROUTE_BEHAVIOR[v.route]}]));
-/* The sections a route reads: what its host view's PAGE_DRAWS rows declare,
-   in their order, and the `needs` its VIEW_META record adds. Read when asked
-   (PAGE_DRAWS is declared further down). */
+/* The sections a route reads, as its VIEW_META record declares them, a fresh
+   list each time it is asked. */
 function routeNeeds(v){
-  const host = v.host.join("/");
-  return [...new Set([...PAGE_DRAWS.filter(row => row[0].split(" ").includes(host)).flatMap(row => row[3]), ...(v.needs || [])])];
+  return [...(v.needs || [])];
 }
 /* The route a host page and view shows when nothing more precise was asked
    for: a finding, a search or the reader's own click on a scope tab. */
@@ -21558,32 +21560,39 @@ function drawWikiSections(){
   if(odHidden || page !== "wiki"){ odWanted = true; return; }
   wikiVisit();
 }
+/* The sections a draw row reads when it does not name them: what the views
+   it is tagged with ask for, each the VIEW_META `needs` of the route the view
+   shows by default (HOST_ROUTES). A "" row has no view and reads none. */
+const rowNeeds = tags => [...new Set(tags.split(" ").filter(Boolean)
+  .flatMap(t => (viewMetaForRoute(HOST_ROUTES[t]) || {}).needs || []))];
 /* Registry: "A view or a page" (docs/architecture.md, Registries). Author
    shared identity in VIEW_META; navigation labels/items, every SEC_PAGE row,
-   area views, route identity, route needs and HOST_ROUTES derive from it.
-   Keep markup, draw rows, search entries, aliases and route hooks explicit. */
+   area views, route identity, route needs, the draw rows' sections, search's
+   default entries and HOST_ROUTES derive from it. Keep markup, draw rows,
+   search's own words, aliases and route hooks explicit. */
 const PAGE_DRAWS = [
+  // A fourth element of [] is a row that reads none of its view's sections:
+  // it draws from the core alone, so a refresh redraws it at once while they load.
   ["today", () => drawKpis(), null, []], ["today", () => drawAlerts(), null, []], ["today", () => drawTools(), null, []],
-  ["company/results", () => drawChart(), null, []], ["company/results", () => drawFinance(), null, []], ["company/results company/standards", () => drawPortfolio(), null, []],
-  ["company/standards", () => drawStandards(), null, []],
-  ["company/results", () => drawSitePicker(), null, []], ["", () => drawSite(), null, []],
+  ["company/results", () => drawChart()], ["company/results", () => drawFinance()], ["company/results company/standards", () => drawPortfolio()],
+  ["company/standards", () => drawStandards()],
+  ["company/results", () => drawSitePicker()], ["", () => drawSite()],
   ["today supply/changes supply/roles supply/imports supply/deliveries supply/production supply/flow", () => drawSupplyStrip(), null, []],
-  ["supply/changes", () => drawChangesView(), null, []], ["supply/roles", () => drawRolesView(), null, []], ["supply/imports", () => drawImportsView(), null, []], ["supply/deliveries", () => drawDeliveriesView(), null, ["wholesale"]],
-  ["supply/production", () => drawProductionView(), null, ["factoryStaffing"]], ["supply/flow", () => drawFlowView(), null, []], ["supply/flow", () => drawFlow(), null, []],
-  ["growth/market", () => drawMovers(), null, []], ["growth/market", () => drawMarket(), null, []], ["growth/open", () => drawOpenStore(), null, ["openStore"]],
-  ["growth/plan", () => drawPlan(), null, ["openFactory", "openStore"]],  // changed for growth: no drawExpansion()
-  ["growth/rivals", () => drawRivals(), null, ["rivalIntel"]],
-  ["estate/buildings", () => drawEstate(), null, ["realEstate"]], ["estate/buy", () => drawEstateBuy(), null, ["realEstate"]],
-  ["mods/browse", () => drawMods(), null, []], ["mods/streetfood", () => drawStreetFood(), null, ["streetFood"]],
-  ["company/products", () => drawPriceShops(), null, []], ["company/products", () => drawProducts(), null, ["products"]],
-  // A third element names a row other code marks stale on its own (hrStale(), nxSchedStale());
-  // a fourth, the sections it reads, asked for as its view opens (odWantView()).
-  ["staffing/schedules", () => drawSchedules(), "schedules", ["hiring"]], ["staffing/needs", () => drawNeeds(), null, []], ["staffing/needs", () => drawStaff(), "staff", ["hiring"]],
-  ["staffing/payroll", () => drawPayroll(), null, []],
-  ["company/milestones", () => drawGoals(), null, ["goals"]], ["", () => drawFindLocation(), null, []], ["today", () => drawOptimizeStaffing(), null, ["staffing"]],
-  ["", () => drawShellCounts(), null, []],
-  ["wiki", () => drawWikiSections(), null, ["products"]],
-];
+  ["supply/changes", () => drawChangesView()], ["supply/roles", () => drawRolesView()], ["supply/imports", () => drawImportsView()], ["supply/deliveries", () => drawDeliveriesView()],
+  ["supply/production", () => drawProductionView()], ["supply/flow", () => drawFlowView()], ["supply/flow", () => drawFlow()],
+  ["growth/market", () => drawMovers()], ["growth/market", () => drawMarket()], ["growth/open", () => drawOpenStore()],
+  ["growth/plan", () => drawPlan()],  // changed for growth: no drawExpansion()
+  ["growth/rivals", () => drawRivals()],
+  ["estate/buildings", () => drawEstate()], ["estate/buy", () => drawEstateBuy()],
+  ["mods/browse", () => drawMods()], ["mods/streetfood", () => drawStreetFood()],
+  ["company/products", () => drawPriceShops(), null, []], ["company/products", () => drawProducts()],
+  // A third element names a row other code marks stale on its own (hrStale(), nxSchedStale()).
+  ["staffing/schedules", () => drawSchedules(), "schedules"], ["staffing/needs", () => drawNeeds(), null, []], ["staffing/needs", () => drawStaff(), "staff"],
+  ["staffing/payroll", () => drawPayroll()],
+  ["company/milestones", () => drawGoals()], ["", () => drawFindLocation()], ["today", () => drawOptimizeStaffing()],
+  ["", () => drawShellCounts()],
+  ["wiki", () => drawWikiSections()],
+].map(([tags, draw, stale = null, needs = rowNeeds(tags)]) => [tags, draw, stale, needs]);
 /* The rows a live refresh left out: drawn for older numbers than D. */
 const pageStale = new Set();
 /* The Live dot's "Stale". Two things hold it, each cleared only by its own
@@ -23516,19 +23525,39 @@ const SS_SEV = {critical: "crit", warn: "watch", info: "opp"};
 const SS_SEV_RANK = {crit: 3, watch: 2, opp: 1};
 const ssWorst = rows => rows.map(r => SS_SEV[r.level] || "opp")
   .sort((a, z) => SS_SEV_RANK[z] - SS_SEV_RANK[a])[0] || "";
-/* The board's pages and views, and the words players use for them. Kept by
-   hand, next to what they name: `need` is false for what works without a save,
-   and `each`, where one view answers for several things, gives one entry per
-   thing (its own id, line and go) in place of the view's single one. */
+/* The board's pages and views, and the words players use for them. Every
+   VIEW_META view has an entry: the one here that names its `route`, laid over
+   the view's own (ssViewEntry(): its label, where it is, its area's icon, and
+   Enter opens it), or that default alone for a view no entry names. An entry
+   gives only what differs from its view's: search's own title and line, the
+   words players use, another icon or another way in. The entries without a
+   `route` are not views (a block, a sheet, the changelog). `need` is false
+   for what works without a save, and `each`, where one view answers for
+   several things, gives one entry per thing (its own id, line and go) in
+   place of the view's single one. */
+function ssViewEntry(v){
+  if(!v) throw new Error("SS_VIEWS names a route that is not in VIEW_META");
+  return {id: v.route, get t(){ return v.label(); }, get p(){ return routePath(v.route); },
+    ic: (AREAS.find(a => a.id === routeArea(v.route)) || {icon: routeArea(v.route)}).icon, syn: [],
+    go: () => openRoute(v.route)};
+}
+/* The hand entries, each view's laid over its default (getters kept, so the
+   words follow the language), then a default entry for each view none names. */
+function ssViews(hand){
+  const named = new Set(hand.map(e => e.route).filter(Boolean));
+  return [...hand.map(e => e.route ? Object.defineProperties(ssViewEntry(viewMetaForRoute(e.route)), Object.getOwnPropertyDescriptors(e)) : e),
+    ...VIEW_META.filter(v => !named.has(v.route)).map(ssViewEntry)];
+}
 /* Registry: "A view or a page" (docs/architecture.md, Registries). Author
    shared identity in VIEW_META; navigation labels/items, every SEC_PAGE row,
-   area views, route identity, route needs and HOST_ROUTES derive from it.
-   Keep markup, draw rows, search entries, aliases and route hooks explicit. */
-const SS_VIEWS = [
-  {id: "alerts", get t(){ return tt("nav.search.alerts.title", "Needs attention"); },
-   get p(){ return tt("nav.search.alerts.line", "Overview"); }, ic: "today", syn: ["problems", "alerts", "warnings", "findings", "to do", "today"],
+   area views, route identity, route needs, the draw rows' sections, search's
+   default entries and HOST_ROUTES derive from it. Keep markup, draw rows,
+   search's own words, aliases and route hooks explicit. */
+const SS_VIEWS = ssViews([
+  {id: "alerts", route: "overview", get t(){ return tt("nav.search.alerts.title", "Needs attention"); },
+   get p(){ return tt("nav.search.alerts.line", "Overview"); }, syn: ["problems", "alerts", "warnings", "findings", "to do", "today"],
    /* What the list reads out, for the sizing on screen: above the gate, and of a kind still on. */
-   live: () => ({tag: tt("nav.search.today", "{n} today", {n: alertLines().filter(a => !kindOff(a)).length})}), go: () => openRoute("overview")},
+   live: () => ({tag: tt("nav.search.today", "{n} today", {n: alertLines().filter(a => !kindOff(a)).length})})},
   {id: "moves", get t(){ return tt("nav.search.moves.title", "All tools"); },
    get p(){ return tt("nav.search.moves.line", "Overview"); }, ic: "today", syn: ["tools", "what next", "next moves", "tasks"],
    go(){ openRoute("overview", {scroll: false}); ovJumpTools(); }},
@@ -23549,7 +23578,7 @@ const SS_VIEWS = [
    get p(){ return tt("nav.search.help.line", "Ask, report a bug, vote on features"); }, ic: "wiki",
    syn: ["help", "feedback", "bug", "report", "discord", "vote", "support"],
    go(){ ssClose(false); pxOpen("help", $("navMore")); }},
-  {id: "daily", get t(){ return tt("nav.search.daily.title2", "Company results"); },
+  {id: "daily", route: "businesses/results", get t(){ return tt("nav.search.daily.title2", "Company results"); },
    get p(){ return tt("nav.search.daily.line", "Businesses › Results"); }, ic: "profit", syn: ["profit", "revenue", "chart", "income", "why did profit move"],
    go: () => reveal("secDaily")},
   {id: "portfolio", get t(){ return tt("nav.search.portfolio.title", "Portfolio"); },
@@ -23559,20 +23588,19 @@ const SS_VIEWS = [
    synP: {get "break even"(){ return tt("nav.search.portfolio.breakeven", "the Payback column · Businesses › Results · break-even day by chain and site"); },
           get "payback"(){ return tt("nav.search.portfolio.payback", "the Payback column · Businesses › Results · break-even day by chain and site"); }},
    go(){ view = "pnl"; sortKey = null; drawPortfolio(); reveal("secPortfolio"); paybackIntoView(); }},
-  {id: "ops", get t(){ return tt("nav.search.ops.title", "Standards"); },
-   get p(){ return tt("nav.search.ops.line", "Businesses › Standards · satisfaction, promotion, amenities, uniforms"); }, ic: "company",
-   syn: ["satisfaction", "promotion", "foot traffic", "marketing", "security", "standards", "pull", "operations", "amenities", "uniforms"],
-   go(){ openRoute("businesses/standards"); }},
+  {id: "ops", route: "businesses/standards", get t(){ return tt("nav.search.ops.title", "Standards"); },
+   get p(){ return tt("nav.search.ops.line", "Businesses › Standards · satisfaction, promotion, amenities, uniforms"); },
+   syn: ["satisfaction", "promotion", "foot traffic", "marketing", "security", "standards", "pull", "operations", "amenities", "uniforms"]},
   /* Weekly rhythm is By weekday in the Daily result chart now (R15). */
   {id: "rhythm", get t(){ return tt("nav.search.rhythm.title", "By weekday"); },
    get p(){ return tt("nav.search.rhythm.line", "Businesses › Results · Daily result"); }, ic: "week",
    syn: ["weekly rhythm", "weekday", "busiest day", "peak day", "rhythm"],
    go(){ if(weekdaySeries().length) chartWindow = "wd"; reveal("secDaily"); }},
-  {id: "products", get t(){ return tt("nav.search.products.title", "Products & prices"); },
+  {id: "products", route: "businesses/prices", get t(){ return tt("nav.search.products.title", "Products & prices"); },
    get p(){ return tt("nav.search.products.line", "Businesses › Products & prices"); }, ic: "shelves", syn: ["sales", "units", "total sales", "best sellers", "what sells", "products", "shop prices"],
-   live: () => odReady("products") ? ({p: tt("nav.search.products.sold", "Businesses › Products & prices · {n} sold", {n: (D.products || []).length})}) : {}, go: () => openRoute("businesses/prices")},
-  {id: "payroll", get t(){ return tt("nav.search.payroll.title", "Payroll"); },
-   get p(){ return tt("nav.search.payroll.line", "Staffing › Payroll"); }, ic: "people", syn: ["wages", "salary", "salaries", "employees", "headcount", "staff"],
+   live: () => odReady("products") ? ({p: tt("nav.search.products.sold", "Businesses › Products & prices · {n} sold", {n: (D.products || []).length})}) : {}},
+  {id: "payroll", route: "staffing/payroll", get t(){ return tt("nav.search.payroll.title", "Payroll"); },
+   get p(){ return tt("nav.search.payroll.line", "Staffing › Payroll"); }, syn: ["wages", "salary", "salaries", "employees", "headcount", "staff"],
    live: () => D.staff && D.staff.total ? {p: tt("nav.search.payroll.people", {one: "Staffing › Payroll · {s} person", other: "Staffing › Payroll · {s} people"},
      {n: D.staff.total, s: ssNum(D.staff.total)})} : {}, go: () => reveal("secPayroll")},
   {id: "staff", get t(){ return tt("nav.search.staff.title", "Hiring"); },
@@ -23580,7 +23608,7 @@ const SS_VIEWS = [
    syn: ["hire", "hiring", "candidates", "headhunter", "quick hire", "open places", "staff", "staff needs"],
    live: () => D.hiring ? {p: tt("nav.search.staff.open", "Staffing › Staff needs · open places, candidates, Quick hire")} : {},
    go: () => openRoute("staffing/needs", {into: "#secStaff"})},
-  {id: "milestones", get t(){ return tt("nav.search.milestones.title", "Milestones"); },
+  {id: "milestones", route: "businesses/milestones", get t(){ return tt("nav.search.milestones.title", "Milestones"); },
    get p(){ return tt("nav.search.milestones.line", "Businesses › Milestones · career totals"); }, ic: "flag",
    syn: ["goals", "diplomas", "rivals", "career", "buildings owned", "tax paid", "leaderboard", "rank", "first place"], go: () => reveal("secGoals")},
   /* The game's settings are the difficulty chip and its popover (R15). */
@@ -23588,24 +23616,20 @@ const SS_VIEWS = [
    get p(){ return tt("nav.search.difficulty.line", "every setting against Normal"); }, ic: "tune",
    syn: ["settings", "game settings", "house rules", "custom", "tax rate", "what am i playing on"],
    live: () => D.meta && D.meta.difficulty ? {p: tt("nav.search.difficulty.named", "{name} · every setting against Normal", {name: fvDiffName(D.meta.difficulty)})} : {}, go: ssDifficulty},
-  {id: "checklist", get t(){ return tt("nav.search.checklist.title", "Changes"); },
+  {id: "checklist", route: "supply/changes", get t(){ return tt("nav.search.checklist.title", "Changes"); },
    get p(){ return tt("nav.search.checklist.line", "Supply › Changes · every change to type"); }, ic: "calendar", syn: ["orders", "what to type", "import plan", "checklist", "change checklist"],
    live(){ const d = sbData(), n = d.rows.filter(r => !pgDone(d, r)).length;
      return d.rows.length ? {p: n ? tt("nav.search.checklist.left", {one: "Supply › Changes · {n} change to type", other: "Supply › Changes · {n} changes to type"}, {n})
-       : tt("nav.search.checklist.done", "Supply › Changes · all ticked")} : {}; },
-   go: () => openRoute("supply/changes")},
-  {id: "roles", get t(){ return tt("nav.search.roles.title", "Plans & contracts"); },
+       : tt("nav.search.checklist.done", "Supply › Changes · all ticked")} : {}; }},
+  {id: "roles", route: "supply/roles", get t(){ return tt("nav.search.roles.title", "Plans & contracts"); },
    get p(){ return tt("nav.search.roles.line", "Supply › Plans & contracts · every delivery plan and import contract"); }, ic: "truck",
-   syn: ["logistics manager", "purchasing agent", "delivery plan", "import contract", "managers", "agents", "who delivers", "vehicles", "drivers", "importers"],
-   go: () => openRoute("supply/roles")},
-  {id: "imports", get t(){ return tt("nav.search.imports.title", "Imports"); },
-   get p(){ return tt("nav.search.imports.line", "Supply › Imports · weekly contracts"); }, ic: "truck", syn: ["import", "importer", "contracts", "weekly order", "what should i import", "orders", "weekly imports", "import amounts"],
-   go: () => openRoute("supply/imports")},
+   syn: ["logistics manager", "purchasing agent", "delivery plan", "import contract", "managers", "agents", "who delivers", "vehicles", "drivers", "importers"]},
+  {id: "imports", route: "supply/imports", get t(){ return tt("nav.search.imports.title", "Imports"); },
+   get p(){ return tt("nav.search.imports.line", "Supply › Imports · weekly contracts"); }, ic: "truck", syn: ["import", "importer", "contracts", "weekly order", "what should i import", "orders", "weekly imports", "import amounts"]},
   /* Top-ups are on every tab (a shelf's, a depot's, a factory input's): the
      tab with the most still to type, else Shops. */
-  {id: "topups", get t(){ return tt("nav.search.topups.title", "Deliveries"); },
-   get p(){ return tt("nav.search.topups.line", "Supply › Deliveries · daily top-ups and wholesale"); }, ic: "route", syn: ["top-up", "distribution", "logistics", "delivery plan", "daily top-ups", "delivery targets", "wholesale", "shopping list", "weekly shopping", "seven days"],
-   go: () => openRoute("supply/deliveries")},
+  {id: "topups", route: "supply/deliveries", get t(){ return tt("nav.search.topups.title", "Deliveries"); },
+   get p(){ return tt("nav.search.topups.line", "Supply › Deliveries · daily top-ups and wholesale"); }, ic: "route", syn: ["top-up", "distribution", "logistics", "delivery plan", "daily top-ups", "delivery targets", "wholesale", "shopping list", "weekly shopping", "seven days"]},
   {id: "shops", get t(){ return tt("nav.search.shops.title", "Shops"); },
    get p(){ return tt("nav.search.shops.line", "Supply › Deliveries · every shelf against tomorrow's round"); }, ic: "shelves", syn: ["shelves", "run out", "stock out", "empty shelf", "before the drop"],
    go: () => ssSupply("deliveries", "shops")},
@@ -23615,7 +23639,7 @@ const SS_VIEWS = [
   {id: "idle", get t(){ return tt("nav.search.idle.title", "Idle stock"); },
    get p(){ return tt("nav.search.idle.line.view", "Supply › Deliveries · grouped by cause"); }, ic: "crate", syn: ["dead stock", "not moving", "overstock", "too much stock"],
    go: () => ssSupply("deliveries")},
-  {id: "lines", get t(){ return tt("nav.search.lines.title", "Factory lines"); },
+  {id: "lines", route: "supply/production", get t(){ return tt("nav.search.lines.title", "Factory lines"); },
    get p(){ return tt("nav.search.lines.line", "Supply › Production · machines and the hours they run"); }, ic: "gear", syn: ["machines", "recipes", "24/7", "full production", "staffed hours", "run hours"],
    go: () => ssSupply("production")},
   {id: "feed", get t(){ return tt("nav.search.feed.title", "Factory inputs"); },
@@ -23627,68 +23651,58 @@ const SS_VIEWS = [
   {id: "factorystaff", get t(){ return tt("nav.search.factorystaff.title", "Staffing for factory lines"); },
    get p(){ return tt("nav.search.factorystaff.line", "Supply › Production"); }, ic: "roster", syn: ["factory workers", "factory staffing", "factory shifts", "run hours"],
    go(){ ssSupply("production"); setTimeout(() => { const el = $("sbStaff"); if(el) settleScroll(el); }, 60); }},
-  {id: "flow", get t(){ return tt("nav.search.flow.title", "Goods flow"); },
-   get p(){ return tt("nav.search.flow.line", "Supply › Goods flow · the diagram"); }, ic: "route", syn: ["diagram", "supply chain", "routes", "pipes", "trace goods"],
-   go: () => openRoute("supply/flow")},
-  {id: "market", get t(){ return tt("nav.search.market.title", "Market demand"); },
-   get p(){ return tt("nav.search.market.line", "Expansion › Demand"); }, ic: "growth", syn: ["demand", "hype", "waves", "neighbourhood", "market"],
-   go: () => openRoute("expansion/demand")},
-  {id: "open", get t(){ return tt("nav.search.open.title", "Open a store"); },
-   get p(){ return tt("nav.search.open.line", "Expansion › Open a store · investment and break even"); }, ic: "growth",
-   syn: ["new store", "new shop", "open a shop", "break even", "investment", "outfit", "installation firm", "loan", "second store"],
-   go: () => openRoute("expansion/open")},
-  {id: "plan", get t(){ return tt("nav.search.plan.title", "Plan a factory"); },
-   get p(){ return tt("nav.search.plan.line", "Expansion › Plan a factory"); }, ic: "growth", syn: ["new factory", "recipe plan", "expand", "plan a chain", "open a factory", "factory location", "add machines"],
-   go: () => openRoute("expansion/factory")},
-  {id: "rivals", get t(){ return tt("nav.search.rivals.title", "Rivals"); },
-   get p(){ return tt("nav.search.rivals.line", "Expansion › Rivals · what each rival sells, its shops and what it opened or closed"); }, ic: "growth",
-   syn: ["rivals", "competitors", "competition", "price war", "undercut", "rival shops", "rival products", "rival prices", "opened", "closed"],
-   go: () => openRoute("expansion/rivals")},
-  {id: "estate", get t(){ return tt("nav.search.estate.title", "My buildings"); },
-   get p(){ return tt("nav.search.estate.line", "Real estate › My buildings · rent prices and occupancy"); }, ic: "estate",
+  {id: "flow", route: "supply/flow", get t(){ return tt("nav.search.flow.title", "Goods flow"); },
+   get p(){ return tt("nav.search.flow.line", "Supply › Goods flow · the diagram"); }, ic: "route", syn: ["diagram", "supply chain", "routes", "pipes", "trace goods"]},
+  {id: "market", route: "expansion/demand", get t(){ return tt("nav.search.market.title", "Market demand"); },
+   get p(){ return tt("nav.search.market.line", "Expansion › Demand"); }, syn: ["demand", "hype", "waves", "neighbourhood", "market"]},
+  {id: "open", route: "expansion/open", get t(){ return tt("nav.search.open.title", "Open a store"); },
+   get p(){ return tt("nav.search.open.line", "Expansion › Open a store · investment and break even"); },
+   syn: ["new store", "new shop", "open a shop", "break even", "investment", "outfit", "installation firm", "loan", "second store"]},
+  {id: "plan", route: "expansion/factory", get t(){ return tt("nav.search.plan.title", "Plan a factory"); },
+   get p(){ return tt("nav.search.plan.line", "Expansion › Plan a factory"); }, syn: ["new factory", "recipe plan", "expand", "plan a chain", "open a factory", "factory location", "add machines"]},
+  {id: "rivals", route: "expansion/rivals", get t(){ return tt("nav.search.rivals.title", "Rivals"); },
+   get p(){ return tt("nav.search.rivals.line", "Expansion › Rivals · what each rival sells, its shops and what it opened or closed"); },
+   syn: ["rivals", "competitors", "competition", "price war", "undercut", "rival shops", "rival products", "rival prices", "opened", "closed"]},
+  {id: "estate", route: "estate/buildings", get t(){ return tt("nav.search.estate.title", "My buildings"); },
+   get p(){ return tt("nav.search.estate.line", "Real estate › My buildings · rent prices and occupancy"); },
    syn: ["real estate", "buildings", "rent price", "set rent", "landlord", "tenants", "occupancy", "property", "best price", "market rent"],
-   live: () => { const n = reCounts().flagged; return n ? {tag: tt("nav.search.estate.tag", {one: "{n} to set", other: "{n} to set"}, {n})} : {}; },
-   go: () => openRoute("estate/buildings")},
-  {id: "buy", get t(){ return tt("nav.search.buy.title", "Buy a building"); },
-   get p(){ return tt("nav.search.buy.line", "Real estate › Buy a building · price, payback and tax day"); }, ic: "estate",
-   syn: ["buy building", "purchase", "invest", "payback", "for sale", "tax", "taxes", "deduction", "tax day", "property"],
-   go: () => openRoute("estate/buy")},
-  {id: "mods", get t(){ return tt("nav.search.mods.title", "Browse mods"); },
-   get p(){ return tt("nav.search.mods.line", "Mods › Browse mods · what the board reads of each mod"); }, ic: "mods",
-   syn: ["mods", "modded", "workshop", "steam workshop", "street food", "seasons", "retail expansion", "economy expansion", "compatibility"],
-   go: () => openRoute("mods/browse")},
-  {id: "streetfood", get t(){ return tt("nav.search.streetFood.title", "Street Food routes"); },
+   live: () => { const n = reCounts().flagged; return n ? {tag: tt("nav.search.estate.tag", {one: "{n} to set", other: "{n} to set"}, {n})} : {}; }},
+  {id: "buy", route: "estate/buy", get t(){ return tt("nav.search.buy.title", "Buy a building"); },
+   get p(){ return tt("nav.search.buy.line", "Real estate › Buy a building · price, payback and tax day"); },
+   syn: ["buy building", "purchase", "invest", "payback", "for sale", "tax", "taxes", "deduction", "tax day", "property"]},
+  {id: "mods", route: "mods/browse", get t(){ return tt("nav.search.mods.title", "Browse mods"); },
+   get p(){ return tt("nav.search.mods.line", "Mods › Browse mods · what the board reads of each mod"); },
+   syn: ["mods", "modded", "workshop", "steam workshop", "street food", "seasons", "retail expansion", "economy expansion", "compatibility"]},
+  {id: "streetfood", route: "mods/street-food", get t(){ return tt("nav.search.streetFood.title", "Street Food routes"); },
    get p(){ return tt("nav.search.streetFood.line", "Mods › Street Food · map, stops and opening hours"); }, ic: "map",
-   syn: ["street food", "food truck", "food cart", "truck route", "cart route", "stops", "commissary", "pitch", "route plan"],
-   go: () => openRoute("mods/street-food")},
-  {id: "finder", get t(){ return tt("nav.search.finder.title", "Find a location"); },
+   syn: ["street food", "food truck", "food cart", "truck route", "cart route", "stops", "commissary", "pitch", "route plan"]},
+  {id: "finder", route: "expansion/finder", get t(){ return tt("nav.search.finder.title", "Find a location"); },
    get p(){ return tt("nav.search.finder.line", "Expansion › Find a location"); }, ic: "pin", syn: ["rent", "premises", "building", "floor size", "m²", "vacant", "where should i open", "size"],
    live(){ const n = ((D.premises || {}).buildings || []).filter(b => b.type === "retail" && b.status === "vacant").length;
      return n ? {p: tt("nav.search.finder.vacant", "Expansion › Find a location · {n} vacant", {n})} : {}; },
    go: () => ssFinder({cat: "retail", type: "", hoods: null})},
-  {id: "map", get t(){ return tt("nav.search.map.title", "City map"); },
-   get p(){ return tt("nav.search.map.line", "City map · the city"); }, ic: "map", syn: ["city", "address", "where is", "map"], go: () => openRoute("map")},
-  {id: "staffing", get t(){ return tt("nav.search.staffing.title", "Schedules"); },
+  {id: "map", route: "map", get t(){ return tt("nav.search.map.title", "City map"); },
+   get p(){ return tt("nav.search.map.line", "City map · the city"); }, syn: ["city", "address", "where is", "map"]},
+  {id: "staffing", route: "staffing/schedules", get t(){ return tt("nav.search.staffing.title", "Schedules"); },
    get p(){ return tt("nav.search.staffing.line", "Staffing › Schedules · each shop's week"); }, ic: "roster",
    syn: ["hire", "hiring", "schedule", "shifts", "roster", "bizman", "overstaffed", "whom should i hire"],
    live(){ const b = D.businesses.find(x => x.key === ssStaffingSite());
      return b ? {p: tt("nav.search.staffing.first", "Staffing › Schedules · first: {site}", {site: b.name}),
        land: tt("nav.search.staffing.land", "Staffing › Schedules · {site}", {site: b.name})} : {}; },
    go: () => openRoute("staffing/schedules", {pick: ssStaffingSite()})},
-  {id: "crew", get t(){ return tt("nav.search.crew.title", "Staff needs"); },
-   get p(){ return tt("nav.search.crew.line", "Staffing › Staff needs · demands and hiring"); }, ic: "crew", syn: ["hire", "demands", "quit", "people", "crew", "whom to hire"],
-   go: () => openRoute("staffing/needs")},
+  {id: "crew", route: "staffing/needs", get t(){ return tt("nav.search.crew.title", "Staff needs"); },
+   get p(){ return tt("nav.search.crew.line", "Staffing › Staff needs · demands and hiring"); }, ic: "crew", syn: ["hire", "demands", "quit", "people", "crew", "whom to hire"]},
   {id: "prices", get t(){ return tt("nav.search.prices.title", "Prices in your save"); },
    get p(){ return tt("nav.search.prices.line2", "Wiki"); }, ic: "tag", syn: ["prices", "pricing", "market price", "too expensive", "are my prices right"],
    /* One entry for each kind of shop the company runs, each opening its own guide. */
    each: () => ssOwnTypes().map(t => ({id: `view:prices:${t.slug}`, p: tt("nav.search.prices.guide2", "Wiki › {type}", {type: t.type}),
      kw: [t.type, ...ssEnglish([t.slug])], go: () => ssPrices(t.slug)})), go: () => ssPrices()},
-  {id: "wiki", get t(){ return tt("nav.search.wiki.title2", "Wiki"); },
-   get p(){ return tt("nav.search.wiki.line", "the game's own help"); }, ic: "wiki", syn: ["help", "guide", "manual", "wiki"], need: false, go: () => openRoute("wiki")},
+  {id: "wiki", route: "wiki", get t(){ return tt("nav.search.wiki.title2", "Wiki"); },
+   get p(){ return tt("nav.search.wiki.line", "the game's own help"); }, syn: ["help", "guide", "manual", "wiki"], need: false},
   {id: "changelog", get t(){ return tt("nav.search.changelog.title", "Changelog"); },
    get p(){ return tt("nav.search.changelog.line", "More · what's new"); }, ic: "list", syn: ["new", "updates", "release notes"], need: false,
    go(){ openChangelog(); }},
-];
+]);
 /* The words players use for the wiki's pages, by title. */
 const SS_WIKI_SYN = {"MyEmployees App": ["hire", "hiring", "fire"], "Headhunter": ["hire", "recruit"],
   "Employee Schedule": ["schedule", "shifts"], "Loans / Investments": ["debt", "loan", "interest"],
