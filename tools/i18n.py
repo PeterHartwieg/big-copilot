@@ -844,6 +844,9 @@ def fold(english: dict | None = None, root: str = ROOT, branch: str | None = Non
         raise CatalogueError("no merge, rebase or merge commit shows which side is the branch; "
                              "give --branch REF and --main REF")
     branch, main = branch or sides[0], main or sides[1]
+    for side, ref in (("branch", branch), ("main", main)):
+        if _git(root, "rev-parse", "-q", "--verify", f"{ref}^{{commit}}").returncode != 0:
+            raise CatalogueError(f"--{side} {ref} is not a commit in {root}")
     names = [os.path.basename(n) for n in _git(root, "ls-tree", "--name-only", f"{branch}:i18n").stdout.split()]
     langs = sorted({n[:-len(s)] for n in names for s in LEGACY_SUFFIXES if n.endswith(s)})
     english = catalogue() if english is None else english
@@ -879,7 +882,8 @@ def fold(english: dict | None = None, root: str = ROOT, branch: str | None = Non
         changes[lang] = (None, base, marks)
         report[lang] = {kind: sorted(keys) for kind, keys in got.items()}
     _rewrite(root, changes)
-    for name in _legacy(root):
+    # Only the old files read from the branch go; any other stays for _current() to name.
+    for name in set(_legacy(root)) & set(names):
         os.remove(os.path.join(root, "i18n", name))
     return report
 

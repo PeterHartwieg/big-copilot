@@ -228,6 +228,16 @@ class FoldTests(unittest.TestCase):
         self.assertEqual(i18n.fold(ENGLISH, repo.root, "HEAD", "HEAD")["de"]["unmarked"], [])
         self.assertEqual(i18n._legacy(repo.root), [], "the work tree's old files are gone")
 
+    def test_a_mistyped_ref_stops_fold_before_it_touches_anything(self):
+        repo = Repo(self)
+        repo.commit({**POINT, "base.json": STORE}, "both")
+        before = sorted(os.listdir(os.path.join(repo.root, "i18n")))
+        for branch, main, side in (("HAED", "HEAD", "--branch HAED"), ("HEAD", "mian", "--main mian")):
+            with self.assertRaisesRegex(i18n.CatalogueError, side):
+                i18n.fold(ENGLISH, repo.root, branch, main)
+        self.assertEqual(sorted(os.listdir(os.path.join(repo.root, "i18n"))), before)
+        self.assertEqual(i18n._store(repo.root), STORE)
+
     def test_the_branch_s_english_fills_and_wins_where_it_is_today_s(self):
         # Main translated f.a in French alone, from today's English; the branch
         # drafted German f.a from an older one and f.c afresh, and redid f.b
