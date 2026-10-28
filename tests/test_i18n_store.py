@@ -1,8 +1,9 @@
 """i18n/base.json, every language's English and draft marks in one file:
 what load(), drafted() and save() read and write, and `fold`, which takes in
-the per-language files it replaced (tools/i18n.py's docstring)."""
+the per-language files it replaced, here after real git merges (tools/i18n.py's docstring)."""
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 
@@ -114,87 +115,137 @@ class StoreTests(unittest.TestCase):
                 i18n.load("de", tree.root)
 
 
+class Repo:
+    """A git repository in a temporary directory: a branch made before
+    base.json, and main, which replaced the old files with it."""
+
+    def __init__(self, case):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = self.tmp.name
+        case.addCleanup(self.tmp.cleanup)
+        self.git("init", "-q", "-b", "main")
+
+    def git(self, *args, check=True):
+        env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}
+        out = subprocess.run(["git", "-C", self.root, "-c", "commit.gpgsign=false", *args],
+                             capture_output=True, text=True, env=env)
+        if check and out.returncode:
+            raise AssertionError(out.stderr)
+        return out
+
+    def put(self, files):
+        """Write {name under i18n/: data}; None deletes, a dict under base.json is a store."""
+        os.makedirs(os.path.join(self.root, "i18n"), exist_ok=True)
+        for name, data in files.items():
+            path = os.path.join(self.root, "i18n", name)
+            if data is None:
+                if os.path.exists(path):
+                    os.remove(path)
+            else:
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(i18n._dump_store(data) if name == i18n.BASE_FILE else json.dumps(data, indent=1) + "\n")
+
+    def commit(self, files, message):
+        self.put(files)
+        self.git("add", "-A", "i18n")
+        self.git("commit", "-q", "--allow-empty", "-m", message)
+
+    @classmethod
+    def merged(cls, case, point, main, branch, *merge):
+        """Commit the branch point, main's and the branch's changes, and merge
+        main into the branch with `merge`'s options (unfinished by default)."""
+        repo = cls(case)
+        repo.commit(point, "point")
+        repo.git("checkout", "-q", "-b", "branch")
+        repo.commit(branch, "branch")
+        repo.git("checkout", "-q", "main")
+        repo.commit({**{n: None for n in point if n.endswith(i18n.LEGACY_SUFFIXES)}, **main}, "main")
+        repo.git("checkout", "-q", "branch")
+        repo.git("merge", *(merge or ("--no-commit", "--no-ff")), "main", check=False)
+        return repo
+
+
+# German f.a and f.b, both machine drafts, translated from today's English.
+POINT = {"de.json": {"f.a": "Verlust {w:$}", "f.b": "Niemand"},
+         "de.base.json": {"f.a": "Lost {w:$}", "f.b": "No staff"},
+         "de.ai.json": {"f.a": "gpt", "f.b": "gpt"}}
+STORE = {"f.a": {"en": "Lost {w:$}", "of": ["de"], "ai": {"de": "gpt"}},
+         "f.b": {"en": "No staff", "of": ["de"], "ai": {"de": "gpt"}}}
+
+
 class FoldTests(unittest.TestCase):
-    def tree(self, tables, store, legacy):
-        tree = Tree(tables, store, legacy)
-        self.addCleanup(tree.close)
-        return tree
+    def test_a_review_on_the_branch_survives_when_git_deletes_the_unchanged_base_file(self):
+        # The branch reviewed f.a: de.base.json is as it was, so the merge
+        # deletes it; only de.ai.json is left, as a conflict.
+        repo = Repo.merged(self, POINT, {"base.json": STORE}, {"de.ai.json": {"f.b": "gpt"}})
+        self.assertFalse(os.path.exists(os.path.join(repo.root, "i18n", "de.base.json")))
+        self.assertEqual(i18n.fold(ENGLISH, repo.root), {"de": {"bases": [], "marked": [], "unmarked": ["f.a"]}})
+        self.assertEqual(i18n.drafted("de", repo.root), {"f.b": "gpt"})
+        self.assertEqual(i18n.load("de", repo.root)[1], POINT["de.base.json"])
+        self.assertEqual(i18n.languages(repo.root), ["de"])
 
-    def test_fold_takes_the_old_files_in_and_deletes_them(self):
-        # A branch from before base.json drafted f.c and redid f.a for a changed
-        # English; main meanwhile reviewed f.b and recorded a newer f.d.
-        tree = self.tree({"de": {"f.a": "Verlust {w:$}", "f.b": "Niemand", "f.c": "Frisch", "f.d": "Zu"},
-                          "fr": {"f.a": "Perte", "f.b": "Personne"}},
-                         {"f.a": {"en": "Lost {w:$} yesterday", "of": ["de", "fr"]},
-                          "f.b": {"en": "No staff", "of": ["de", "fr"]}, "f.d": {"en": "Closed", "of": ["de"]}},
-                         {"de.base.json": {"f.a": "Lost {w:$}", "f.b": "No staff", "f.c": "Fresh",
-                                           "f.d": "Closed before"},
-                          "de.ai.json": {"f.a": "gpt", "f.b": "gpt", "f.c": "gpt", "f.gone": "gpt"}})
-        with self.assertRaisesRegex(i18n.CatalogueError, "fold"):
-            i18n.load("de", tree.root)
-        self.assertEqual(i18n.languages(tree.root), ["de", "fr"])
-        main = {"de": {"f.a": "Verlust {w:$} gestern", "f.b": "Niemand", "f.d": "Zu"},
-                "fr": {"f.a": "Perte", "f.b": "Personne"}}
-        taken = i18n.fold(ENGLISH, tree.root, main)
-        # f.b keeps main's review: the wording is main's, and the branch's mark predates it.
-        self.assertEqual(taken, {"de": {"bases": ["f.a", "f.c"], "marked": ["f.a", "f.c", "f.gone"], "unmarked": []}})
-        self.assertEqual(sorted(os.listdir(tree.path(""))), ["base.json", "de.json", "fr.json"])
-        self.assertEqual(i18n.load("de", tree.root)[1],
-                         {"f.a": "Lost {w:$}", "f.b": "No staff", "f.c": "Fresh", "f.d": "Closed"})
-        self.assertEqual(i18n.drafted("de", tree.root), {"f.a": "gpt", "f.c": "gpt", "f.gone": "gpt"})
-        self.assertEqual(i18n.load("fr", tree.root)[1], {"f.a": "Lost {w:$} yesterday", "f.b": "No staff"})
-        self.assertEqual(i18n.fold(ENGLISH, tree.root), {}, "nothing left to fold")
+    def test_a_review_of_the_last_draft_survives_a_clean_merge_and_its_commit(self):
+        # The branch reviewed both keys, so the old _write() deleted
+        # de.ai.json; the merge is clean and leaves no old file at all.
+        for merge in (("--no-commit", "--no-ff"), ("--no-edit", "--no-ff")):
+            repo = Repo.merged(self, POINT, {"base.json": STORE}, {"de.ai.json": None}, *merge)
+            self.assertEqual(i18n._legacy(repo.root), [])
+            self.assertEqual(i18n.fold(ENGLISH, repo.root),
+                             {"de": {"bases": [], "marked": [], "unmarked": ["f.a", "f.b"]}}, merge)
+            self.assertEqual(i18n.drafted("de", repo.root), {}, merge)
 
-    def test_fold_keeps_the_older_english_of_a_key_main_has_only_in_another_language(self):
-        # Main translated f.a in French alone, from today's English. The branch
-        # drafted it in German from an older English, and the merge brought
-        # that German into de.json. German records no English on main, so the
-        # old file's stands: the draft stays stale and marked, and never ships.
-        english = {"f.a": "Lost {w:$} today"}
-        tree = self.tree({"de": {"f.a": "Verlust {w:$}"}, "fr": {"f.a": "Perte {w:$} aujourd'hui"}},
-                         {"f.a": {"en": "Lost {w:$} today", "of": ["fr"]}},
-                         {"de.base.json": {"f.a": "Lost {w:$}"}, "de.ai.json": {"f.a": "gpt"}})
-        self.assertEqual(i18n.fold(english, tree.root), {"de": {"bases": ["f.a"], "marked": ["f.a"], "unmarked": []}})
-        self.assertEqual(i18n.load("de", tree.root)[1], {"f.a": "Lost {w:$}"})
-        self.assertEqual(i18n.drafted("de", tree.root), {"f.a": "gpt"})
-        self.assertEqual(i18n.shipped("de", english, tree.root), {}, "stale: it ships nothing")
-        self.assertEqual(i18n.load("fr", tree.root)[1], {"f.a": "Lost {w:$} today"})
+    def test_a_redraft_on_the_branch_keeps_its_mark_over_a_review_on_main(self):
+        main = {"base.json": {"f.a": {"en": "Lost {w:$}", "of": ["de"]}, "f.b": STORE["f.b"]}}
+        branch = {"de.json": {"f.a": "Verlust: {w:$}", "f.b": "Niemand"},
+                  "de.ai.json": {"f.a": "gpt-new", "f.b": "gpt"}}
+        repo = Repo.merged(self, POINT, main, branch)
+        self.assertEqual(i18n.fold(ENGLISH, repo.root), {"de": {"bases": [], "marked": ["f.a"], "unmarked": []}})
+        self.assertEqual(i18n.drafted("de", repo.root), {"f.a": "gpt-new", "f.b": "gpt"})
 
-    def test_fold_keeps_a_review_the_branch_made(self):
-        # Both sides record the same English for f.a and f.b, both drafts on
-        # main. The branch ran `reviewed de f.a`, so its de.ai.json lacks f.a:
-        # main's mark on it goes, and f.b stays marked.
-        store = {"f.a": {"en": "Lost {w:$}", "of": ["de"], "ai": {"de": "gpt"}},
-                 "f.b": {"en": "No staff", "of": ["de"], "ai": {"de": "gpt"}}}
-        tables = {"de": {"f.a": "Verlust {w:$}", "f.b": "Niemand"}}
-        bases = {"f.a": "Lost {w:$}", "f.b": "No staff"}
-        for main in (None, tables):
-            tree = self.tree(tables, store, {"de.base.json": bases, "de.ai.json": {"f.b": "gpt"}})
-            self.assertEqual(i18n.fold(ENGLISH, tree.root, main),
-                             {"de": {"bases": [], "marked": [], "unmarked": ["f.a"]}}, main)
-            self.assertEqual(i18n.drafted("de", tree.root), {"f.b": "gpt"})
-            self.assertEqual(i18n.load("de", tree.root)[1], bases)
-        # Without the branch's marks file there is no telling, so main's marks stay.
-        tree = self.tree(tables, store, {"de.base.json": bases})
-        self.assertEqual(i18n.fold(ENGLISH, tree.root), {"de": {"bases": [], "marked": [], "unmarked": []}})
-        self.assertEqual(i18n.drafted("de", tree.root), {"f.a": "gpt", "f.b": "gpt"})
+    def test_a_review_on_main_stands_against_the_branch_s_older_mark(self):
+        main = {"base.json": {"f.a": {"en": "Lost {w:$}", "of": ["de"]}, "f.b": STORE["f.b"]}}
+        repo = Repo.merged(self, POINT, main, {"de.ai.json": {"f.a": "gpt", "f.b": "gpt", "f.x": "gpt"}})
+        self.assertEqual(i18n.fold(ENGLISH, repo.root)["de"]["marked"], [])
+        self.assertEqual(i18n.drafted("de", repo.root), {"f.b": "gpt"})
 
-    def test_fold_keeps_a_redraft_the_branch_made_over_a_review_on_main(self):
-        # Main reviewed f.a's German; the branch redrafted it from the same
-        # English, and the merge kept the branch's wording. Its mark wins, so
-        # a later import-draft does not take the draft for a person's.
-        store = {"f.a": {"en": "Lost {w:$}", "of": ["de"]}}
-        legacy = {"de.base.json": {"f.a": "Lost {w:$}"}, "de.ai.json": {"f.a": "gpt-new"}}
-        main = {"de": {"f.a": "Verlust {w:$} (geprüft)"}}
-        for wording, main_tables, want in (
-                ("Verlust {w:$} (Entwurf)", main, {"f.a": "gpt-new"}),
-                ("Verlust {w:$} (Entwurf)", None, {"f.a": "gpt-new"}),
-                # The merge kept main's reviewed wording: main's review stands.
-                ("Verlust {w:$} (geprüft)", main, {})):
-            tree = self.tree({"de": {"f.a": wording}}, store, legacy)
-            got = i18n.fold(ENGLISH, tree.root, main_tables)
-            self.assertEqual(got, {"de": {"bases": [], "marked": sorted(want), "unmarked": []}}, wording)
-            self.assertEqual(i18n.drafted("de", tree.root), want, wording)
+    def test_main_s_mark_stays_when_the_conflict_kept_main_s_redraft(self):
+        # Main redrafted f.a; the branch edited it by hand and reviewed it.
+        # The conflict went to main's words, which nobody has reviewed.
+        main = {"de.json": {"f.a": "Verlust (neu) {w:$}", "f.b": "Niemand"},
+                "base.json": {"f.a": {"en": "Lost {w:$}", "of": ["de"], "ai": {"de": "gpt-new"}}, "f.b": STORE["f.b"]}}
+        branch = {"de.json": {"f.a": "Verlust (Hand) {w:$}", "f.b": "Niemand"}, "de.ai.json": {"f.b": "gpt"}}
+        repo = Repo.merged(self, POINT, main, branch)
+        repo.put({"de.json": main["de.json"]})
+        self.assertEqual(i18n.fold(ENGLISH, repo.root), {"de": {"bases": [], "marked": [], "unmarked": []}})
+        self.assertEqual(i18n.drafted("de", repo.root), {"f.a": "gpt-new", "f.b": "gpt"})
+
+    def test_without_a_merge_fold_asks_which_side_is_which(self):
+        repo = Repo(self)
+        repo.commit({**POINT, "base.json": STORE}, "both")
+        with self.assertRaisesRegex(i18n.CatalogueError, "--branch"):
+            i18n.fold(ENGLISH, repo.root)
+        self.assertEqual(i18n.fold(ENGLISH, repo.root, "HEAD", "HEAD")["de"]["unmarked"], [])
+        self.assertEqual(i18n._legacy(repo.root), [], "the work tree's old files are gone")
+
+    def test_the_branch_s_english_fills_and_wins_where_it_is_today_s(self):
+        # Main translated f.a in French alone, from today's English; the branch
+        # drafted German f.a from an older one and f.c afresh, and redid f.b
+        # for a changed English main has not caught up with.
+        english = {"f.a": "Lost {w:$} today", "f.b": "No staff at all", "f.c": "Fresh"}
+        point = {"de.json": {"f.b": "Niemand"}, "de.base.json": {"f.b": "No staff"}, "de.ai.json": {}}
+        main = {"fr.json": {"f.a": "Perte {w:$}"},
+                "base.json": {"f.a": {"en": "Lost {w:$} today", "of": ["fr"]}, "f.b": {"en": "No staff", "of": ["de"]}}}
+        branch = {"de.json": {"f.a": "Verlust {w:$}", "f.b": "Gar niemand", "f.c": "Frisch"},
+                  "de.base.json": {"f.a": "Lost {w:$}", "f.b": "No staff at all", "f.c": "Fresh"},
+                  "de.ai.json": {"f.a": "gpt", "f.b": "gpt", "f.c": "gpt"}}
+        repo = Repo.merged(self, point, main, branch)
+        self.assertEqual(i18n.fold(english, repo.root)["de"]["bases"], ["f.a", "f.b", "f.c"])
+        self.assertEqual(i18n.load("de", repo.root)[1], branch["de.base.json"])
+        self.assertEqual(i18n.drafted("de", repo.root), {"f.a": "gpt", "f.b": "gpt", "f.c": "gpt"})
+        self.assertEqual(i18n.shipped("de", english, repo.root), {"f.b": "Gar niemand", "f.c": "Frisch"},
+                         "German f.a was made from an older English, so it does not ship")
+        self.assertEqual(i18n.load("fr", repo.root)[1], {"f.a": "Lost {w:$} today"})
 
 
 if __name__ == "__main__":

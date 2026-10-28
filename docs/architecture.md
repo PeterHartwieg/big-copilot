@@ -997,18 +997,24 @@ and marks from `base.json` (git history keeps their text). `status --complete` a
 missing and stale keys, for a translation pull request.
 
 Before `base.json` each language had an `i18n/<lang>.base.json` and an `i18n/<lang>.ai.json`.
-A branch from before the change that merges main gets a modify/delete conflict on those it
-touched: keep the branch's copies and run `python tools/i18n.py fold`, which takes them into
-`base.json` and deletes them. Until then `load()` and `drafted()` refuse to read, so the
-build and every command that reads the translations stop and name `fold`. The old file
-fills every key `base.json` records no English for in that language, draft mark included.
-Where both record one, `base.json`'s stays unless only the old file's is today's English.
-Where both record the same English and the branch's `<lang>.ai.json` is there, the
-branch's mark or the lack of one wins when `<lang>.json` holds the branch's wording (it
-redrafted or reviewed the key); `fold` reads main's wording from `MERGE_HEAD`, and with no
-merge in progress takes every such wording as the branch's. Where the wording is main's
-too, an unmarked side wins, as only a review takes a mark off and keeps the words. `fold`
-lists every mark it took or dropped, for the author to check.
+A branch from before the change that merges main runs `python tools/i18n.py fold` before it
+commits the merge (or right after, or during a rebase). `fold` reads the branch's old files
+and its own `<lang>.json` from the branch's commit and main's `<lang>.json` from main's
+(`merge_sides()`: `HEAD` and `MERGE_HEAD`, `REBASE_HEAD` and the rebase's onto, or a merge
+commit's two parents), because git deletes an old file the branch did not change, and drops
+`<lang>.ai.json` altogether once a branch reviewed its last draft. With none of those it
+stops and asks for `--branch REF --main REF`. It deletes any old file the merge left in the
+work tree; while one is there, `load()` and `drafted()` refuse to read, so the build and every
+command that reads the translations stop and name `fold`.
+
+The branch's English fills every key `base.json` records none for in that language, and
+wins where only it is today's English; such a key takes the branch's draft mark too. For
+every other key both sides record the same English for, a mark follows the wording
+`<lang>.json` kept: the branch's mark (or its lack) when the merge kept the branch's words
+and they differ from main's, as after a redraft or a review with an edit on the branch, and
+no mark when all three wordings agree and the branch has none, since only a review takes a
+mark off and keeps the words. Anything else keeps main's mark, so no guess reverses a
+reviewer's. `fold` lists every mark it took or dropped, for the author to check.
 
 `glossary de --out <path>` and `draft-sheet de --out <path>` read the installed game's
 `en.json` and `de.json` for the game's own words (address form: du, as the game's German

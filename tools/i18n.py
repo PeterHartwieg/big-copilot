@@ -9,7 +9,7 @@
     python tools/i18n.py draft-sheet LANG [--out PATH] [--review]  what a translator has to do, with context
     python tools/i18n.py import-draft LANG FILE --model M  take a machine draft in, marked unreviewed
     python tools/i18n.py reviewed LANG KEY ... | --all  a native speaker has checked KEY
-    python tools/i18n.py fold                      take in the per-language base and draft files of an older branch
+    python tools/i18n.py fold [--branch REF --main REF]  take in an older branch's per-language base and draft files
 
 The English is never kept in a file: it stays at the call site, beside its key
 (docs/architecture.md, "UI text"), and `extract` reads it from there:
@@ -56,10 +56,11 @@ mark names the model that wrote it until a native speaker checks it
 review; they never fail it.
 
 Before base.json each language had an i18n/<lang>.base.json and an
-i18n/<lang>.ai.json. While one of those is there, load() and drafted() refuse
-to read, so every command that reads the translations (the build's ship()
-too) stops and names `fold`. `fold` takes them into base.json and deletes
-them: a branch from before the change runs it after merging main.
+i18n/<lang>.ai.json. A branch from before the change runs `fold` when it
+merges main: it reads those files from the branch's commit, since the merge
+may have deleted them (fold()). While one is left in the work tree, load()
+and drafted() refuse to read, so every command that reads the translations
+(the build's ship() too) stops and names `fold`.
 
 `glossary` and `draft-sheet` read the installed game's text. That text is the
 game's, so neither writes into this repository.
@@ -789,58 +790,69 @@ def languages(root: str = ROOT) -> list[str]:
                   if n.endswith(".json") and n != BASE_FILE and not n.endswith(LEGACY_SUFFIXES))
 
 
-def merging_tables(root: str = ROOT) -> dict | None:
-    """{lang: table} of the other side of a merge in progress (MERGE_HEAD),
-    which is main when a branch merges main; None when no merge is under way."""
+def _git(root: str, *args: str):
     import subprocess
-
-    def git(*args):
-        return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True, encoding="utf-8")
-
-    if git("rev-parse", "-q", "--verify", "MERGE_HEAD").returncode != 0:
-        return None
-    out = {}
-    for name in git("ls-tree", "--name-only", "MERGE_HEAD", "i18n/").stdout.split():
-        lang = os.path.basename(name)[:-5]
-        if name.endswith(".json") and "." not in lang and os.path.basename(name) != BASE_FILE:
-            shown = git("show", f"MERGE_HEAD:{name}")
-            out[lang] = json.loads(shown.stdout) if shown.returncode == 0 else {}
-    return out
+    return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True, encoding="utf-8")
 
 
-def fold(english: dict | None = None, root: str = ROOT, main: dict | None = None) -> dict:
-    """Take the files base.json replaced (i18n/<lang>.base.json and
-    <lang>.ai.json, which a branch from before it still has after merging
-    main) into base.json, and delete them. `main` is main's {lang: table}
-    (merging_tables()), None when it cannot be known. Returns, per language,
-    {"bases": keys whose English came from the old file, "marked": keys
-    whose draft mark did, "unmarked": keys whose base.json mark went}, so the
-    author can check what changed.
+def _at(root: str, ref: str, name: str) -> dict:
+    """i18n/<name> as commit `ref` has it; {} when it has none."""
+    got = _git(root, "show", f"{ref}:i18n/{name}")
+    return json.loads(got.stdout) if got.returncode == 0 else {}
 
-    The old file fills each key base.json records no English for in that
-    language, with its draft mark. Where both record one, base.json's stays,
-    unless only the old file's is today's English: then the branch translated
-    a changed English, and its base and mark win. Where both record the same
-    English and the branch's <lang>.ai.json is there, its mark or the lack of
-    one wins when the translation in <lang>.json is the branch's (it differs
-    from main's, or main's is unknown): the branch redrafted the key, or
-    reviewed it. Where the translation is main's too, an unmarked side wins,
-    as only a review takes a mark off and leaves the wording. A mark the old
-    file holds for a key neither file has an English for comes along too.
-    Every other mark stays as base.json has it."""
-    folder = os.path.join(root, "i18n")
-    names = _legacy(root)
-    if not names:
-        return {}
+
+def merge_sides(root: str = ROOT) -> tuple[str, str] | None:
+    """(the branch's commit, main's): HEAD and MERGE_HEAD during a merge,
+    REBASE_HEAD and the rebase's onto during a rebase, HEAD^1 and HEAD^2 on a
+    merge commit; None when git shows none of those."""
+    def has(ref):
+        return _git(root, "rev-parse", "-q", "--verify", ref).returncode == 0
+    if has("MERGE_HEAD"):
+        return "HEAD", "MERGE_HEAD"
+    if has("REBASE_HEAD"):
+        for kind in ("rebase-merge", "rebase-apply"):
+            path = os.path.join(root, _git(root, "rev-parse", "--git-path", f"{kind}/onto").stdout.strip())
+            if os.path.isfile(path):
+                with open(path, encoding="utf-8") as fh:
+                    return "REBASE_HEAD", fh.read().strip()
+    if has("HEAD^2"):
+        return "HEAD^1", "HEAD^2"
+    return None
+
+
+def fold(english: dict | None = None, root: str = ROOT, branch: str | None = None, main: str | None = None) -> dict:
+    """Take a branch's files from before base.json (i18n/<lang>.base.json and
+    <lang>.ai.json) into base.json after it merged main, and delete any left
+    in the work tree. They and the branch's own <lang>.json are read from the
+    branch's commit, and main's <lang>.json from main's (merge_sides(), or
+    `branch` and `main` as given), because a merge deletes the old files it
+    sees no change in. Returns, per language, {"bases": keys whose English
+    came from the branch, "marked": keys whose draft mark did, "unmarked":
+    keys whose base.json mark went}, so the author can check what changed.
+
+    The branch's English fills each key base.json records none for in that
+    language, and replaces base.json's where only the branch's is today's
+    English; such a key takes the branch's draft mark, or loses base.json's.
+    For every other key both sides record the same English for (or none), a
+    mark follows the wording <lang>.json kept: the branch's when it kept the
+    branch's words and they differ from main's (a redraft or a review on the
+    branch), and no mark when all three wordings agree and the branch has
+    none (only a review takes a mark off and keeps the words). Otherwise
+    main's mark stays, so a reviewer's mark is never reversed by a guess."""
+    sides = None if branch and main else merge_sides(root)
+    if not (branch and main) and sides is None:
+        raise CatalogueError("no merge, rebase or merge commit shows which side is the branch; "
+                             "give --branch REF and --main REF")
+    branch, main = branch or sides[0], main or sides[1]
+    names = [os.path.basename(n) for n in _git(root, "ls-tree", "--name-only", f"{branch}:i18n").stdout.split()]
+    langs = sorted({n[:-len(s)] for n in names for s in LEGACY_SUFFIXES if n.endswith(s)})
     english = catalogue() if english is None else english
     store = _store(root)
-    langs = sorted({name[:-len(suffix)] for name in names for suffix in LEGACY_SUFFIXES if name.endswith(suffix)})
     changes, report = {}, {}
     for lang in langs:
         base, marks = _shares(store, lang)
-        table = _flat(root, f"{lang}.json")
-        old, old_marks = _flat(root, f"{lang}.base.json"), _flat(root, f"{lang}.ai.json")
-        has_marks = os.path.isfile(os.path.join(folder, f"{lang}.ai.json"))
+        old, old_marks = _at(root, branch, f"{lang}.base.json"), _at(root, branch, f"{lang}.ai.json")
+        words, ours, theirs = _flat(root, f"{lang}.json"), _at(root, branch, f"{lang}.json"), _at(root, main, f"{lang}.json")
         got = {"bases": [], "marked": [], "unmarked": []}
 
         def mark(key, model):
@@ -857,20 +869,18 @@ def fold(english: dict | None = None, root: str = ROOT, main: dict | None = None
                 base[key] = text
                 got["bases"].append(key)
                 mark(key, old_marks.get(key))
-            elif text == base[key] and has_marks:
-                theirs = main is None or table.get(key) != main.get(lang, {}).get(key)
-                if theirs:
-                    mark(key, old_marks.get(key))
-                elif key not in old_marks:
-                    mark(key, None)
-        for key, model in sorted(old_marks.items()):
-            if key not in old and key not in base and key not in marks:
-                mark(key, model)
+        for key in sorted((set(base) | set(marks) | set(old_marks)) - set(got["bases"])):
+            if base.get(key) != old.get(key):
+                continue
+            if words.get(key) == ours.get(key) != theirs.get(key):
+                mark(key, old_marks.get(key))
+            elif words.get(key) == ours.get(key) == theirs.get(key) and key not in old_marks:
+                mark(key, None)
         changes[lang] = (None, base, marks)
         report[lang] = {kind: sorted(keys) for kind, keys in got.items()}
     _rewrite(root, changes)
-    for name in names:
-        os.remove(os.path.join(folder, name))
+    for name in _legacy(root):
+        os.remove(os.path.join(root, "i18n", name))
     return report
 
 
@@ -1176,7 +1186,9 @@ def main(argv=None) -> int:
                      help="fail on anything but a complete, current translation")
     p = sub.add_parser("prune", help="drop orphaned keys from i18n/<lang>.json and i18n/base.json")
     p.add_argument("lang", nargs="?")
-    sub.add_parser("fold", help="take an older branch's i18n/<lang>.base.json and .ai.json into i18n/base.json")
+    p = sub.add_parser("fold", help="take an older branch's i18n/<lang>.base.json and .ai.json into i18n/base.json")
+    p.add_argument("--branch", help="the branch's commit, when no merge or rebase shows it")
+    p.add_argument("--main", help="main's commit, when no merge or rebase shows it")
     p = sub.add_parser("ship", help="write web/i18n/<lang>.json")
     p.add_argument("--check", action="store_true", help="write nothing; fail when web/i18n/ is stale")
     p = sub.add_parser("accept", help="record the current English as the base of translated keys")
@@ -1247,11 +1259,7 @@ def main(argv=None) -> int:
                 print(f"{lang}: " + (", ".join(f"{len(v)} dropped from {PRUNED[k].format(lang=lang)}"
                                                for k, v in dropped.items()) or "nothing to prune"))
         elif args.cmd == "fold":
-            main_tables = merging_tables()
-            if main_tables is None:
-                print("no merge in progress, so main's wording is unknown: where both sides record the same "
-                      "English, the branch's draft marks win")
-            for lang, got in fold(main=main_tables).items():
+            for lang, got in fold(branch=args.branch, main=args.main).items():
                 print(f"{lang}: from its old files, {len(got['bases'])} English bases and {len(got['marked'])} "
                       f"draft marks taken into i18n/{BASE_FILE}, {len(got['unmarked'])} marks dropped as reviewed")
                 for kind, label in (("marked", "mark taken"), ("unmarked", "mark dropped")):
