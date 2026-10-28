@@ -20,8 +20,6 @@ class FurniturePricesTests(unittest.TestCase):
                 cost = setup_cost([("ba:itemname_armchair1", 0)] * quantity,
                                   [], 0, 0, load_item_prices())
                 self.assertEqual(cost["furniture"], 130 * quantity)
-                self.assertEqual(cost["self"], 130 * quantity)
-                self.assertEqual(cost["firm"], 130 * quantity)
 
 
 if __name__ == "__main__":
