@@ -5373,6 +5373,14 @@ const spPlanWrite = (key, which) => {
   if(which === "full" || which === "open") remember(SP_PLAN_STORE + at, which);
   else forget(SP_PLAN_STORE + at);
 };
+/* An office's plan (spOfficeRoster()): its own row, and the pick between
+   that row and its optional Every open hour plan (`openCover`), which
+   shares the shops' remembered "open" pick. */
+const spOfficeBase = key => (Array.isArray(D.officeStaffing) ? D.officeStaffing : [])
+  .find(r => r.key === key && !r.failed) || null;
+const spOfficePlanOf = key => spPlanRead(key) === "open" && spOfficeBase(key)?.openCover
+  && !spOfficeBase(key).openCover.failed ? "open" : "office";
+const spOfficeReplaces = row => !!row && (row.demandBased || row.variant === "open");
 /* A demand test needs a serving station to test. A site with none has
    cleaning and security alone, and both plans would be the same week. */
 const spOffersFull = row => !!(row && !row.failed && row.fullCover
@@ -5483,7 +5491,7 @@ const spSpareIds = b => {
      called spare. */
   const office = base ? null : [...(Array.isArray(D.officeStaffing) ? D.officeStaffing : []),
     ...(((D.factoryStaffing || {}).cap) || [])].find(r => r.key === b.key);
-  const row = base && !base.failed ? spShownRow(base) : office;
+  const row = base && !base.failed ? spShownRow(base) : b.status === "office" ? gwOfficeRow(b.key) : office;
   if(!row) return ids;
   const people = row.people || (base || {}).people || [];
   const used = new Set((row.shifts || []).filter(s => s.p !== null && s.p !== undefined)
@@ -6601,21 +6609,30 @@ function spPlanPick(base, full){
 function spOfficeRoster(b){
   if(!odNeed("officeStaffing")) return odWaitHtml("officeStaffing");
   const row = gwOfficeRow(b.key);
+  const base = spOfficeBase(b.key);
+  const every = row?.variant === "open";
+  const seg = (plan, label) => `<a href="#" data-plan="${plan}"${
+    (plan === "open") === every ? ' class="on" aria-current="true"' : ""}>${label}</a>`;
+  const pick = base?.openCover && !base.openCover.failed
+    ? `<div class="sp-pick"><span class="seg sp-plans" role="group" aria-label="${attr(tt("sp.pick.plan", "Plan"))}">${
+      seg("demand", base.demandBased ? tt("sp.pick.demand", "Demand plan") : tt("sp.gw.plan.office", "Office default"))}${
+      seg("open", `${tt("sp.pick.openall", "Every open hour")}<span class="feature-new" data-new-feature="office-open-hours" hidden>${tt("nav.new", "New")}</span>`)}</span></div>` : "";
   /* No office default to add: Staff this site still, where people move in or out. */
-  if(!row || (!row.demandBased && !(row.shifts || []).length)){
+  if(!row || (!spOfficeReplaces(row) && !(row.shifts || []).length && !pick)){
     const staff = gwLink() ? gwStaffButton(b.key, true) : "";
     return staff ? `<section class="sec rv" data-block="roster" id="sp-roster" data-site="${attr(b.key)}">
     ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster"})}${staff}</section>` : "";
   }
   const comp = gwOfficeComputers(row);
   /* The demand plan replaces computer hours; the fallback only adds. */
-  const now = ((row.current || {}).list || []).filter(s => comp.has(s.s)), after = row.demandBased ? (row.shifts || []).filter(s => comp.has(s.s) && !spNobody(s.p)) : now.concat(gwRosterWeek(row).added);
+  const now = ((row.current || {}).list || []).filter(s => comp.has(s.s)), after = spOfficeReplaces(row) ? (row.shifts || []).filter(s => comp.has(s.s) && !spNobody(s.p)) : now.concat(gwRosterWeek(row).added);
   const people = list => new Set(list.map(s => s.p).filter(p => p !== null && p !== undefined)).size;
   const open = (row.shifts || []).filter(s => spNobody(s.p));
   const facts = [[tt("sp.off.hours", "Hours / week"), gwHours(now), gwHours(after)], [tt("sp.off.people", "People"), people(now), people(after)]];
   return `<section class="sec rv" data-block="roster" id="sp-roster" data-site="${attr(b.key)}">
-    ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", quiet: row.demandBased ? tt("sp.off.demand", "Customer demand by weekday and hour") : tt("sp.off.quiet", "the office default: {n} always on, every computer on weekdays 8 to 22", {n: row.alwaysOn || 0})})}
-    <p class="quiet">${row.demandBased ? tt("sp.off.demand.after", "Computers now → demand plan; cleaning and other duties stay as they are.") : tt("sp.off.after", "Computers now → after adding the office default where they are free")}</p>
+    ${sechead(tt("sp.roster.title", "Staffing"), {icon: "roster", quiet: every ? tt("sp.off.open.quiet", "Every computer during every open hour") : row.demandBased ? tt("sp.off.demand", "Customer demand by weekday and hour") : tt("sp.off.quiet", "the office default: {n} always on, every computer on weekdays 8 to 22", {n: row.alwaysOn || 0})})}
+    ${pick}
+    <p class="quiet">${every ? tt("sp.off.open.after", "Computers now → every open hour; opening hours, cleaning and other duties stay as they are.") : row.demandBased ? tt("sp.off.demand.after", "Computers now → demand plan; cleaning and other duties stay as they are.") : tt("sp.off.after", "Computers now → after adding the office default where they are free")}</p>
     <div class="sp-offroster">${facts.map(([k, a, z]) => `<div><span>${k}</span><b>${a === z ? z : `<s>${a}</s> → ${z}`}</b></div>`).join("")}${
       open.length ? `<div><span>${tt("sp.off.open", "Waiting on a hire")}</span><b>${tt("sp.off.openh", "{n} h", {n: gwHours(open)})}</b></div>` : ""}</div>
     ${gwLink() ? gwRosterButtons(b.key) : `<p class="quiet">${tt("sp.off.link", "Link the game to write this week from here.")}</p>`}
@@ -18232,6 +18249,7 @@ function schedStatus(b){
   if(b.status === "office"){
     /* The office default where it plans the office (spOfficeRoster()). */
     const o = gwOfficeRow(b.key);
+    if(o?.variant === "open") return tt("sp.pick.openall", "Every open hour");
     if(o && o.demandBased) return tt("co.sched.office.demand", "Office: staffing follows customer demand");
     return o && (o.shifts || []).length && o.computers
       ? tt("co.sched.office.plan", {one: "Office default: {s} of {n} computer staffed", other: "Office default: {s} of {n} computers staffed"},
@@ -18316,6 +18334,7 @@ function drawSchedules(){
     <div class="sch-grid"><nav class="sch-list" aria-label="${attr(tt("co.sched.list", "Businesses to schedule"))}">${group(tt("nav.sub.shops", "Shops"), shops)}${
       group(tt("co.sched.offices", "Offices"), offices)}${facs}</nav><div class="sch-detail" id="schDetail">${detail}</div></div>`;
   schedApplyView();
+  featureDiscovery.refresh();
 }
 
 /* Staffing › Staff needs: one page. First what the people ask for (the staff
@@ -23150,20 +23169,25 @@ const wireRoster = once(() => {
     spPlanWrite(site(a), a.dataset.plan);
     const b = (D.businesses || []).find(x => x.key === site(a));
     if(!b) return;
+    /* The office's Every open hour pick is its New badge's feature. */
+    const seen = () => b.status === "office" && a.dataset.plan === "open"
+      ? featureDiscovery.visit("office-open-hours") : featureDiscovery.refresh();
     /* On Staffing › Schedules the list beside the planner says the plan
        picked, so the view is drawn again, the pick keeping the keyboard. */
     if(s.closest("#schDetail")){
       drawSchedules(); wireAll();
       const back = q(`#sp-roster [data-plan="${a.dataset.plan}"]`);
       if(back) back.focus();
+      seen();
       return;
     }
     const box = document.createElement("div");
-    box.innerHTML = spRosterBlock(b).trim();
+    box.innerHTML = (b.status === "office" ? spOfficeRoster(b) : spRosterBlock(b)).trim();
     const fresh = box.firstElementChild;
     fresh.classList.add("in");
     fresh.id = s.id;
     s.replaceWith(fresh);
+    seen();
     const again = q(`[data-plan="${a.dataset.plan}"]`, fresh);
     if(again) again.focus();
   });

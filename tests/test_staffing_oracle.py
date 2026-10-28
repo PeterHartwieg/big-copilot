@@ -512,6 +512,9 @@ class OracleSweepTest(unittest.TestCase):
                                  coverage=False, skilled_only=True)
                 self.assertEqual(found, [], n)
                 self.assertEqual(office_cover(row), [], n)
+                opened = row["openCover"]
+                self.assertEqual(problems(opened, opened, "office", people, row["key"],
+                                          opened.get("_hire"), coverage=False, skilled_only=True), [], n)
 
     def test_factories(self):
         from tests.test_factory_staffing import People, hand_rows

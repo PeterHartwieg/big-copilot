@@ -964,6 +964,16 @@ weekly limit. There is no full-cover test and no hand-over for an office, and no
 measurement to start: Peter asked for the shop's logic (10 October 2026), and the
 earlier measurement's record is dropped from local history on its next write.
 
+**Every open hour (offices).** The office's Staffing block also offers an opt-in
+plan for every installed computer during every saved open hour, including nights
+and weekends. The existing demand/default plan remains selected until the player
+chooses this alternative; the choice is remembered per company and site in this
+browser. It preserves opening hours, cleaning and other duties, and applies the
+same employee and workstation requirements. Staff needs and schedule writes use
+the chosen plan. With no saved open hours, the alternative is unavailable. Like
+the retail open-hours option, it covers installed stations rather than limiting
+their count to building capacity; it is not a demand forecast.
+
 ### The rules every planned week keeps
 
 Every week the board plans or writes, for a shop, an office or a factory, keeps the game's

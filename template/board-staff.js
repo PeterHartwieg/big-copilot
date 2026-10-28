@@ -154,6 +154,7 @@ function hrVariant(site){
     return plans.demand ? "demand" : null;
   }
   if(site.kind === "factory") return plans[sizing] ? sizing : Object.keys(plans)[0] || null;
+  if(site.kind === "office" && plans.open && spOfficePlanOf(site.key) === "open") return "open";
   return plans.office ? "office" : Object.keys(plans)[0] || null;
 }
 function hrPlanRow(site, variant){
@@ -166,7 +167,8 @@ function hrPlanRow(site, variant){
   if(site.kind === "factory") return (((D.factoryStaffing || {})[variant]) || []).find(r => r.key === site.key && !r.failed) || null;
   const offices = D.officeStaffing;
   const list = Array.isArray(offices) ? offices : ((offices || {})[variant] || []);
-  return list.find(r => r.key === site.key && !r.failed) || null;
+  const row = list.find(r => r.key === site.key && !r.failed);
+  return (variant === "open" ? row?.openCover : row) || null;
 }
 /* Who a person is: the hiring payload's own table ({name, skills, wage,
    site, hours, demands}), else the plan's (a name). Their role is their
@@ -556,7 +558,7 @@ function hrWeek(S, fill, away, arriving, lost, o = {}){
     if(!row.full && spCoverOnly(row)) now.filter(s => !s.k).forEach(s => kept.add(s));
   } else {
     const owned = new Set((row.shifts || []).map(s => s.s));
-    now.filter(s => row.demandBased && S.site.kind === "office"
+    now.filter(s => spOfficeReplaces(row) && S.site.kind === "office"
       ? s.k || !gwOfficeComputers(row).has(s.s)
       : !owned.has(s.s) && !((row.stations || [])[s.s] || {}).skill).forEach(s => kept.add(s));
   }
@@ -782,7 +784,7 @@ const hrSendable = days => days.every(({shifts}) => shifts.every(s => Number.isI
    it hires. */
 function hrSiteWeek(S, fill, away, arriving, inbound, additive){
   const lost = {hours: 0};
-  if(S.site.kind === "office" && !(S.row || {}).demandBased && !inbound){
+  if(S.site.kind === "office" && !spOfficeReplaces(S.row) && !inbound){
     const base = gwOfficeRow(S.key);
     if(!base) return {days: [], lost, changes: false};
     const gone = s => away.has(((base.people || [])[s.p] || {}).id);
@@ -895,7 +897,7 @@ function hrRequest(m, o = {}){
     if(!weekly){ sites.push({address, expect: null, days: null}); return; }
     const wk = hrSiteWeek(S, at ? at.fill : [], away, arriving, !!(at && at.inbound), !!(at && at.additive && !inScope(S)));
     if(!at && !wk.changes) return;
-    const unreadableOffice = S.site.kind === "office" && S.row.demandBased
+    const unreadableOffice = S.site.kind === "office" && spOfficeReplaces(S.row)
       && gwRosterWeek(Object.assign({}, S.row, {office: true})).unreadable;
     if(unreadableOffice){
       unreadableSites.push(S);
@@ -1114,7 +1116,7 @@ function hrNoHoursHtml(){
 /* The plan the site's Staffing block shows and writes (spPlanOf()): its gap of people with no hours, or undefined. */
 function hrUnstaffedOf(S){
   const u = S.site.unstaffed || {};
-  return S.site.kind === "office" ? u.office : u[spPlanOf(spRosterRow(S.key)) || "demand"];
+  return S.site.kind === "office" ? u[spOfficePlanOf(S.key)] : u[spPlanOf(spRosterRow(S.key)) || "demand"];
 }
 function hrIdleHtml(m){
   const of = hrUnstaffedOf;
@@ -2015,9 +2017,9 @@ function hrReviewSites(req, phase, gone, status){
     const plan = !weekly ? (people ? tt("co.hire.plan.none", "no hours: assigned only") : tt("co.hire.plan.same", "its week stays as it is"))
       : at.additive ? tt("co.hire.plan.add", "its week as it is, with the reassigned hours added")
       : S.variant === "full" ? tt("co.hire.plan.full", "full cover 24/7: opens every day 0 to 24")
-      : S.variant === "open" ? (S.row && S.row.complete ? tt("co.hire.plan.open", "every station, the hours it opens")
+      : S.variant === "open" ? (S.site.kind === "office" || S.row && S.row.complete ? tt("co.hire.plan.open", "every station, the hours it opens")
         : tt("co.hire.plan.unread", "every station where nothing is measured yet"))
-      : S.site.kind === "office" && !(S.row || {}).demandBased && !at.inbound ? tt("co.hire.plan.office", "the office default, added where free")
+      : S.site.kind === "office" && !spOfficeReplaces(S.row) && !at.inbound ? tt("co.hire.plan.office", "the office default, added where free")
       : tt("co.hire.plan.board", "hours from the board's plan");
     /* Each site's own outcome once the action has run. */
     const said = phase !== "done" || (!weekly && !people) ? null : at.rest ? st[S.key] || "wait" : "done";
@@ -2476,7 +2478,7 @@ function hrFewer(m, req, rewritten){
     ...(req.rest || []).map(r => [r.S.key, r.body.days])]);
   const away = new Set(req.body.moves.map(x => x.employeeId));
   const sum = (map, id, h) => map.set(id, (map.get(id) || 0) + h);
-  return m.sites.filter(S => keys.has(S.key) && !(S.site.kind === "office" && !(S.row || {}).demandBased && !((req.touched.get(S.key) || {}).inbound)))
+  return m.sites.filter(S => keys.has(S.key) && !(S.site.kind === "office" && !spOfficeReplaces(S.row) && !((req.touched.get(S.key) || {}).inbound)))
     .flatMap(S => {
       const row = S.row || {};
       /* A row that does not carry the game's week: the plan's own figures. */

@@ -3713,8 +3713,9 @@ def _take_hires(rows) -> dict:
     """Each plan row's private `_hire` part, taken off it: {id(part): hire}.
 
     A shop's row carries one on itself, on its `fullCover` and on its
-    `openCover`; an office's and a factory's on the row. _hiring() reads them
-    by the row, which the build keeps alive.
+    `openCover`; an office has its row and optional `openCover`, and a
+    factory's is on the row. _hiring() reads them by the row, which the build
+    keeps alive.
     """
     out = {}
     for row in rows:
@@ -17744,7 +17745,8 @@ def _office_staffing(save: Save, names, businesses: list, grids: list, staff: li
     The row has the shop row's fields a write reads (`stations`, `people`,
     `shifts`, `current`, `roles`, `open`, `openAllHours` false) and its plan
     fields (`need`, `headcount`, `addPeople`, `shortHours`, ...), plus
-    `alwaysOn`, `computers` and `staffedComputers`.
+    `alwaysOn`, `computers` and `staffedComputers`. `openCover` is an optional
+    complete row with its own tables, for every computer during saved open hours.
     """
     by_key = {b["key"]: b for b in businesses}
     buildings = {
@@ -17783,6 +17785,20 @@ def _office_staffing(save: Save, names, businesses: list, grids: list, staff: li
                         "typeSlug": business["typeSlug"], "failed": True,
                         "error": _plan_failed(exc, f"the staffing of office {business['key']}")})
             continue
+        # Build the opt-in week independently. Only reuse bench people already
+        # reserved by the default, so merely offering it cannot change another
+        # site's default plan or spend the same unassigned person twice.
+        if not row.get("failed") and any(grid["open"]):
+            reserved = {p["id"] for p in took}
+            open_pool = [p for p in pool if p["addr"] or p["id"] in reserved]
+            open_state = {p["id"]: _copy_state(state[p["id"]]) for p in open_pool}
+            try:
+                row["openCover"], _ = _office_site_plan(
+                    save, names, business, building, grid, skill, open_pool, people,
+                    [p for p in bench if p["id"] in reserved], open_state, every_open=True)
+            except Exception as exc:
+                row["openCover"] = {"failed": True, "error": _plan_failed(
+                    exc, f"the open-hours staffing of office {business['key']}")}
         state.update(scratch)
         taken = {p["id"] for p in took}
         bench = [p for p in bench if p["id"] not in taken]
@@ -17818,7 +17834,7 @@ def _mod_office_fallback_issue(save, building, need, skill):
 
 
 def _office_site_plan(save, names, business, building, grid, skill, pool, people, bench,
-                      state) -> tuple:
+                      state, *, every_open=False) -> tuple:
     """One office's row of _office_staffing(), and who it drew off the bench."""
     label = names.label(skill) if names else skill
     stations = [
@@ -17828,11 +17844,22 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
     ]
     runs, always = _office_runs(len(stations), grid["open"], grid["door"])
     slots_open = grid["open"] if any(grid["open"]) else ALL_DAY_OPEN
-    run = _days_open(save, building)
-    daily = _open_day_average(save, building, slots_open) if run >= DEMAND_RUN_DAYS else None
-    need, demand_based = _office_need(grid, skill, runs, run, daily, _office_recent(save, building))
-    if _mod_office_fallback_issue(save, building, need, skill):
+    demand_based = False
+    if every_open:
+        slots_open = grid["open"]
+        need = {skill: {
+            "need": [[len(stations) if any(a <= h < z for a, z in day) else 0
+                      for h in range(24)] for day in slots_open],
+            "basis": [["open" if any(a <= h < z for a, z in day) else "closed"
+                       for h in range(24)] for day in slots_open],
+        }}
+    else:
+        run = _days_open(save, building)
+        daily = _open_day_average(save, building, slots_open) if run >= DEMAND_RUN_DAYS else None
+        need, demand_based = _office_need(grid, skill, runs, run, daily, _office_recent(save, building))
+    if not every_open and _mod_office_fallback_issue(save, building, need, skill):
         return _mod_staffing_blocked(business, ["office-unread-hours-with-mod-demand"]), []
+    replaces = demand_based or every_open
     fake = {"roles": [{"skill": skill, "label": label}], "stations": stations}
     usable_bench = [p for p in bench if _usable(p, skill, "serve")]
     current = _current_roster(save, building, {s["id"]: s for s in stations})
@@ -17843,9 +17870,9 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
     retained = [r for r in current["list"] if r["station"] not in owned or r["kind"] != "serve"]
     week = _place_week(fake, need, slots_open, [], pool, people, business, usable_bench,
                        state, groups=_station_groups(save, building),
-                       current=[r for r in current["list"] if r not in retained] if demand_based else current["list"],
-                       fixed=retained if demand_based else None, keep=demand_based)
-    if demand_based:
+                       current=[r for r in current["list"] if r not in retained] if replaces else current["list"],
+                       fixed=retained if replaces else None, keep=replaces)
+    if replaces:
         retained_people = {r["employee"] for r in retained}
         worked = {r["employee"] for r in week["shifts"]} | retained_people
         week["spareIds"] = _in_order(p["id"] for p in pool if p["addr"] and p["id"] not in worked)
@@ -17868,7 +17895,12 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
     }
     cost = {"current": money(_current_cost(current, wage_of)), "currentCover": 0.0}
     fields = _plan_fields(week, table, names, people, cost)
-    if not demand_based:
+    # The office UI draws hours and people, not demand grids. Keep the
+    # alternative's tables independent, but do not ship its redundant grids.
+    if every_open:
+        fields.pop("need", None)
+        fields.pop("basis", None)
+    if not replaces:
         fields.pop("basis", None)
     row = {
         "key": business["key"],
@@ -17878,7 +17910,7 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
         "label": label,
         # Computers staffed around the clock by the office default.
         "alwaysOn": always,
-        **({"demandBased": True} if demand_based else {}),
+        **({"variant": "open"} if every_open else {"demandBased": True} if demand_based else {}),
         # Shifts in the game's week _current_roster() drops or clamps (no
         # hours, reversed, outside 0-24): the page cannot send them back as
         # they are, so an office write is refused.
@@ -18252,26 +18284,40 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
                 if found is not None:
                     plans[mode] = found
         elif kind == "office":
-            found = take(offices.get(business["key"]))
+            row = offices.get(business["key"])
+            found = take(row)
             if found is not None:
                 plans["office"] = found
+            opened = take((row or {}).get("openCover"))
+            if opened is not None:
+                plans["open"] = opened
         # Staff with no hours (_unstaffed()): the hours a site's own people
         # would work that nobody works in the game's week now, against every
         # plan a shop's Staffing block may write -- the demand plan, full
         # cover, and the open-hours plan it writes for a new shop or one
         # without complete data -- which the page picks between as that block
-        # does (spPlanOf()); an office's office default.
+        # does (spPlanOf()); an office's office default and, where it has
+        # saved open hours, its opt-in Every open hour plan (`openCover`).
         unstaffed = {}
         base = shops.get(business["key"]) if kind == "shop" else offices.get(business["key"]) if kind == "office" else None
         if base and not base.get("failed"):
             pairs = (("demand", base.get("shifts")), ("full", (base.get("fullCover") or {}).get("shifts")),
                      ("open", (base.get("openCover") or {}).get("shifts"))) \
-                if kind == "shop" else (("office", base.get("shifts")),)
+                if kind == "shop" else (("office", base.get("shifts")),
+                                        ("open", (base.get("openCover") or {}).get("shifts")))
             # The game's week is read once a site, and two plans with the same
             # rows (a shop's full cover and its open-hours plan, on a shop
             # open around the clock) have the same answer.
             done, now = [], _unstaffed_now(base)
             for mode, shifts in pairs:
+                if kind == "office" and mode == "open":
+                    opened = base.get("openCover")
+                    if opened:
+                        gap = _unstaffed(opened, shifts or (), own.get(business["key"], set()),
+                                         training, _unstaffed_now(opened))
+                        if gap:
+                            unstaffed[mode] = gap
+                    continue
                 shifts = shifts or ()
                 gap = next((copy.deepcopy(found) for other, found in done if other == shifts),
                            False)
@@ -18311,6 +18357,7 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
             take(row)
     for row in office_staffing:
         take(row)
+        take(row.get("openCover"))
 
     employees = [e for e in save.items(save.root.get("EmployeeInstances")) if isinstance(e, dict)]
     bench = _in_order({
