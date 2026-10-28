@@ -8,9 +8,7 @@ rules are research/real-estate-2026-10-12/rules.md, the game's own code.
 """
 from __future__ import annotations
 
-import copy
 import json
-import math
 import os
 import tempfile
 import unittest

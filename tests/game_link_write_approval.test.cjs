@@ -3,11 +3,11 @@
 // helpers are tests/_game_link_write.cjs.
 const {test} = require('node:test');
 const H = require('./_game_link_write.cjs');
-const {assert, en, enRe, APPROVAL, ORIGIN, GIFTS, BARE, configure, applied, linked, button, passOn, holdRefresh, dialog, pair, WAITING, ready, kept, until} = H;
+const {assert, en, enRe, APPROVAL, ORIGIN, GIFTS, BARE, configure, applied, linked, button, passOn, holdRefresh, dialog, pair, WAITING, ready, kept} = H;
 
 for (const [outcome, said] of [['deny', en('nav.dlg.say.notallowed')], ['expire', en('nav.dlg.say.noanswergame')],
                                 ['popup_open', en('nav.dlg.pair.popup')]]) {
-  test(`the game\'s approval: ${outcome}`, async (t) => {
+  test(`the game's approval: ${outcome}`, async (t) => {
     const page = await linked(t);
     await configure({pair: outcome});
     await button(page, GIFTS).click();

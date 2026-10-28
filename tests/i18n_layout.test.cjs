@@ -260,7 +260,7 @@ async function measure(page){
              so brackets nest. Matched pairs go innermost first; what is left
              before a lone "]" opened earlier, and after a lone "[" closes later. */
           let outside = '['.repeat(carried) + text;
-          for(let was = ''; was !== outside;){ was = outside; outside = outside.replace(/\[[^\[\]]*\]/g, ''); }
+          for(let was = ''; was !== outside;){ was = outside; outside = outside.replace(/\[[^[\]]*\]/g, ''); }
           outside = outside.replace(/^[^]*\]/, '').replace(/\[[^]*$/, '').replace(/[\d\s.,:;$%+\-–—×·/()!?%'"‹›…#]+/g, '');
           if(outside.length > 1) english.push(`${area}: ${n.textContent.trim().slice(0, 60)}`);
         }

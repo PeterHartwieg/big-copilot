@@ -8,6 +8,7 @@ import struct
 import tempfile
 import unittest
 
+import ba_cli
 import ba_dashboard as d
 import ba_facts as f
 from ba_save import load_save, Save, SaveFormatError, Names
@@ -444,7 +445,7 @@ class BuildingFacts(unittest.TestCase):
                     cash=0, build=3671, schema=1, throttle=False, refuse=None)
         server = MockServer(mock, port=0).start(follow=False)
         self.addCleanup(server.stop)
-        game = d.GameLink(server.url, self.tmp.name)
+        game = ba_cli.GameLink(server.url, self.tmp.name)
         first = game.poll()
         self.assertTrue(first.endswith(".bcsave"))
         self.assertEqual(load_save(first).facts["stamp"], mock.stamp)

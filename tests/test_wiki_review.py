@@ -1,6 +1,5 @@
 """Regressions found when reviewing the generated catalogue with the reader."""
 from collections import Counter
-import json
 import os
 
 from tests.test_wiki_build import FixtureCase, LOCALE, CHEAPGIFT_HELP, build

@@ -3,9 +3,7 @@ const {boardHtml} = require('./_page.cjs');
 // NODE_PATH may point at an existing Playwright installation.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
-const {en, enRe} = require('./_i18n.cjs');
-const path = require('node:path');
-const fs = require('node:fs');
+const {enRe} = require('./_i18n.cjs');
 const {chromium} = require('playwright');
 
 let browser;

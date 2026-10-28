@@ -8,7 +8,8 @@ import urllib.request
 from http.server import ThreadingHTTPServer
 from types import SimpleNamespace
 
-from ba_dashboard import BoardHandler, WIKI_SERVED, compact_wiki, render, script_json
+from ba_cli import BoardHandler
+from ba_dashboard import WIKI_SERVED, compact_wiki, render, script_json
 
 ROOT = Path(__file__).resolve().parents[1]
 

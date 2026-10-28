@@ -682,8 +682,6 @@ test('the now/plan toggle swaps the plan for the fragments the game holds', asyn
     assert.match(await page.locator('#sp-roster .sp-gantt').getAttribute('class'), /sp-now/);
     // The tile carries both weeks either way round, and the toggle changes
     // neither: 42 blocks today, struck through, against 26 to drag in.
-    const tile = (await page.locator('#sp-roster .sp-ba > div').first().innerText())
-      .replace(/\s+/g, '');
     assert.match(await page.locator('#sp-roster .sp-ba > div').first().getAttribute('data-read'), enRe('sp.ba.hours', {entries: en('sp.n.entries', {n:26}), wasEntries: en('sp.n.entries', {n:42})}));
     assert.match(await page.locator('#sp-roster .sp-nowplan a.sp-on').innerText(), enRe('sp.view.now'));
   } finally { await page.close(); }
@@ -763,7 +761,6 @@ async function reticked(edit){
       localStorage.setItem('ba_dash_roster:' + key, JSON.stringify([spTickId(r, line)]));
       drawShop();
       const before = $$('#sp-roster .sp-shift.sp-done').length;
-      // eslint-disable-next-line no-new-func
       new Function('row', 'line', body)(r, line);
       drawShop();
       return [before, $$('#sp-roster .sp-shift.sp-done').length,

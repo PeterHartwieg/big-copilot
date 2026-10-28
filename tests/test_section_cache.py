@@ -34,7 +34,6 @@ class PlanningCacheTests(unittest.TestCase):
         return stable
 
     def test_hit_restores_all_worlds_private_hires_and_complete_payload(self):
-        producers = ('_staffing', '_office_staffing', '_factory_staffing')
         with patch.object(board, '_staffing', wraps=board._staffing) as shop, patch.object(board, '_office_staffing', wraps=board._office_staffing) as office, patch.object(board, '_factory_staffing', wraps=board._factory_staffing) as factory:
             first = self.build()
             expected = board.materialize_all(first)

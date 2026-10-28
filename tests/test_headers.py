@@ -35,6 +35,10 @@ STAMPED_FETCHERS = {
     "web/report.js": 0,
     "web/update.js": 0,
 }
+# The board script's other parts (template/board-*.js, spliced into board.js)
+# request none today, but a request moved into one is checked all the same.
+STAMPED_FETCHERS.update({path.relative_to(ROOT).as_posix(): 0
+                         for path in sorted((ROOT / "template").glob("board-*.js"))})
 
 
 def js_code(source: str) -> str:

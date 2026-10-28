@@ -334,7 +334,7 @@ async function cachedOverlay(request, env, ctx, lang, diagnostic) {
   const [stamp, current] = await Promise.all([buildStamp(request, env), revisionQuery(db).bind(lang).first()]);
   const cacheKey = revision => new URL(`/api/translations/_overlay/${OVERLAY_FORMAT}/${lang}/${revision}/${stamp}`, request.url).toString();
   if (stamp) {
-    let hit = null;
+    let hit;
     try { hit = await caches.default.match(cacheKey(current?.revision || 0)); } catch { hit = null; }
     if (hit) {
       const response = overlayReply(request, hit.body, current?.revision || 0, stamp);

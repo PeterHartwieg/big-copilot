@@ -58,7 +58,8 @@ class UiLanguagesTest(unittest.TestCase):
             self.assertEqual(i18n.PLURALS[code], UI_LANGUAGES[code]["plurals"])
 
     def test_each_language_but_english_has_a_translation(self):
-        ours = sorted(n.name[:-5] for n in (ROOT / "i18n").iterdir() if n.name.endswith(".json") and n.name.count(".") == 1)
+        ours = sorted(n.name[:-5] for n in (ROOT / "i18n").iterdir()
+                      if n.name.endswith(".json") and n.name.count(".") == 1 and n.name != i18n.BASE_FILE)
         self.assertEqual(ours, sorted(set(UI_LANGS) - {"en"}))
 
     def test_locales_and_plurals_are_what_intl_says(self):

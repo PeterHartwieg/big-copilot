@@ -28,9 +28,7 @@ import build_wiki_data as build
 import wiki_data
 from tests.test_wiki_build import (  # noqa: E402  (the shared synthetic install)
     BUILDINGS,
-    CLAY_HELP,
     HELP_STRUCTURE,
-    LAYOUT,
     LOCALE,
     FixtureCase,
 )

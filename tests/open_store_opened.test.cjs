@@ -4,7 +4,7 @@
 // the plan steps before it are tests/open_store.test.cjs.
 const {test} = require('node:test');
 const H = require('./_open_store.cjs');
-const {assert, en, enRe, textRe, path, ROOT, LIQ, MID, SITE, board, strip, money, planned, running, rows, until, line, opened, linked, FULL, OPENED, traded, openedPlan, tiles, pvsa, pvRow, goOpen} = H;
+const {assert, en, enRe, textRe, path, ROOT, LIQ, MID, SITE, board, strip, money, planned, opened, linked, FULL, OPENED, traded, openedPlan, tiles, pvsa, pvRow, goOpen} = H;
 
 test('opened headquarters compares its investment and keeps running costs without payback or sales claims', async t => {
   const page = await board(t, {hq: true});

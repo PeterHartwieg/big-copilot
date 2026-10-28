@@ -19,7 +19,6 @@ from ba_dashboard import (
     FULL_TIME,
     JOB_DEMANDS,
     SHIFT_CAP,
-    _cut_run,
     _full_cover_in_game,
     _full_need,
     _hourly,

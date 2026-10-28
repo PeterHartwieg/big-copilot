@@ -18,7 +18,6 @@ import unittest.mock
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 import ba_dashboard  # noqa: E402
-from tests import es3_fixture  # noqa: E402
 from tests import save_fixtures  # noqa: E402
 from ba_save import Names, load_save  # noqa: E402
 from tests.test_payload_snapshot import normalise  # noqa: E402

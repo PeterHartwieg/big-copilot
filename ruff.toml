@@ -1,0 +1,17 @@
+# Ruff with the pyflakes rules only: unused and undefined names, imports and
+# redefinitions (docs/contributing.md, "Linting"). `npm run lint` runs
+# `ruff check .` through tools/verify.mjs. Gitignored paths are skipped too.
+extend-exclude = [
+  "web/py/",  # generated copies of the root modules
+  "web/assets/",
+  "docs/",
+  "mockup/",
+  "research/",
+  "build/",
+  "node_modules/",
+  ".claude/",
+]
+
+[lint]
+select = ["F"]
+

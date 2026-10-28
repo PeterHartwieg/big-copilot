@@ -58,7 +58,6 @@ const where = page => page.evaluate(() => ({route, hash: location.hash, site: si
   lit: (document.querySelector('#localNav a.on') || {}).dataset?.route || null}));
 const back = async page => { await page.goBack(); await page.waitForTimeout(200); };
 const forward = async page => { await page.goForward(); await page.waitForTimeout(200); };
-const GIFTS = 'ba:street_lexingtonavenue#3', SPIRITS = 'ba:street_eighthstreet#5';
 const keys = page => page.evaluate(() => ({
   gifts: D.businesses.find(b => /Gifts/.test(b.name)).key, spirits: D.businesses.find(b => /Spirits/.test(b.name)).key}));
 
