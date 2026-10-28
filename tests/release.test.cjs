@@ -55,10 +55,16 @@ test('the deployed page opens the map and wiki and remembers dismissed badges', 
     await page.waitForFunction(n => document.querySelectorAll('#changelogDialog .changelog-entry').length === n, changes.length, {timeout:CONTENT_WAIT_MS})
       .catch(error => { if(error.name !== 'TimeoutError') throw error; });
     const drawn = await page.locator('#changelogDialog .changelog-entry').count();
-    assert.equal(drawn, changes.length, `live changelog shows ${drawn} entries but this checkout has ${changes.length}: `
-      + (drawn < changes.length
+    // Locally the page and this require read the same file, so a mismatch is
+    // the page's own fault; only against RELEASE_URL can the two differ.
+    const why = !process.env.RELEASE_URL
+      ? 'the local page drew the wrong count (a render, route or fetch bug)'
+      : drawn < changes.length
         ? `the site at ${base} is older than this checkout (deploy first, or run without RELEASE_URL)`
-        : `this checkout is older than the site at ${base} (update the checkout, or run without RELEASE_URL)`));
+        : `this checkout is older than the site at ${base} (update the checkout, or run without RELEASE_URL)`;
+    // A failed fetch leaves only the shipped entry.
+    const fetchFailed = drawn === 1 && changes.length > 1 ? ', or the changelog fetch failed' : '';
+    assert.equal(drawn, changes.length, `changelog shows ${drawn} entries but this checkout has ${changes.length}: ${why}${fetchFailed}`);
     const first = await page.locator('#changelogDialog .changelog-entry').first();
     const newest = [...changes].sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : b.pr - a.pr)[0];
     assert.equal(await first.locator('time').getAttribute('datetime'), newest.date);
