@@ -979,10 +979,9 @@ and the detail after `: ` or `; `.
 | File | Role |
 | --- | --- |
 | `i18n/de.json` | The German, hand-reviewed: flat, `"key": "text"`, plurals as `key_one`/`key_other` |
-| `i18n/de.base.json` | The English each German string was translated from, per key. Staleness is measured against it; `python tools/i18n.py accept de [key …]` records it |
-| `i18n/de.ai.json` | Only while machine drafts await review: `"key": "model"` for every key `python tools/i18n.py import-draft de <file> --model <id>` took in and no native speaker has checked yet. `reviewed de <key …>` (or `--all`) accepts the key and drops its line, as does `accept` for a key a person has fixed; the file goes when the last one does. Drafts ship like any translation; `status` counts them and never fails on them, and `draft-sheet de --review` lists them with their context for the reviewer |
-| `web/i18n/de.json` | Assembled by `python build_web.py --assemble` (`tools/i18n.py ship`) and not committed: `i18n/de.json` minus orphans, placeholder mismatches (a placeholder its calls do not pass; see [Python's sentences](#pythons-sentences)) and stale keys (whose English changed since `de.base.json` recorded it, or was never recorded), which show English until redone and `accept`ed. In `STAMP_INPUTS`, and compared by `--check` |
-| `tools/i18n.py` | `extract` (the English catalogue, read off the call sites: a JS lexer over the scripts, an HTML parser over the markup, `ast` over `msg(`), `extract --params` (the params each key's calls pass), `status [--strict | --complete]`, `prune`, `ship`, `accept`, `glossary`, `draft-sheet [--review]`, `import-draft`, `reviewed` |
+| `i18n/base.json` | One file for every language, one line per key: `"key": {"en": …, "of": […], "was": {…}, "ai": {…}}`. `en` is the English most languages were made from, stored once, and `of` lists those languages; `was` holds the English of each language made from a different one; `ai` names, per language, the model of a machine draft no native speaker has checked yet. A language named in neither `of` nor `was` has no English recorded for the key, so its translation of it is stale until accepted. Staleness is measured against it; `python tools/i18n.py accept de [key …]` records German's English. `import-draft de <file> --model <id>` adds the `ai` marks, and `reviewed de <key …>` (or `--all`) accepts the key and drops its mark, as does `accept` for a key a person has fixed. Drafts ship like any translation; `status` counts them and never fails on them, and `draft-sheet de --review` lists them with their context for the reviewer. Code reads and writes one language's share of it through `load()`, `drafted()` and `save()` in `tools/i18n.py` |
+| `web/i18n/de.json` | Assembled by `python build_web.py --assemble` (`tools/i18n.py ship`) and not committed: `i18n/de.json` minus orphans, placeholder mismatches (a placeholder its calls do not pass; see [Python's sentences](#pythons-sentences)) and stale keys (whose English changed since `i18n/base.json` recorded German's, or was never recorded), which show English until redone and `accept`ed. In `STAMP_INPUTS`, and compared by `--check` |
+| `tools/i18n.py` | `extract` (the English catalogue, read off the call sites: a JS lexer over the scripts, an HTML parser over the markup, `ast` over `msg(`), `extract --params` (the params each key's calls pass), `status [--strict \| --complete]`, `prune`, `ship`, `accept`, `glossary`, `draft-sheet [--review]`, `import-draft`, `reviewed`, `fold` |
 | `tools/translation_catalogue.py` | Community catalogues, per-key source versions, compiled placeholder validation and validated overlay export/import |
 | `web/translations/<lang>.json`, `web/translations/<lang>.manifest.json` | Generated public contribution catalogue and compact runtime validation manifest; assembled, not committed |
 
@@ -992,10 +991,34 @@ not a literal (or holds `${}`). A missing or stale translation never fails the b
 tests: the page falls back to English per key, so an English edit elsewhere never breaks
 anybody. An orphan (a translated key no source names any more) never fails the build, which
 drops it, but `status --strict` fails on it, on its leftover base or draft mark, and on a
-placeholder mismatch, and `tests/test_i18n_status.py` holds main to that. A change that
-removes or renames a key runs `python tools/i18n.py prune`, which deletes the orphans from
-`<lang>.json`, `.base.json` and `.ai.json` (git history keeps their text). `status
---complete` also fails on missing and stale keys, for a translation pull request.
+placeholder mismatch, and `tests/test_i18n_status.py` holds main to that. A change that removes or renames a key runs
+`python tools/i18n.py prune`, which deletes the orphans from `<lang>.json` and their English
+and marks from `base.json` (git history keeps their text). `status --complete` also fails on
+missing and stale keys, for a translation pull request.
+
+Before `base.json` each language had an `i18n/<lang>.base.json` and an `i18n/<lang>.ai.json`.
+A branch from before the change that merges main resolves any conflict in `i18n/<lang>.json`
+first, then runs `python tools/i18n.py fold` before it commits the merge (or right after, or
+during a rebase); `fold` stops on a `<lang>.json` that still holds conflict markers. `fold` reads the branch's old files
+and its own `<lang>.json` from the branch's commit and main's `<lang>.json` from main's
+(`merge_sides()`: `HEAD` and `MERGE_HEAD`, `REBASE_HEAD` and the rebase's onto, or a merge
+commit's two parents), because git deletes an old file the branch did not change, and drops
+`<lang>.ai.json` altogether once a branch reviewed its last draft. With none of those it
+stops and asks for `--branch REF --main REF`. It deletes any old file the merge left in the
+work tree; while one is there, `load()` and `drafted()` refuse to read, so the build and every
+command that reads the translations stop and name `fold`.
+
+Where the merged `<lang>.json` holds the branch's words for a key, the branch's English wins
+when those words differ from main's (they were made from it), fills the key when `base.json`
+records none in that language, and wins where only it is today's English; such a key takes
+the branch's draft mark too. Where the merge kept other words,
+main's English and mark stay. For
+every other key both sides record the same English for, a mark follows the wording
+`<lang>.json` kept: the branch's mark (or its lack) when the merge kept the branch's words
+and they differ from main's, as after a redraft or a review with an edit on the branch, and
+no mark when all three wordings agree and the branch has none, since only a review takes a
+mark off and keeps the words. Anything else keeps main's mark, so no guess reverses a
+reviewer's. `fold` lists every mark it took or dropped, for the author to check.
 
 `glossary de --out <path>` and `draft-sheet de --out <path>` read the installed game's
 `en.json` and `de.json` for the game's own words (address form: du, as the game's German
@@ -1795,7 +1818,10 @@ change `PYODIDE_VERSION` in `web/worker.js`, and delete the old folder.
 The board's dependencies are the files `PY_CODE` (the Python modules) and `PY_DATA`
 (the game data tables) name in `build_web.py`. `tests/test_web_fresh.py` checks them
 against `CODE_FILES`/`DATA_FILES` in the worker, and `tests/worker_startup.test.cjs`
-reads its list from the same two tuples.
+reads its list from the same two tuples. `ba_cli.py`, the command line with the watch
+server and the game-link client, is not among them: the worker never fetches it and
+`ba_dashboard` never imports it, so the browser loads none of `http.server`, `urllib`
+or `argparse`.
 
 Live link snapshots transfer compressed save bytes and the hash-bound facts document
 separately. The worker writes the pair to its virtual filesystem and passes
@@ -1812,11 +1838,14 @@ large. Fixed-size decode chunks and memoryview string reads reduce temporary
 copies; `tests/save_memory_probe.py` and `tests/worker_snapshot.test.cjs` exercise
 repeated synthetic large loads and recovery through the actual bundled Pyodide.
 
-`ba_dashboard.py` ships as `strip_copy()` of the source: comments removed and docstrings
-emptied, every line where it was. The virtual filesystem is new on each page load, so
-Python compiles the module every time, and a third of the source is comments and
-docstrings. Because no line moves, tracebacks and `_raised_at()` name the source's line
-at that release. The CLI runs the source itself; the other code files ship verbatim.
+`ba_dashboard.py` ships as `strip_copy()` of the source, and so do the two modules split
+out of it: `ba_msg.py`, the message layer with `msg()`, `Msg`, `tok()`, `plain()` and
+`_wire_msgs()`, and `ba_alerts.py`, the findings with `_alerts()`, `_finding()` and
+`_condense()`. `STRIPPED` in `build_web.py` names them. Comments are removed and docstrings emptied, and
+every line stays where it was. The virtual filesystem is new on each page load, so Python
+compiles the modules every time, and a third of the source is comments and docstrings.
+Because no line moves, tracebacks and `_raised_at()` name the source's line at that
+release. The CLI runs the source itself; the other code files ship verbatim.
 
 Assembly writes each dependency and the worker itself to
 `web/assets/<full-sha256>/<filename>`, hashing the exact LF-normalized bytes.
@@ -1887,6 +1916,12 @@ it does not repair already cached or running old worker code. Such an old page
 must reload onto the pinned protocol to obtain these guarantees.
 `tests/fixtures/legacy_worker_53497965.js` preserves the actual previous worker
 bytes, and `tests/asset_cache.test.cjs` exercises its partial-cache rollout window.
+That worker fetches only `ba_save.py`, `ba_dashboard.py` and `ba_facts.py`. Its own
+release's `ba_dashboard.py` imports with those three, and the test primes a stand-in
+that does the same, since today's also needs `ba_msg.py` and `ba_alerts.py`. One edge
+follows: a pre-manifest worker that has not cached `ba_dashboard.py` and fetches
+today's fails at startup on the missing module, and the page offers reload, as for
+any other startup failure.
 
 Runtime completion and each consumed/validated body or development HTTP
 fallback emit progress before the join, keeping the pending-save inactivity

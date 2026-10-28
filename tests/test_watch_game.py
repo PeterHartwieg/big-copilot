@@ -15,7 +15,7 @@ from types import SimpleNamespace
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "tools"))
 
-import ba_dashboard  # noqa: E402
+import ba_cli  # noqa: E402
 import game_link_mock  # noqa: E402
 
 BYTES = b"\x1f\x8b dummy save bytes"
@@ -34,7 +34,7 @@ class GameLinkAgainstMock(unittest.TestCase):
         self.server = game_link_mock.MockServer(self.mock, port=0).start(follow=False)
         self.out = os.path.join(self.dir.name, "out")
         os.makedirs(self.out)
-        self.game = ba_dashboard.GameLink(self.server.url, self.out)
+        self.game = ba_cli.GameLink(self.server.url, self.out)
 
     def tearDown(self):
         self.server.stop()
@@ -79,7 +79,7 @@ class GameLinkAgainstMock(unittest.TestCase):
         try:
             for _ in range(9):
                 self.assertIsNone(self.game.poll())
-            with self.assertRaises(ba_dashboard.LinkUnavailable) as caught:
+            with self.assertRaises(ba_cli.LinkUnavailable) as caught:
                 self.game.poll()
             self.assertIn("not as the Big Copilot Link mod", str(caught.exception))
             self.assertNotIn("None", str(caught.exception))
@@ -95,7 +95,7 @@ class GameLinkAgainstMock(unittest.TestCase):
             try:
                 for _ in range(9):
                     self.assertIsNone(self.game.poll(), body)
-                with self.assertRaises(ba_dashboard.LinkUnavailable):
+                with self.assertRaises(ba_cli.LinkUnavailable):
                     self.game.poll()
             finally:
                 self.game._call = real
@@ -113,10 +113,10 @@ class GameLinkAgainstMock(unittest.TestCase):
         try:
             for _ in range(9):
                 self.assertIsNone(self.game.poll())
-            with self.assertRaises(ba_dashboard.LinkUnavailable) as caught:
+            with self.assertRaises(ba_cli.LinkUnavailable) as caught:
                 self.game.poll()
             self.assertIn("not as the Big Copilot Link mod", str(caught.exception))
-            with self.assertRaises(ba_dashboard.LinkUnavailable):
+            with self.assertRaises(ba_cli.LinkUnavailable):
                 self.game.poll()  # still the same outage, not a quiet None
         finally:
             self.game._call = real
@@ -130,9 +130,9 @@ class GameLinkAgainstMock(unittest.TestCase):
     def test_schema_mismatch_names_the_version_needed_and_passes(self):
         """GL-7 in #110: an outage the next poll can end, as the contract's step 5 has it."""
         self.mock.schema = 99
-        with self.assertRaises(ba_dashboard.LinkMismatch) as caught:
+        with self.assertRaises(ba_cli.LinkMismatch) as caught:
             self.game.poll()
-        self.assertIsInstance(caught.exception, ba_dashboard.LinkUnavailable, "the watch loop's outage")
+        self.assertIsInstance(caught.exception, ba_cli.LinkUnavailable, "the watch loop's outage")
         self.assertIn("version 99", str(caught.exception))
         self.assertIn("needs version 5", str(caught.exception))
         self.mock.schema = 1
@@ -140,18 +140,18 @@ class GameLinkAgainstMock(unittest.TestCase):
 
     def test_a_one_shot_run_still_stops_on_a_mismatch(self):
         self.mock.schema = 99
-        with self.assertRaises(ba_dashboard.LinkMismatch):
+        with self.assertRaises(ba_cli.LinkMismatch):
             self.game.wait_for_save(seconds=5)
 
     def test_localhost_and_ipv6_loopback_are_spelt_127_0_0_1(self):
         """GL-1 in #110: the mod listens on 127.0.0.1 and turns away any other Host."""
         port = self.server.url.rsplit(":", 1)[1]
         for given in (f"http://localhost:{port}", f"http://LOCALHOST:{port}/", f"http://[::1]:{port}"):
-            game = ba_dashboard.GameLink(given, self.out)
+            game = ba_cli.GameLink(given, self.out)
             self.assertEqual(game.url, f"http://127.0.0.1:{port}", given)
         self.assertEqual(game.poll(), game.path, "and it reaches the mod")
-        self.assertEqual(ba_dashboard.GameLink("http://localhost", self.out).url, "http://127.0.0.1")
-        self.assertEqual(ba_dashboard.GameLink("http://10.0.0.5:8322", self.out).url, "http://10.0.0.5:8322",
+        self.assertEqual(ba_cli.GameLink("http://localhost", self.out).url, "http://127.0.0.1")
+        self.assertEqual(ba_cli.GameLink("http://10.0.0.5:8322", self.out).url, "http://10.0.0.5:8322",
                          "another address is left as given")
 
     def test_a_proxy_in_the_environment_is_never_used(self):
@@ -162,19 +162,19 @@ class GameLinkAgainstMock(unittest.TestCase):
             dead = f"http://127.0.0.1:{probe.getsockname()[1]}"
         env = {"HTTP_PROXY": dead, "http_proxy": dead, "NO_PROXY": "", "no_proxy": ""}
         with mock.patch.dict(os.environ, env):
-            game = ba_dashboard.GameLink(self.server.url, self.out)
-            proxies = [h.proxies for h in game._opener.handlers if isinstance(h, ba_dashboard.urllib.request.ProxyHandler)]
+            game = ba_cli.GameLink(self.server.url, self.out)
+            proxies = [h.proxies for h in game._opener.handlers if isinstance(h, ba_cli.urllib.request.ProxyHandler)]
             self.assertEqual([p for p in proxies if p], [], "the environment's proxy is not in the opener")
             self.assertEqual(game.poll(), game.path)
 
     def test_the_board_only_builds_from_bytes_its_own_link_downloaded(self):
         """Board._refresh in link mode: a stale file, the first stamp, a rename."""
         seen = []
-        real = (ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render)
-        ba_dashboard.load_save = lambda path: SimpleNamespace(path=path)
-        ba_dashboard.safe_extract = lambda path, names, history: (
+        real = (ba_cli.load_save, ba_cli.safe_extract, ba_cli.render)
+        ba_cli.load_save = lambda path: SimpleNamespace(path=path)
+        ba_cli.safe_extract = lambda path, names, history: (
             seen.append(path.path) or {"meta": {"day": 7, "save": "Mock Co"}, "supply": {"factories": {"character": "abc"}}})
-        ba_dashboard.render = lambda data, live=False: "<html>"
+        ba_cli.render = lambda data, live=False: "<html>"
         try:
             out = os.path.join(self.out, "board.html")
             # A game-link.hsg left behind by an earlier session, and a mod that
@@ -182,7 +182,7 @@ class GameLinkAgainstMock(unittest.TestCase):
             with open(os.path.join(self.out, "game-link.hsg"), "wb") as fh:
                 fh.write(b"stale")
             self.mock.stamp = ""  # the mock's state before its first refresh
-            board = ba_dashboard.Board(None, out, link=ba_dashboard.GameLink(self.server.url, self.out))
+            board = ba_cli.Board(None, out, link=ba_cli.GameLink(self.server.url, self.out))
             self.assertFalse(board.refresh(settle=False))
             self.assertEqual(seen, [])
             # The mock's first stamp: one build, from the downloaded bytes.
@@ -197,47 +197,47 @@ class GameLinkAgainstMock(unittest.TestCase):
             self.assertEqual(len(seen), 2)
             self.assertEqual(seen[1], board.link.path)
         finally:
-            ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render = real
+            ba_cli.load_save, ba_cli.safe_extract, ba_cli.render = real
 
     def test_a_line_named_while_the_game_is_closed_rebuilds_from_the_downloaded_bytes(self):
         """EX-7 in #109: the name reaches the board without waiting for the game."""
         seen = []
-        real = (ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render)
-        ba_dashboard.load_save = lambda path: SimpleNamespace(path=path)
-        ba_dashboard.safe_extract = lambda path, names, history: (
+        real = (ba_cli.load_save, ba_cli.safe_extract, ba_cli.render)
+        ba_cli.load_save = lambda path: SimpleNamespace(path=path)
+        ba_cli.safe_extract = lambda path, names, history: (
             seen.append(path.path) or {"meta": {"day": 7, "save": "Mock Co"}, "supply": {"factories": {"character": "abc"}}})
-        ba_dashboard.render = lambda data, live=False: "<html>"
+        ba_cli.render = lambda data, live=False: "<html>"
         try:
             out = os.path.join(self.out, "board.html")
-            board = ba_dashboard.Board(None, out, link=ba_dashboard.GameLink(self.server.url, self.out))
+            board = ba_cli.Board(None, out, link=ba_cli.GameLink(self.server.url, self.out))
             self.mock.refresh(force=True)
             self.assertTrue(board.refresh(settle=False))
             revision = board.revision
 
             def closed():
-                raise ba_dashboard.LinkUnavailable("the game link did not answer")
+                raise ba_cli.LinkUnavailable("the game link did not answer")
             board.link.poll = closed
             board.name_line("rid", "beer")
             self.assertEqual(seen, [board.link.path, board.link.path])
             self.assertEqual(board.revision, revision + 1)
             self.assertIn(f"#{revision + 1}", board.stamp.decode())
             # With nothing to rebuild the closed game is still reported.
-            with self.assertRaises(ba_dashboard.LinkUnavailable):
+            with self.assertRaises(ba_cli.LinkUnavailable):
                 board.refresh(settle=False)
         finally:
-            ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render = real
+            ba_cli.load_save, ba_cli.safe_extract, ba_cli.render = real
 
     def test_a_name_the_history_cannot_keep_is_said_and_the_board_still_rebuilds(self):
         """#109: a damaged market_history.json loses the name, and says so."""
         seen = []
-        real = (ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render)
-        ba_dashboard.load_save = lambda path: SimpleNamespace(path=path)
-        ba_dashboard.safe_extract = lambda path, names, history: (
+        real = (ba_cli.load_save, ba_cli.safe_extract, ba_cli.render)
+        ba_cli.load_save = lambda path: SimpleNamespace(path=path)
+        ba_cli.safe_extract = lambda path, names, history: (
             seen.append(path.path) or {"meta": {"day": 7, "save": "Mock Co"}, "supply": {"factories": {"character": "abc"}}})
-        ba_dashboard.render = lambda data, live=False: "<html>"
+        ba_cli.render = lambda data, live=False: "<html>"
         try:
             out = os.path.join(self.out, "board.html")
-            board = ba_dashboard.Board(None, out, link=ba_dashboard.GameLink(self.server.url, self.out))
+            board = ba_cli.Board(None, out, link=ba_cli.GameLink(self.server.url, self.out))
             self.mock.refresh(force=True)
             self.assertTrue(board.refresh(settle=False))
             with open(board.history, "w", encoding="utf-8") as fh:
@@ -251,7 +251,7 @@ class GameLinkAgainstMock(unittest.TestCase):
             self.assertEqual(board.revision, revision + 1)
             self.assertEqual(len(seen), 2, "the board rebuilt all the same")
         finally:
-            ba_dashboard.load_save, ba_dashboard.safe_extract, ba_dashboard.render = real
+            ba_cli.load_save, ba_cli.safe_extract, ba_cli.render = real
 
     def test_wait_for_save_waits_for_the_refresh_it_asked_for(self):
         """A 202 names the stamp being replaced; the bytes returned are newer.
@@ -317,15 +317,15 @@ class GameLinkAgainstMock(unittest.TestCase):
 
     def test_a_save_name_after_the_flag_is_refused(self):
         with self.assertRaises(SystemExit) as caught:
-            ba_dashboard.GameLink("Hart", self.dir.name)
+            ba_cli.GameLink("Hart", self.dir.name)
         self.assertIn("takes the mod's address", str(caught.exception))
 
     def test_a_closed_port_raises_unavailable(self):
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
             port = probe.getsockname()[1]
-        game = ba_dashboard.GameLink(f"http://127.0.0.1:{port}", self.out)
-        with self.assertRaises(ba_dashboard.LinkUnavailable):
+        game = ba_cli.GameLink(f"http://127.0.0.1:{port}", self.out)
+        with self.assertRaises(ba_cli.LinkUnavailable):
             game.poll()
 
     def test_refresh_returns_the_status_and_body(self):
@@ -370,15 +370,15 @@ class WatchSurvivesAFailingFirstBuild(unittest.TestCase):
             def start(self):
                 started.append(self.target)
 
-        with mock.patch.object(ba_dashboard, "Board", Board), \
-                mock.patch.object(ba_dashboard, "yield_to_the_game", lambda: False), \
-                mock.patch.object(ba_dashboard.http.server, "ThreadingHTTPServer", Server), \
-                mock.patch.object(ba_dashboard.threading, "Thread", Thread), \
+        with mock.patch.object(ba_cli, "Board", Board), \
+                mock.patch.object(ba_cli, "yield_to_the_game", lambda: False), \
+                mock.patch.object(ba_cli.http.server, "ThreadingHTTPServer", Server), \
+                mock.patch.object(ba_cli.threading, "Thread", Thread), \
                 mock.patch("sys.stdout"), mock.patch("sys.stderr"):
-            ba_dashboard.watch("saves", "out.html", 0, 30, open_browser=False)
+            ba_cli.watch("saves", "out.html", 0, 30, open_browser=False)
         self.assertEqual(len(started), 1, "the poll loop runs, to retry on the next save")
         # The page served meanwhile is the live shell, which loads the first good build.
-        page = ba_dashboard.BoardHandler.board.html.decode("utf-8")
+        page = ba_cli.BoardHandler.board.html.decode("utf-8")
         self.assertIn("const LIVE = true", page)
         self.assertIn("let D = null", page)
 
@@ -386,7 +386,7 @@ class WatchSurvivesAFailingFirstBuild(unittest.TestCase):
         """GL-7 in #110: said once under the board it keeps, over when the version returns."""
         from unittest import mock
 
-        mismatch = ba_dashboard.LinkMismatch("the Big Copilot Link mod speaks schema version 2")
+        mismatch = ba_cli.LinkMismatch("the Big Copilot Link mod speaks schema version 2")
         answers = [mismatch, mismatch, mismatch, False, True]
 
         class Board:
@@ -432,14 +432,14 @@ class WatchSurvivesAFailingFirstBuild(unittest.TestCase):
             if len(sleeps) >= 6:
                 raise Stop
 
-        with mock.patch.object(ba_dashboard, "Board", Board), \
-                mock.patch.object(ba_dashboard, "yield_to_the_game", lambda: False), \
-                mock.patch.object(ba_dashboard.http.server, "ThreadingHTTPServer", Server), \
-                mock.patch.object(ba_dashboard.threading, "Thread", Thread), \
+        with mock.patch.object(ba_cli, "Board", Board), \
+                mock.patch.object(ba_cli, "yield_to_the_game", lambda: False), \
+                mock.patch.object(ba_cli.http.server, "ThreadingHTTPServer", Server), \
+                mock.patch.object(ba_cli.threading, "Thread", Thread), \
                 mock.patch("sys.stdout"), mock.patch("sys.stderr"):
-            ba_dashboard.watch(None, "out.html", 0, 30, open_browser=False, link=Board.link)
+            ba_cli.watch(None, "out.html", 0, 30, open_browser=False, link=Board.link)
         said = io.StringIO()
-        with mock.patch.object(ba_dashboard.time, "sleep", sleep), contextlib.redirect_stdout(said):
+        with mock.patch.object(ba_cli.time, "sleep", sleep), contextlib.redirect_stdout(said):
             with self.assertRaises(Stop):
                 started[0]()
         self.assertEqual(answers, [], "every answer after the mismatch was asked for")

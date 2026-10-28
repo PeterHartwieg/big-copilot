@@ -122,13 +122,15 @@ class StripSnippets(unittest.TestCase):
 
 
 class StripDashboard(unittest.TestCase):
+    NAME = "ba_dashboard.py"
+
     @classmethod
     def setUpClass(cls):
-        source = Path(__file__).resolve().parents[1] / "ba_dashboard.py"
+        source = Path(__file__).resolve().parents[1] / cls.NAME
         cls.source = build_web.read_text(str(source))
         cls.stripped = build_web.strip_copy(cls.source)
-        cls.original_code = compile(cls.source, "ba_dashboard.py", "exec")
-        cls.stripped_code = compile(cls.stripped, "ba_dashboard.py", "exec")
+        cls.original_code = compile(cls.source, cls.NAME, "exec")
+        cls.stripped_code = compile(cls.stripped, cls.NAME, "exec")
 
     def test_lines_and_size(self):
         self.assertEqual(self.source.count("\n"), self.stripped.count("\n"))
@@ -157,3 +159,19 @@ class StripDashboard(unittest.TestCase):
                 self.assertEqual(before.co_firstlineno, after.co_firstlineno)
                 self.assertEqual([line for _, _, line in before.co_lines()],
                                  [line for _, _, line in after.co_lines()])
+
+
+# The modules split out of ba_dashboard.py ship stripped too (STRIPPED in
+# build_web.py), and each gets the same checks.
+class StripMessages(StripDashboard):
+    NAME = "ba_msg.py"
+
+
+class StripAlerts(StripDashboard):
+    NAME = "ba_alerts.py"
+
+
+class EveryStrippedFile(unittest.TestCase):
+    def test_each_file_the_worker_gets_stripped_is_checked(self):
+        checked = {case.NAME for case in (StripDashboard, StripMessages, StripAlerts)}
+        self.assertEqual(checked, set(build_web.STRIPPED))

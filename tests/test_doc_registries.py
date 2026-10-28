@@ -41,6 +41,9 @@ def between(text: str, start: str, end: str, what: str) -> str:
 
 ARCH = read("docs/architecture.md")
 DASHBOARD = read("ba_dashboard.py")
+# The findings, split out of ba_dashboard.py: _alerts(), its note()s and the
+# _*_notes helpers, ALERT_UNITS, SUMMARIES and WORST_FIRST.
+ALERTS = read("ba_alerts.py")
 # The board's markup and its script (the last <script> block's body): board.js
 # and the parts load_template() splices back into it, template/board-*.js.
 PAGE = read("template/board.html")
@@ -112,28 +115,30 @@ class BuildTokenTests(unittest.TestCase):
 
 def _produced_groups() -> set:
     """Every finding group the Python build can emit: the literal group of each
-    note() in _alerts() and each _finding() anywhere, a group taken from a
+    note() in ba_alerts.py and each _finding() anywhere, a group taken from a
     literal tuple a for loop runs over, and the groups of AMENITY_DEMANDS, but
     only where a note() or _finding() call takes its group from an
     AMENITY_DEMANDS lookup: drop that call and the amenity kinds count as gone.
     A group held in any other variable fails, so a new way of naming one is
     noticed here rather than skipped."""
-    tree = ast.parse(DASHBOARD)
+    dashboard, alerts = ast.parse(DASHBOARD), ast.parse(ALERTS)
     groups, unresolved = set(), []
     amenity = set()
-    for node in ast.walk(tree):
+    for node in ast.walk(dashboard):
         if isinstance(node, ast.Assign) and any(
                 isinstance(t, ast.Name) and t.id == "AMENITY_DEMANDS" for t in node.targets):
             amenity = {v.elts[0].value for v in node.value.values}
-    for fn in ast.walk(tree):
+    functions = [(fn, tree is alerts) for tree in (dashboard, alerts) for fn in ast.walk(tree)]
+    for fn, in_alerts in functions:
         if not isinstance(fn, ast.FunctionDef) or fn.name == "note":
-            continue  # note() is _alerts()'s wrapper round _finding(): its group is the caller's
+            continue  # note() is the findings' wrapper round _finding(): its group is the caller's
         own = list(_own_nodes(fn))
         loops = [n for n in own if isinstance(n, ast.For)]
         for call in own:
             if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Name)):
                 continue
-            if call.func.id == "_finding" or (call.func.id == "note" and fn.name == "_alerts"):
+            # ba_alerts.py's note() is the only one; ba_dashboard.py has none.
+            if call.func.id == "_finding" or (call.func.id == "note" and in_alerts):
                 arg = call.args[2] if len(call.args) > 2 else next(
                     (k.value for k in call.keywords if k.arg == "group"), None)
                 if isinstance(arg, ast.Constant):
@@ -207,8 +212,8 @@ class FindingGroupTests(unittest.TestCase):
 
 class RegistryPointerTests(unittest.TestCase):
     """(d) Each table a checklist under Registries names by its declaration
-    carries a `Registry: "<heading>"` comment just above it, in ba_dashboard.py
-    or the board script (template/board*.js), so a reader who lands on the table finds the checklist. Only the comment
+    carries a `Registry: "<heading>"` comment just above it, in ba_dashboard.py,
+    ba_alerts.py or the board script (template/board*.js), so a reader who lands on the table finds the checklist. Only the comment
     directly above the declaration counts, not a neighbour's."""
 
     HEADINGS = ("A finding kind", "A view or a page")
@@ -242,7 +247,7 @@ class RegistryPointerTests(unittest.TestCase):
         return "\n".join(found)
 
     def test_every_declared_table_points_at_its_checklist(self):
-        sources = [DASHBOARD.split("\n"), *(part.split("\n") for part in BOARD_PARTS), PAGE.split("\n")]
+        sources = [DASHBOARD.split("\n"), ALERTS.split("\n"), *(part.split("\n") for part in BOARD_PARTS), PAGE.split("\n")]
         for heading in self.HEADINGS:
             tag = 'Registry: "%s"' % heading
             missing = []
