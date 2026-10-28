@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import ba_dashboard as bd
 from tests.test_office_demand import plan
-from tests.test_staff_hire import LAWYER, office_rows, lawyer
+from tests.test_staff_hire import office_rows, lawyer
 
 
 class OfficeOpenHoursTests(unittest.TestCase):
@@ -16,6 +16,8 @@ class OfficeOpenHoursTests(unittest.TestCase):
         self.assertFalse(opened['openAllHours'])
         self.assertEqual(opened['variant'], 'open')
         self.assertNotIn('demandBased', opened)
+        self.assertNotIn('need', opened)
+        self.assertNotIn('basis', opened)
         self.assertEqual(opened['open'], opens)
         self.assertGreater(opened['addPeople']['people'], 0)
         for d, slots in enumerate(opens):
@@ -24,7 +26,6 @@ class OfficeOpenHoursTests(unittest.TestCase):
                 got = {h for s in opened['shifts'] if s['d'] == d and s['s'] == st
                        for h in range(s['f'], s['t'])}
                 self.assertEqual(got, hours, (d, st))
-            self.assertEqual(opened['need'][LAWYER][d], [4 if h in hours else 0 for h in range(24)])
 
     def test_no_opening_hours_does_not_offer_an_open_hours_plan(self):
         _, _, [row] = office_rows(2, [[] for _ in range(7)], [])
@@ -44,7 +45,23 @@ class OfficeOpenHoursTests(unittest.TestCase):
                     default, _, _ = plan(history=history)
                 default.pop('openCover')
                 self.assertEqual(row, default)
-                self.assertNotEqual(row['need'], opened['need'])
+                self.assertNotEqual(row['shifts'], opened['shifts'])
+
+    def test_alternative_does_not_repeat_discarded_demand_analysis(self):
+        for name in ('_days_open', '_open_day_average', '_office_recent', '_office_need'):
+            with self.subTest(helper=name), patch.object(bd, name, wraps=getattr(bd, name)) as helper:
+                row, _, _ = plan()
+                self.assertIn('openCover', row)
+                self.assertEqual(helper.call_count, 1)
+
+    def test_mod_compatibility_blocks_suppress_the_alternative(self):
+        for gate, result in (('_mod_staffing_issues', ['synthetic-mod-issue']),
+                             ('_mod_office_fallback_issue', True)):
+            with self.subTest(gate=gate), patch.object(bd, gate, return_value=result):
+                row, _, _ = plan(history=False)
+                self.assertTrue(row['failed'])
+                self.assertEqual(row['unavailable'], 'modCompatibility')
+                self.assertNotIn('openCover', row)
 
     def test_offering_the_alternative_does_not_reserve_more_people_or_hours(self):
         original, worlds = bd._office_site_plan, []

@@ -17863,9 +17863,7 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
     ]
     runs, always = _office_runs(len(stations), grid["open"], grid["door"])
     slots_open = grid["open"] if any(grid["open"]) else ALL_DAY_OPEN
-    run = _days_open(save, building)
-    daily = _open_day_average(save, building, slots_open) if run >= DEMAND_RUN_DAYS else None
-    need, demand_based = _office_need(grid, skill, runs, run, daily, _office_recent(save, building))
+    demand_based = False
     if every_open:
         slots_open = grid["open"]
         need = {skill: {
@@ -17874,6 +17872,10 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
             "basis": [["open" if any(a <= h < z for a, z in day) else "closed"
                        for h in range(24)] for day in slots_open],
         }}
+    else:
+        run = _days_open(save, building)
+        daily = _open_day_average(save, building, slots_open) if run >= DEMAND_RUN_DAYS else None
+        need, demand_based = _office_need(grid, skill, runs, run, daily, _office_recent(save, building))
     if not every_open and _mod_office_fallback_issue(save, building, need, skill):
         return _mod_staffing_blocked(business, ["office-unread-hours-with-mod-demand"]), []
     replaces = demand_based or every_open
@@ -17912,6 +17914,11 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
     }
     cost = {"current": money(_current_cost(current, wage_of)), "currentCover": 0.0}
     fields = _plan_fields(week, table, names, people, cost)
+    # The office UI draws hours and people, not demand grids. Keep the
+    # alternative's tables independent, but do not ship its redundant grids.
+    if every_open:
+        fields.pop("need", None)
+        fields.pop("basis", None)
     if not replaces:
         fields.pop("basis", None)
     row = {
