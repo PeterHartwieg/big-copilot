@@ -20,10 +20,11 @@ const root = path.join(__dirname, '..');
 const PYTHON = process.env.PYTHON || 'python';
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
-// The board script is template/board.js, with template/board-write.js spliced
-// into it; map.js and wiki.js run inside it, and template/board.html holds the
-// page's smaller scripts.
-const SOURCES = [['template/board.js', read('template/board.js'), 1], ['template/board-write.js', read('template/board-write.js'), 1],
+// The board script is template/board.js, with template/board-staff.js and
+// template/board-write.js spliced into it; map.js and wiki.js run inside it,
+// and template/board.html holds the page's smaller scripts.
+const SOURCES = [['template/board.js', read('template/board.js'), 1], ['template/board-staff.js', read('template/board-staff.js'), 1],
+  ['template/board-write.js', read('template/board-write.js'), 1],
   ['template/board.html', read('template/board.html'), 1],
   ['web/map.js', read('web/map.js'), 1],
   ['web/wiki.js', read('web/wiki.js'), 1], ['web/i18n.js', read('web/i18n.js'), 1]];
@@ -70,7 +71,7 @@ test('compact() follows the UI number locale and writes the old English unchange
 test('no money on the board is written with a bare toFixed()', () => {
   // "$" + x.toFixed(2) keeps the dot in German; it goes through
   // tt("…", "${x:.2f}") instead. (CSS widths still use toFixed(), rightly.)
-  const src = read('template/board.js') + read('template/board-write.js');
+  const src = read('template/board.js') + read('template/board-staff.js') + read('template/board-write.js');
   assert.deepEqual(src.split('\n').filter(line => /\$\$\{[^}]*\.toFixed\(/.test(line)), []);
   assert.doesNotMatch(src, /margin\.toFixed\(/, 'the margin goes through tt("…", "{x:.1f}%")');
   assert.doesNotMatch(src, /mb: \(bytes \/ 1048576\)\.toFixed/);

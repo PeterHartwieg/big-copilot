@@ -18,7 +18,9 @@ the numbers drift.
 | --- | --- |
 | Extraction (save → numbers) | `def build_core(` (the core), `SECTIONS` (the sections) and the `_` helpers before `def render(`, in `ba_dashboard.py`; `def extract(` is both |
 | The board's HTML and CSS | `template/board.html`, read on the first `render()` by `load_template()` |
-| The board script | `template/board.js`, which `load_template()` splices into `/*__BOARD_SCRIPT__*/`, the body of the page's last `<script>` block, before any other placeholder is filled. A branch from before the split (1 Oct 2026), with the script still inline in `board.html`, needs the retired tool and its `--resolve` from history: `git show ecabe57c:tools/split_board_script.py` |
+| The board script | `template/board.js`, which `load_template()` splices into `/*__BOARD_SCRIPT__*/`, the body of the page's last `<script>` block, before any other placeholder is filled. Parts of it live in files of their own and go back in at a placeholder line where they were taken out (below). A branch from before the split (1 Oct 2026), with the script still inline in `board.html`, needs the retired tool and its `--resolve` from history: `git show ecabe57c:tools/split_board_script.py` |
+| Company › Staff (the `hr*` names: hiring for every site, Quick hire, Change picks, the hire review, Payroll) | `template/board-staff.js`, a part of the board script that `load_template()` splices back into `template/board.js` at its `/*__BOARD_STAFF__*/` line, where the block was |
+| Writing to the game (the `gw*` names: each write's dialog, imports, schedules, the checks a week passes) | `template/board-write.js`, a part of the board script that `load_template()` splices back into `template/board.js` at its `/*__BOARD_WRITE__*/` line, where the block was. A new part is a block between two `/* --- ` banners moved whole, with its own placeholder line, a row in `load_template()` and in `BOARD_PARTS` in `tests/_board.cjs`, and the lists in docs/architecture.md, "Template placeholders" |
 | Open a store calculations | `template/open-store-model.js`: an explicit-input calculation module, embedded before the board script by `load_template()` and imported directly by its arithmetic tests and `check_profit_model.py` |
 | Plan a factory calculations | `template/open-factory-model.js`: explicit-input prices, storage, investment and running costs; the board owns plan selection and persistence |
 | Where `web/map.js` and `web/wiki.js` are spliced in | `/*__MAP_SCRIPT__*/`, `/*__WIKI_SCRIPT__*/` in `template/board.js` |
@@ -205,7 +207,7 @@ stale one fails them.
 | --- | --- |
 | `SECTIONS`, `build_core()`, `section()`, `materialize_all()`, `browser_section()`, the worker's `section` message or the board's `od*` functions (what is core and what is computed on demand) | `python -m unittest tests.test_sections tests.test_browser_build tests.test_payload_snapshot` and `node --test tests/on_demand.test.cjs tests/worker_history.test.cjs tests/worker_startup.test.cjs`; then the `tools/payload_diff.py` dump and compare below, since a payload with every section computed must not change |
 | `ba_save.py`, `ba_dashboard.py` (extraction) | `python -m unittest discover -s tests`. Premises extraction is `tests/test_premises.py`. `tests/test_payload_snapshot.py` compares whole `extract()` payloads with `tests/fixtures/payload_snapshot/`; after an intended change regenerate them with `python tests/test_payload_snapshot.py --update` and review the diff. A change meant to leave the payload alone also runs `python tools/payload_diff.py dump research/<name>` on main and on the branch and `compare`s the two (owner only: it reads every save on the machine) |
-| `template/board.html` or `template/board.js` (the board's markup, CSS or script) | `python -m unittest discover -s tests` and `node --test tests/*.test.cjs` |
+| `template/board.html`, `template/board.js`, `template/board-staff.js` or `template/board-write.js` (the board's markup, CSS or script) | `python -m unittest discover -s tests` and `node --test tests/*.test.cjs` |
 | `template/open-store-model.js` (Open a store arithmetic) | `npm run verify`; its direct arithmetic tests are `tests/open_store_model.test.cjs`, and its board integration uses `tests/open_store.test.cjs`, `tests/open_store_checklist.test.cjs`, `tests/open_store_opened.test.cjs` and `tests/finder_plan.test.cjs`. Compare `python check_profit_model.py <save-root>` before and after locally when owner saves are available; never commit its private outputs |
 | `template/open-factory-model.js` (Plan a factory arithmetic) | `npm run verify`; direct arithmetic: `tests/open_factory_model.test.cjs`, browser flow and persistence: `tests/open_factory.test.cjs` |
 | `tools/verify.mjs`, its sharding helpers, npm verification scripts or the CI stage wiring | `npm test -- tests/verify.test.cjs`, then `npm run verify` |
@@ -264,10 +266,11 @@ and never attach one to an issue.
 
 - CSS classes are global across every page of the board, so give a new class a feature
   prefix or scope it under its page's root class. `.site` and `.chip` have collided before.
-- `web/map.js` and `web/wiki.js` are spliced into the board script (`template/board.js`) and
+- `web/map.js` and `web/wiki.js` are spliced into the board script (`template/board.js`, with
+  `template/board-staff.js` and `template/board-write.js` spliced back in at their lines) and
   run in its global scope, reusing its helpers (`attr`, `icon`, `wireTips`, `ICON`, `shortName`,
-  `ssEsc`, `spEsc`, `hrNum`). A new top-level
-  name must be unique across all three files, and `web/i18n.js`, which runs in the same
+  `ssEsc`, `spEsc`, `hrNum`). A new top-level name must be unique across all five files, and
+  `web/i18n.js`, which runs in the same
   global scope from the head (its names start `tt`/`TT_`). `tests/global_names.test.cjs`
   fails on a column-0 name declared twice across them, `template/board.html`'s inline
   scripts and the site's scripts.
@@ -287,7 +290,7 @@ and never attach one to an issue.
   regex, or loading the whole board script into a VM through `loadBoard()` in
   `tests/_board.cjs` (and `web/app.js` through `loadShell()` in `tests/_shell.cjs`, whose
   helpers a test calls on `window.BigCopilotShell`). When you change a comment or declaration in a source file, update the
-  tests that read it: `rg -l "board\.js|_board\.cjs" tests` lists them (put the file's name in the
+  tests that read it: `rg -l "board\.js|board-staff\.js|board-write\.js|_board\.cjs" tests` lists them (put the file's name in the
   pattern: `board\.html`, `app\.js`, `map\.js`, `worker\.js`, `ba_dashboard\.py`). `check_profit_model.py`
   imports `template/open-store-model.js` directly. A reworded
   `_slice.cjs` anchor fails loudly; a bare `indexOf` can slice the wrong span.

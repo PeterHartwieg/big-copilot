@@ -46,6 +46,7 @@ const SOURCES = [
   {name: 'template/open-store-model.js', text: read('template/open-store-model.js')},
   {name: 'template/open-factory-model.js', text: read('template/open-factory-model.js')},
   {name: 'template/board.js', text: read('template/board.js')},
+  {name: 'template/board-staff.js', text: read('template/board-staff.js')},
   {name: 'template/board-write.js', text: read('template/board-write.js')},
   {name: 'web/map.js', text: read('web/map.js')},
   {name: 'web/wiki.js', text: read('web/wiki.js')},
