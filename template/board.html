@@ -3223,9 +3223,9 @@ body.no-save .nx-tabs{display:none}
 .ov-head{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px}
 .ov-head h2{margin:0;font-size:28px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
 /* The severity filters are switches: on is filled and ticked, off is an
-   outline with a hollow dot -- both in full-strength text. */
-.ov-head .sev{opacity:1;color:var(--ink-2);min-height:32px;background:none;font:500 12.5px/1 "IBM Plex Mono",monospace;border:1px solid transparent}
-.ov-head .sev.off{opacity:1;color:var(--ink-2);border-color:var(--rule)}
+   outline with a hollow dot -- both in full-strength text. The outline is
+   every filter's own, so off needs no rule of its own here. */
+.ov-head .sev{opacity:1;color:var(--ink-2);min-height:32px;background:none;font:500 12.5px/1 "IBM Plex Mono",monospace;border:1px solid var(--rule)}
 .ov-head .sev[aria-pressed="true"]{background:var(--surface);color:var(--ink);border-color:var(--ink-3)}
 .ov-head .sev[aria-pressed="false"] i{background:transparent!important;box-shadow:inset 0 0 0 1.5px currentColor}
 .ov-head .sev[aria-pressed="false"] span{text-decoration:line-through;text-decoration-thickness:1px}
@@ -3421,8 +3421,13 @@ body.no-save .nx-tabs{display:none}
   #alertSection .find.ov-f .ov-det{grid-row:2}
   #alertSection .find.ov-f .ov-now{grid-column:2/-1;grid-row:3}
   #alertSection .find.ov-f .ov-vz{grid-row:4}
+  /* A linked board's game-write buttons get a row of their own, under the
+     picture; above 560 px they share its row 4. */
+  #alertSection .find.ov-f > .gw-find{grid-row:5}
   #alertSection .find.ov-f .ov-x{grid-row:6}
   #pageToday #alertSection .find.ov-f{padding:10px 0;row-gap:6px}
+  .ov-head{gap:8px}
+  .ov-head h2{font-size:22px}
   .ov-head .sev{min-height:32px;padding:0 10px}
   #pageToday #alertSection{margin-top:8px}
   #pageToday #alerts .ov-band{margin-top:4px;padding-top:8px}
@@ -3431,6 +3436,7 @@ body.no-save .nx-tabs{display:none}
      so it and All tools share the row with the severity filters. */
   #alertKindsToggle > span{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
   #alertKindsToggle.nx-btn{min-width:36px;min-height:32px;padding:0 9px;justify-content:center}
+  .ov-head .aside{gap:6px}
   .ov-head .aside .nx-btn{min-height:32px}
   /* An action's words never run past its button: tighter, and a longer one
      (a translation, larger text) takes a second line inside it. */
