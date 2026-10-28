@@ -598,6 +598,26 @@ class UnstaffedTest(unittest.TestCase):
         self.assertEqual(list(site["unstaffed"]), ["office", "open"])
         self.assertEqual([(r["skill"], r["idle"]) for r in site["unstaffed"]["office"]["roles"]], [(LAWYER, 1)])
 
+    def test_an_office_open_plan_is_measured_on_its_own_tables(self):
+        """The Every open hour plan's gap reads its shifts through openCover's
+        own people and station tables, not the default row's."""
+        employees = [lawyer("l1"), lawyer("l2")]
+        _save, _b, [row] = office_rows(2, [[[8, 20]] for _ in range(7)], employees)
+        opened = row["openCover"]
+        # Somebody else first in the open plan's people table: every index
+        # it holds moves by one, so the default's table would misread it.
+        opened["people"] = [{"id": "stranger"}] + opened["people"]
+        shift = lambda s: dict(s, p=None if s["p"] is None else s["p"] + 1)  # noqa: E731
+        opened["shifts"] = [shift(s) for s in opened["shifts"]]
+        opened["current"] = dict(opened["current"], list=[shift(s) for s in opened["current"]["list"]])
+        business = {"key": site_key((STREET, 10)), "name": "Halden Law", "status": "office",
+                    "typeSlug": LAW, "basket": 388.0, "staff": 2}
+        save = save_of({"EmployeeInstances": {"$items": employees},
+                        "BuildingRegistrations": {"$items": [office_registration(2, [[[8, 20]] for _ in range(7)])]}})
+        [site] = _hiring(save, [business], [], {}, [row])["sites"]
+        self.assertEqual(site["unstaffed"]["open"],
+                         {"hours": 96, "roles": [{"skill": LAWYER, "hours": 96, "idle": 2}]})
+
 
 class NoOpeningHoursTest(unittest.TestCase):
     def test_a_shop_the_game_opens_no_hour_has_no_plan(self):
