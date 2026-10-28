@@ -57,8 +57,9 @@ review; they never fail it.
 
 Before base.json each language had an i18n/<lang>.base.json and an
 i18n/<lang>.ai.json. A branch from before the change runs `fold` when it
-merges main: it reads those files from the branch's commit, since the merge
-may have deleted them (fold()). While one is left in the work tree, load()
+merges main, once the conflicts in <lang>.json are resolved: it reads those
+files from the branch's commit, since the merge may have deleted them
+(fold()). While one is left in the work tree, load()
 and drafted() refuse to read, so every command that reads the translations
 (the build's ship() too) stops and names `fold`.
 
@@ -830,15 +831,19 @@ def fold(english: dict | None = None, root: str = ROOT, branch: str | None = Non
     came from the branch, "marked": keys whose draft mark did, "unmarked":
     keys whose base.json mark went}, so the author can check what changed.
 
-    The branch's English fills each key base.json records none for in that
-    language, and replaces base.json's where only the branch's is today's
-    English; such a key takes the branch's draft mark, or loses base.json's.
-    For every other key both sides record the same English for (or none), a
+    Where the merged <lang>.json holds the branch's words for a key, the
+    branch's English fills it when base.json records none in that language,
+    and replaces base.json's where only the branch's is today's English; such
+    a key takes the branch's draft mark, or loses base.json's. Where the merge
+    kept other words, main's English and mark stay. For every other key both sides record the same English for (or none), a
     mark follows the wording <lang>.json kept: the branch's when it kept the
     branch's words and they differ from main's (a redraft or a review on the
     branch), and no mark when all three wordings agree and the branch has
     none (only a review takes a mark off and keeps the words). Otherwise
-    main's mark stays, so a reviewer's mark is never reversed by a guess."""
+    main's mark stays, so a reviewer's mark is never reversed by a guess.
+
+    <lang>.json must be resolved first: fold() stops on one that still holds
+    conflict markers."""
     sides = None if branch and main else merge_sides(root)
     if not (branch and main) and sides is None:
         raise CatalogueError("no merge, rebase or merge commit shows which side is the branch; "
@@ -855,7 +860,12 @@ def fold(english: dict | None = None, root: str = ROOT, branch: str | None = Non
     for lang in langs:
         base, marks = _shares(store, lang)
         old, old_marks = _at(root, branch, f"{lang}.base.json"), _at(root, branch, f"{lang}.ai.json")
-        words, ours, theirs = _flat(root, f"{lang}.json"), _at(root, branch, f"{lang}.json"), _at(root, main, f"{lang}.json")
+        try:
+            words = _flat(root, f"{lang}.json")
+        except json.JSONDecodeError:
+            raise CatalogueError(f"i18n/{lang}.json is not JSON, likely still in conflict; "
+                                 "resolve the conflict in it first, then run fold") from None
+        ours, theirs = _at(root, branch, f"{lang}.json"), _at(root, main, f"{lang}.json")
         got = {"bases": [], "marked": [], "unmarked": []}
 
         def mark(key, model):
@@ -868,7 +878,8 @@ def fold(english: dict | None = None, root: str = ROOT, branch: str | None = Non
 
         for key, text in sorted(old.items()):
             now = _english_text(key, english)
-            if key not in base or (text == now and base[key] != now):
+            # Only where the merge kept the branch's words: main's words keep main's base and mark.
+            if words.get(key) == ours.get(key) and (key not in base or (text == now and base[key] != now)):
                 base[key] = text
                 got["bases"].append(key)
                 mark(key, old_marks.get(key))

@@ -228,6 +228,35 @@ class FoldTests(unittest.TestCase):
         self.assertEqual(i18n.fold(ENGLISH, repo.root, "HEAD", "HEAD")["de"]["unmarked"], [])
         self.assertEqual(i18n._legacy(repo.root), [], "the work tree's old files are gone")
 
+    def test_a_new_english_on_the_branch_goes_with_the_words_the_conflict_kept(self):
+        # The branch changed f.b's English and redrafted it; main changed the
+        # German too, against the old English. The conflict decides.
+        english = {"f.b": "No staff at all"}
+        point = {"de.json": {"f.b": "Niemand"}, "de.base.json": {"f.b": "No staff"}, "de.ai.json": {"f.b": "gpt"}}
+        branch = {"de.json": {"f.b": "Gar niemand"}, "de.base.json": {"f.b": "No staff at all"},
+                  "de.ai.json": {"f.b": "gpt-new"}}
+        reviewed = {"de.json": {"f.b": "Keiner"}, "base.json": {"f.b": {"en": "No staff", "of": ["de"]}}}
+        drafted = {"de.json": {"f.b": "Keiner (Entwurf)"},
+                   "base.json": {"f.b": {"en": "No staff", "of": ["de"], "ai": {"de": "gpt-main"}}}}
+        for main, kept, base, marks in (
+                # Main's reviewed words kept: its review and old English stand, so they do not ship.
+                (reviewed, reviewed["de.json"], "No staff", {}),
+                # Main's unreviewed redraft kept: its mark stays.
+                (drafted, drafted["de.json"], "No staff", {"f.b": "gpt-main"}),
+                # The branch's words kept: its English and mark come along.
+                (reviewed, branch["de.json"], "No staff at all", {"f.b": "gpt-new"})):
+            repo = Repo.merged(self, point, main, branch)
+            repo.put({"de.json": kept})
+            i18n.fold(english, repo.root)
+            self.assertEqual(i18n.load("de", repo.root)[1], {"f.b": base}, kept)
+            self.assertEqual(i18n.drafted("de", repo.root), marks, kept)
+        # Left in conflict, the table stops fold before it changes anything.
+        repo = Repo.merged(self, point, reviewed, branch)
+        with self.assertRaisesRegex(i18n.CatalogueError, "resolve the conflict"):
+            i18n.fold(english, repo.root)
+        self.assertEqual(i18n._legacy(repo.root), ["de.ai.json", "de.base.json"])
+        self.assertEqual(i18n._store(repo.root), reviewed["base.json"])
+
     def test_a_mistyped_ref_stops_fold_before_it_touches_anything(self):
         repo = Repo(self)
         repo.commit({**POINT, "base.json": STORE}, "both")

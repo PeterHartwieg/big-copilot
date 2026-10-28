@@ -997,8 +997,9 @@ and marks from `base.json` (git history keeps their text). `status --complete` a
 missing and stale keys, for a translation pull request.
 
 Before `base.json` each language had an `i18n/<lang>.base.json` and an `i18n/<lang>.ai.json`.
-A branch from before the change that merges main runs `python tools/i18n.py fold` before it
-commits the merge (or right after, or during a rebase). `fold` reads the branch's old files
+A branch from before the change that merges main resolves any conflict in `i18n/<lang>.json`
+first, then runs `python tools/i18n.py fold` before it commits the merge (or right after, or
+during a rebase); `fold` stops on a `<lang>.json` that still holds conflict markers. `fold` reads the branch's old files
 and its own `<lang>.json` from the branch's commit and main's `<lang>.json` from main's
 (`merge_sides()`: `HEAD` and `MERGE_HEAD`, `REBASE_HEAD` and the rebase's onto, or a merge
 commit's two parents), because git deletes an old file the branch did not change, and drops
@@ -1007,8 +1008,10 @@ stops and asks for `--branch REF --main REF`. It deletes any old file the merge 
 work tree; while one is there, `load()` and `drafted()` refuse to read, so the build and every
 command that reads the translations stop and name `fold`.
 
-The branch's English fills every key `base.json` records none for in that language, and
-wins where only it is today's English; such a key takes the branch's draft mark too. For
+Where the merged `<lang>.json` holds the branch's words for a key, the branch's English
+fills it when `base.json` records none in that language, and wins where only it is today's
+English; such a key takes the branch's draft mark too. Where the merge kept other words,
+main's English and mark stay. For
 every other key both sides record the same English for, a mark follows the wording
 `<lang>.json` kept: the branch's mark (or its lack) when the merge kept the branch's words
 and they differ from main's, as after a redraft or a review with an edit on the branch, and
