@@ -3,14 +3,42 @@ import gc
 import gzip
 import os
 import struct
+import sys
 import tempfile
 import tracemalloc
 from unittest.mock import patch
 import unittest
 
-from ba_save import SaveFormatError, _Reader, _decompress, load_save
+from ba_save import MAX_DEPTH, SaveFormatError, _Reader, _decompress, load_save
 from tests.es3_fixture import encode
 from tests.test_es3_tags import every_tag
+
+
+def nested_instances(levels):
+    """A root struct holding `levels` nested 0x03 structs, each under the key n."""
+    body = b"\x05"
+    key = b"\x01" + struct.pack("<i", 1) + "n".encode("utf-16-le")
+    for _ in range(levels):
+        body = bytes([0x03]) + key + b"\x2e" + body + b"\x05"
+    return b"\x02\x2e" + body
+
+
+def nested_items(levels):
+    """A root list holding `levels` nested one-element lists, the innermost empty."""
+    body = b"\x06" + struct.pack("<q", 0) + b"\x07\x05"
+    for _ in range(levels):
+        body = b"\x06" + struct.pack("<q", 1) + b"\x04\x2e" + body + b"\x07\x05"
+    return b"\x02\x2e" + body
+
+
+def _instance_levels(limit):
+    """Nested 0x03 structs that open exactly `limit` instance/body levels, with the root."""
+    return (limit - 2) // 2
+
+
+def _item_levels(limit):
+    """Nested lists that stay within `limit` instance/body/items levels, with the root."""
+    return max(0, (limit - 3) // 3)
 
 
 class SaveBoundaries(unittest.TestCase):
@@ -79,6 +107,75 @@ class SaveBoundaries(unittest.TestCase):
     def test_utf16_lengths_count_code_units_and_keep_null_values(self):
         root = {"": "", "Türkçe": "A🙂", "long": "🙂" * 80, "null": None}
         self.assertEqual(self.load(gzip.decompress(encode(root))).root, root)
+
+    def test_nested_instances_past_the_limit_are_a_format_error(self):
+        # The root and each 0x03 struct open an instance and a body. One more
+        # than the ceiling is a bad save; the ceiling itself still parses.
+        allowed = _instance_levels(MAX_DEPTH)
+        leaf = self.load(nested_instances(allowed)).root
+        for _ in range(allowed):
+            leaf = leaf["n"]
+        self.assertEqual(leaf, {})
+        with self.assertRaisesRegex(SaveFormatError, f"nesting deeper than {MAX_DEPTH}"):
+            self.load(nested_instances(allowed + 1))
+
+    def test_nested_items_past_the_limit_are_a_format_error(self):
+        # Each list opens an instance, a body and an items frame.
+        allowed = _item_levels(MAX_DEPTH)
+        node = self.load(nested_items(allowed)).root
+        for _ in range(allowed):
+            node = node["$items"][0]
+        self.assertEqual(node["$items"], [])
+        with self.assertRaisesRegex(SaveFormatError, f"nesting deeper than {MAX_DEPTH}"):
+            self.load(nested_items(allowed + 1))
+
+    def test_too_deep_nesting_restores_the_callers_gc_state(self):
+        original = gc.isenabled()
+        self.addCleanup(gc.enable if original else gc.disable)
+        streams = (("instances", nested_instances(_instance_levels(MAX_DEPTH) + 1)),
+                   ("items", nested_items(_item_levels(MAX_DEPTH) + 1)))
+        for enabled in (True, False):
+            (gc.enable if enabled else gc.disable)()
+            for kind, stream in streams:
+                with self.subTest(enabled=enabled, kind=kind), self.assertRaises(SaveFormatError):
+                    self.load(stream)
+                self.assertEqual(gc.isenabled(), enabled)
+
+    def test_a_recursion_error_stays_a_format_error(self):
+        # The counter is the guard. With it lifted, a ceiling only a few dozen
+        # frames above this test still comes back as the same format error,
+        # and gc is put back. The handler runs after the stack unwinds.
+        frame, resting = sys._getframe(), 0
+        while frame is not None:
+            resting += 1
+            frame = frame.f_back
+        original_limit = sys.getrecursionlimit()
+        original_gc = gc.isenabled()
+        self.addCleanup(sys.setrecursionlimit, original_limit)
+        self.addCleanup(gc.enable if original_gc else gc.disable)
+        gc.enable()
+        with patch("ba_save.MAX_DEPTH", 10**6):
+            sys.setrecursionlimit(resting + 48)
+            try:
+                with self.assertRaisesRegex(SaveFormatError, "nesting deeper than"):
+                    self.load(nested_instances(40))
+            finally:
+                sys.setrecursionlimit(original_limit)
+        self.assertTrue(gc.isenabled())
+
+    def test_real_fixtures_still_parse(self):
+        from tests.es3_fixture import link_company
+        from tests.save_fixtures import data_company
+        cases = (
+            ("tags", every_tag(), "Name", "Tag Co"),
+            ("link", link_company(), "SaveGameName", "Link Co"),
+            ("data", data_company(), "SaveGameName", "Payload Co"),
+        )
+        for name, root, field, expected in cases:
+            with self.subTest(name=name):
+                with open(self.path, "wb") as fh:
+                    fh.write(encode(root))
+                self.assertEqual(load_save(self.path).root[field], expected)
 
 
 class SaveMemoryBoundaries(unittest.TestCase):
