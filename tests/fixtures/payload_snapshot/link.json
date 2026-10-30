@@ -22124,6 +22124,7 @@
  ],
  "wholesale": {
   "available": true,
+  "contracts": [],
   "margin": 0.15,
   "rows": [],
   "suppliers": []
