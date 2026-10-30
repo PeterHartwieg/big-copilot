@@ -112,12 +112,13 @@ a nonzero exit status, including partially matched bulk commands.
 The cursor is exclusive, so later insertions do not shift subsequent pages. Bulk
 hide accepts up to 100 validated visitor IDs in one atomic UPDATE.
 
-Publishing has a separate best-effort limit of three requests per minute per IPv4 address or IPv6 /64
-at each Cloudflare location (`SUGGEST_LIMITER`, namespace 1004). The database also
-atomically caps active requests at 1,000 across all connections. A full list
-returns 503 with `Request list full`; voting and duplicate submission retries
-still work at capacity. Rate limits return 429 with `Retry-After: 60`. Both messages
-keep the typed text available for retry. Curated polls do not consume this cap.
+Publishing has a separate best-effort limit of three requests per minute per IPv4
+address or IPv6 /64 at each Cloudflare location (`SUGGEST_LIMITER`, namespace 1004).
+The database also atomically caps active requests at 1,000 across all connections.
+A full list returns 503 with `Request list full`; voting and duplicate submission
+retries still work at capacity. Rate limits return 429 with `Retry-After: 60`. Both
+messages keep the typed text available for retry. Curated polls do not consume this
+cap.
 Restoration also checks the active cap; operators must free space first when full.
 
 Hide removes inappropriate text from the public list; retire closes shipped or
