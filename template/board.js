@@ -16066,6 +16066,12 @@ function hrPickWeek(c, pool){
    breaks none: the hard filter automatic picks and moves go through. */
 const hrFails = (p, x) => (p.demands || []).filter(d => hrKind(d) === "schedule" && hrBreaks(d, x.w, x.S && x.S.row));
 const hrFits = (p, x) => !hrFails(p, x).length;
+/* Whether a site is on the plan the board picks for it by default, the one
+   that reserves whom it draws off the bench (_staffing()): a shop's
+   open-hours plan where it opens on it (spOpenFirst()), else its demand
+   plan. A factory or an office has no plan of the player's to switch to. */
+const hrOnDefault = S => S.site.kind !== "shop"
+  || S.variant === (spOpenFirst(spRosterRow(S.key)) ? "open" : "demand");
 /* The page's whole answer, deterministic for one payload, one set of
    filters and one set of ticks:
      sites  one per hiring site: {site, b, variant, plan, row, weeks, planned}
@@ -16100,12 +16106,32 @@ function hrModel(){
   /* Someone in training: the game's move turns them away, so nobody in
      training is moved or assigned from here. */
   const training = id => !!(((H.people || {})[id] || {}).training);
-  /* 1. The unassigned people a plan already counts on: assigned there. */
-  sites.forEach(S => (S.plan.bench || []).forEach(id => {
-    if(training(id)) return;
+  /* 1. The unassigned people a plan already counts on: assigned there. Only
+     the plan a site is on by default reserves whom it draws off the bench
+     (_staffing()), so a plan the player switched to can count on someone
+     another site's plan counts on too, and the game refuses a call that
+     names one person twice. They go to the site on its default plan, else
+     the first in list order; every other site that counts on them lists
+     them in `shared` ({x: its own move, to: the site they go to}), which
+     Staff this site there sends instead (hrRequest()). */
+  const benchMove = (id, S) => {
     const p = hrPerson(id, S.row);
-    moves.push({id, p, from: null, to: S, week: null, skill: p.skill || null, fixed: true, group: `bench|${S.key}`});
-  }));
+    return {id, p, from: null, to: S, week: null, skill: p.skill || null, fixed: true, group: `bench|${S.key}`};
+  };
+  const claims = new Map();  // id -> the sites whose plan counts on them, list order
+  sites.forEach(S => {
+    S.shared = [];
+    (S.plan.bench || []).forEach(id => {
+      if(training(id)) return;
+      if(!claims.has(id)) claims.set(id, []);
+      if(!claims.get(id).includes(S)) claims.get(id).push(S);
+    });
+  });
+  claims.forEach((list, id) => {
+    const owner = list.find(hrOnDefault) || list[0];
+    moves.push(benchMove(id, owner));
+    list.filter(S => S !== owner).forEach(S => S.shared.push({x: benchMove(id, S), to: owner}));
+  });
   /* 2. Spare people, and the unassigned nobody plans on, into another site's
      week in their primary profession; the sites' spares in list order,
      then the rest. Secondary spare-role metadata cannot qualify them for
@@ -16118,7 +16144,7 @@ function hrModel(){
   const spares = [];
   sites.forEach(S => (S.plan.spare || []).forEach(id => spares.push({id, from: S})));
   (H.bench || []).filter(id => !counted.has(id)).forEach(id => spares.push({id, from: null}));
-  const moved = new Set();
+  const moved = new Set(claims.keys());
   spares.forEach(({id, from}) => {
     if(moved.has(id) || training(id)) return;
     const p = hrPerson(id, from && from.row);
@@ -16277,7 +16303,8 @@ function hrTotals(m){
 /* The week a touched site gets: its plan's entries with somebody on them,
    and each hire week's entries with the person put on it. A week nobody
    fills stays empty. An unassigned person the plan counts on keeps their
-   entries only when this call assigns them here (`arriving`): a "Pick
+   entries only when this call assigns them here (`arriving`, id -> the
+   site key they are moved to): a "Pick
    more" that sends no move leaves them empty. The
    write replaces all seven days, so the shifts the plan does not own stay
    as the game has them, except for anyone this call moves away: a
@@ -16391,7 +16418,7 @@ function hrWeek(S, fill, away, arriving, lost, o = {}){
     if(spNobody(s.p)) return;
     const st = (row.stations || [])[s.s], who = (row.people || [])[s.p];
     if(!st || !who || away.has(who.id)) return;
-    if(bench.has(who.id) && !(arriving && arriving.has(who.id))) return;
+    if(bench.has(who.id) && !(arriving && arriving.get(who.id) === S.key)) return;
     put(s.d, s.f, s.t, who.id, st.id);
   });
   fill.forEach(({id, w}) => (w.slots || []).forEach(sl => {
@@ -16685,7 +16712,7 @@ function hrRequest(m, o = {}){
     return touched.get(S.key);
   };
   const names = new Map();    // id -> {name, skill, c | move}
-  const hires = [], moves = [], away = new Set(), arriving = new Set(), zero = [];
+  const hires = [], moves = [], away = new Set(), arriving = new Map(), zero = [];
   /* One site's action: where each of its own spares can go (hrOutWeek()),
      worked out whatever the mode, for the review to say why. */
   /* One site's action: where each of its own spares goes (hrOutPlan()). */
@@ -16712,13 +16739,16 @@ function hrRequest(m, o = {}){
       /* A site outside the scope gets an additive week, never opened around
          the clock: the spare goes to a week inside its opening hours and on
          hours free there (hrOutWeek()), or is left spare, with that said. */
+      /* Staff this site also moves in whom its plan shares with a site
+         outside the scope (hrModel()): the call names them once either way. */
       const sent = o.site
-        ? [...[...out.values()].filter(r => r.x && !r.x.off).map(r => r.x), ...t.moves.filter(x => inScope(x.to) && !(x.from && x.from.key === o.site))]
+        ? [...[...out.values()].filter(r => r.x && !r.x.off).map(r => r.x), ...t.moves.filter(x => inScope(x.to) && !(x.from && x.from.key === o.site)),
+           ...m.sites.filter(inScope).flatMap(S => (S.shared || []).filter(v => !inScope(v.to)).map(v => v.x))]
         : t.moves.filter(x => inScope(x.to));
       if(!only) sent.forEach(x => {
         moves.push({employeeId: x.id, from: x.from ? gwAddress(x.from.key) : null, to: gwAddress(x.to.key)});
         names.set(x.id, {name: x.p.name, skill: x.skill, move: x});
-        arriving.add(x.id);
+        arriving.set(x.id, x.to.key);
         const at = touch(x.to);
         at.inbound = true;
         /* Outside the scope (Staff this site's own spare reassigned out): the
@@ -16770,6 +16800,11 @@ function hrRequest(m, o = {}){
     own.lost = wk.lost;
     own.leftOut = wk.leftOut || [];
     own.stranded = wk.stranded || [];
+    /* Whom the plan here shares with a site they go to instead: their
+       planned hours here stay open, and the review says so. */
+    own.shared = (S.shared || []).filter(v => arriving.has(v.x.id) && arriving.get(v.x.id) !== S.key).map(v => ({
+      name: v.x.p.name, to: v.to,
+      hours: ((S.row || {}).shifts || []).filter(sh => (((S.row || {}).people || [])[sh.p] || {}).id === v.x.id).reduce((n, sh) => n + sh.t - sh.f, 0)}));
     own.additive = additive;
     own.week = true;
     if(at || one || sources.has(S.key)) sites.push(entry);
@@ -18172,6 +18207,10 @@ function hrReview(o = {}, hooks = {}){
       const fewerCall = fewer.length ? gwCall("", "roster", tt("co.hire.fewer", "<b>Fewer hours than now</b> in the week sent: {who}.",
         {who: fewer.map(({S, r}) => tt("co.hire.fewer.one", "{name} ({site}, {now} → {h} h)", {name: spEsc(r.name || tt("co.hire.someone", "someone")),
           site: spEsc(S.b ? shortName(S.b) : tt("co.hire.asite", "a site")), now: hrNum(r.now), h: hrNum(r.hours)})).join(", ")})) : "";
+      const shared = [...req.touched.values()].flatMap(at => (at.shared || []).filter(v => v.hours > 0).map(v => Object.assign({S: at.S}, v)));
+      const sharedCall = shared.length ? gwCall("warn", "roster", tt("co.hire.shared", "<b>Planned at two sites</b>: {who}. Staff this site at the second site moves them there instead.",
+        {who: shared.map(v => tt("co.hire.shared.one", {one: "{name} goes to {to}, so {n} hour a week at {site} stays open", other: "{name} goes to {to}, so {n} hours a week at {site} stay open"},
+          {name: spEsc(v.name || tt("co.hire.someone", "someone")), to: spEsc(hrSiteName(v.to)), site: spEsc(hrSiteName(v.S)), n: v.hours})).join(", ")})) : "";
       const displaced = [...req.touched.values()].filter(at => at.lost && at.lost.hours > 0);
       const displacedCall = displaced.length ? gwCall("", "roster", tt("co.hire.displaced", "<b>Hours the plan takes over</b>: hours the plan does not own that overlap its own are cut to fit, {where}. The people on them keep any hours outside the plan's.",
         {where: displaced.map(at => tt("co.hire.displaced.one", {one: "{site} {n} hour a week", other: "{site} {n} hours a week"},
@@ -18203,7 +18242,7 @@ function hrReview(o = {}, hooks = {}){
           ...(mode === "hire" ? [] : [[tt("co.hire.tile.weeks", "Site schedules"), null, hrNum(c.weeks)]]),
           [tt("co.hire.tile.wages", "Added wages"), null, `+${fmt(bill)}<small class="hr-u">${tt("co.hire.perday", "/day")}</small>`]])}
         ${mcOrdinaryWageNote()}<p class="gw-lead">${tt("co.hire.lead", "Who goes where. Open a site to see each person and the days they work.")}</p>
-        ${sites}${goneCall}${zero}${fewerCall}${emptyCall}${displacedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", tt("sp.gw.left.head", "<b>No hours here after this</b>"))}<div class="gw-pills">${left.join("")}</div></div>` : ""}
+        ${sites}${goneCall}${zero}${fewerCall}${emptyCall}${displacedCall}${sharedCall}${left.length ? `<div class="gw-box">${gwCall("", "exit", tt("sp.gw.left.head", "<b>No hours here after this</b>"))}<div class="gw-pills">${left.join("")}</div></div>` : ""}
         ${gapText ? gwCall("warn", "alert", `${gapText}.${gapWhy ? ` ${gapWhy}` : ""}`) : ""}${shortCall}${chain}
         ${(req.unreadableSites || []).map(S => gwCall("warn", "alert", tt("sp.evidence.unreadable", "{site}: the current schedule contains unreadable entries. Hires and assignments can proceed, but this office's schedule will stay unchanged; repair its entries in BizMan before applying staffing.", {site: spEsc(hrSiteName(S))}))).join("")}
         ${gwCheckLines(checked)}${officeLeft}

@@ -44,7 +44,7 @@ test('unreadable duties continue to block the office write', () => {
 test('staffing action uses the same demand week without an incoming hire', () => {
   const c = loadBoard(), r = row();
   const S = {key: r.key, site: {kind: 'office'}, row: r, plan: {bench: []}};
-  const week = c.hrSiteWeek(S, [], new Set(), new Set(), false, false);
+  const week = c.hrSiteWeek(S, [], new Set(), new Map(), false, false);
   assert.equal(week.changes, true);
   assert.deepEqual(plain(week.days[0].shifts.map(x => [x.employeeId, x.f, x.t])),
     [['cleaner', 8, 12], ['lawyer', 9, 13]]);
@@ -54,7 +54,7 @@ test('incoming hire fills the demand plan and keeps other duties', () => {
   r.shifts[0].p = null;
   const S = {key: r.key, site: {kind: 'office'}, row: r, plan: {bench: []}};
   const week = c.hrSiteWeek(S, [{id: 'new', w: {slots: [{shift: 0, d: 1, f: 9, t: 13}]}}],
-    new Set(), new Set(['new']), true, false);
+    new Set(), new Map([['new', r.key]]), true, false);
   assert.deepEqual(plain(week.days[0].shifts.map(x => x.employeeId)), ['cleaner', 'new']);
 });
 test('office without history keeps its additive write', () => {

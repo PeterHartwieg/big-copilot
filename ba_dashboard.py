@@ -15778,7 +15778,10 @@ def _staffing(
         if isinstance(site, str):  # the demand plan failed: site is its error
             out[index] = failed(business, site)
             continue
-        mine = {p["id"] for p in site["took"]}
+        # Whom the site's demand plan reserved above. A shop that opens on its
+        # open-hours plan reserved nobody there, so whoever its demand plan drew
+        # may since have gone to a later shop, and is not this one's to count on.
+        mine = set() if _opens_first(site, business) else {p["id"] for p in site["took"]}
         free = {p["id"] for p in left}
         site_bench = [p for p in everyone_on_bench if p["id"] in mine or p["id"] in free]
         scratch = {pid: _copy_state(entry) for pid, entry in site["before"].items()

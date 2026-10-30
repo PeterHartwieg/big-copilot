@@ -647,6 +647,37 @@ test('nobody in training is reassigned or assigned, and their planned hours stay
   assert.equal(await page.locator('#hsOpen .hs-re').count(), 0);
 });
 
+test('someone on the bench two sites\' plans count on is moved once, and the other site is told', async (t) => {
+  // Only the plan a site is on by default reserves whom it draws off the
+  // bench, so Gifts and Bare can both count on Bo; the game refuses a call
+  // naming him twice. Both are on their default plans here: list order decides.
+  const d = JSON.parse(payload);
+  const gifts = d.hiring.sites[0];
+  gifts.plans.demand.bench = ['BENCH1'];
+  // Bo takes Gifts' Sunday, so the second hire week no longer holds it.
+  Object.assign(gifts.plans.demand.hireWeeks[1], {hours: 24, days: 2, slots: gifts.plans.demand.hireWeeks[1].slots.slice(0, 2)});
+  const row = d.staffing.find(r => r.key === G);
+  row.people.push({id: 'BENCH1', name: 'Bo Bench'});
+  row.shifts.find(s => s.d === 0).p = 1;
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  assert.deepEqual((await model(page)).moves.filter(x => x.id === 'BENCH1').map(x => x.to), [G]);
+  const has = (body, n) => body.sites.find(s => s.address.number === n).days.some(x => x.shifts.some(s => s.employeeId === 'BENCH1'));
+  const body = await request(page);
+  assert.deepEqual(body.moves.filter(x => x.employeeId === 'BENCH1').map(x => x.to.number), [10]);
+  assert.ok(has(body, 10), 'his hours where he is moved');
+  assert.ok(!has(body, 4), 'no shift where he is not moved');
+  // Staff this site at Bare moves him there, as before.
+  const bare = await page.evaluate(k => hrRequest(hrModel(), {site: k}).body, B);
+  assert.deepEqual(bare.moves.filter(x => x.employeeId === 'BENCH1').map(x => x.to.number), [4]);
+  assert.ok(has(bare, 4));
+  // Staff all sites says which hours at Bare stay open.
+  await answering(page, []);
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  assert.match(await page.locator('dialog.gw-dlg .gw-body').textContent(), textRe('co.hire.shared', {who: en('co.hire.shared.one',
+    {name: 'Bo Bench', to: 'HART. Gifts', site: 'HART. Bare', n: 12})}));
+});
+
 test('"Pick more" sends no reassign, and leaves the bench a plan counts on out of the week', async (t) => {
   const page = await board(t);
   const body = await page.evaluate(k => hrRequest(hrModel(), {only: {[`${k}|ba:skill_customerservice`]: 1}}).body, B);
@@ -2583,7 +2614,7 @@ test('an entry the game holds past 12 hours goes back as the same hours in piece
   // Its week with nobody hired: the same as the game's, entry for entry but the cut.
   const same = await page.evaluate(k => {
     const S = hrModel().sites.find(x => x.key === k);
-    return hrDiffers(S.row, hrWeek(S, [], new Set(), new Set(), {hours: 0}), new Set());
+    return hrDiffers(S.row, hrWeek(S, [], new Set(), new Map(), {hours: 0}), new Set());
   }, F);
   assert.equal(same, false, 'Fay on Monday and Dee as she is: the cut alone is no change');
 });

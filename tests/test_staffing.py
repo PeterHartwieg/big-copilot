@@ -1863,6 +1863,21 @@ class BenchReservationTest(unittest.TestCase):
         self.assertTrue(row["openCover"]["bench"])
         self.assertEqual(left, [])
 
+    def test_two_default_plans_never_count_on_one_bench_member(self):
+        # A shop nobody works at opens on its open-hours plan; its demand plan
+        # draws the unassigned cashier but does not reserve him, so the next
+        # shop's demand plan takes him. The first shop's open-hours plan must not
+        # count on him again: Staff all sites would move him twice, and the
+        # game refuses the call ("names someone twice").
+        new, measured = plan_sites(
+            [dict(items=[(1, REGISTER)], hourly={h: 2 for h in range(8, 20)}, opens=((8, 20),), number=12),
+             dict(items=[(2, REGISTER)], hourly={h: 2 for h in range(8, 20)}, opens=((8, 20),), number=14,
+                  staff=1)],
+            [employee("free", [SERVICE], here=False)],
+        )
+        self.assertTrue(measured["bench"])
+        self.assertEqual(new["openCover"]["bench"], [])
+
 
 class UnmeasuredSiteTest(unittest.TestCase):
     """A shop that has never reported an hour is still a shop (item 2)."""
