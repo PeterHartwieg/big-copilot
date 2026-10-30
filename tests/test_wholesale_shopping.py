@@ -183,6 +183,39 @@ class WholesaleShopping(unittest.TestCase):
         self.assertFalse(r["deliveryUnknown"])
         self.assertEqual(r["deliveries"], [[0.083, 900]])
 
+    def test_contracts_keep_weekly_stopped_once_and_urgent_and_drop_an_empty_one(self):
+        c = self.company()
+        c.wholesale(SHOP, SODA, 40, due=26)
+        c.deliveries[0]["deliveryFee"] = 15
+        c.wholesale(SHOP, SODA, 10, due=27, enabled=False)
+        c.wholesale(SHOP, BEER, 5, due=28, repeating=False)
+        c.deliveries[2]["wholesaleAddress"] = ("other_way", 2)
+        c.wholesale(SHOP, SODA, 8, due=29)
+        c.deliveries[3]["isUrgentOrder"] = True
+        c.wholesale(SHOP, SODA, 0, due=30)  # nothing to pre-fill
+        c.deliveries[0]["items"].append({"itemName": BEER, "amount": True})  # not a quantity
+        c.deliveries[0]["items"].append({"itemName": BEER, "amount": 0})
+        save = c.save()
+        save.root["BuildingRegistrations"].append({
+            "StreetName": "wholesale_way", "StreetNumber": 1, "BusinessName": "Warehouse Market",
+            "businessTypeName": "ba:businesstype_wholesalestore"})
+        rules = {**RULES, "products": {**RULES["products"], SODA: {"bx": 50, "w": 3}}}
+        with patch("ba_dashboard.load_store_rules", return_value=rules):
+            contracts = _wholesale_shopping(save, Names({}), c.businesses())["contracts"]
+        self.assertEqual([row["mode"] for row in contracts], ["weekly", "weekly", "once", "urgent"])
+        self.assertEqual([row["enabled"] for row in contracts], [True, False, True, True])
+        weekly, stopped, once, urgent = contracts
+        self.assertEqual(weekly["id"], "w:main_street#1|wholesale_way#1|0")
+        self.assertEqual(stopped["id"], "w:main_street#1|wholesale_way#1|1")
+        self.assertEqual((weekly["s"], weekly["supplierName"], weekly["next"], weekly["fee"]),
+                         (0, "Warehouse Market", 26, 15))
+        self.assertEqual(weekly["items"], [{"slug": SODA, "item": "Soda", "amount": 40, "price": 3}])
+        self.assertFalse(stopped["enabled"])
+        self.assertEqual(once["supplier"], "other_way#2")
+        self.assertEqual(once["items"][0]["price"], None)  # beer has no catalogue wholesale price here
+        self.assertEqual(urgent["mode"], "urgent")
+        self.assertEqual(len(contracts), 4)
+
     def test_a_rushed_weekly_contract_stays_weekly_but_its_next_monday_is_not_credited(self):
         # The game trims that drop to the weekly wholesale limit left, which no
         # save records, so Buy now does not lean on it.

@@ -2707,6 +2707,467 @@ const gwScheduleSaid = (shop, answer) => answer.openedHours
       other: "{shop}: {n} entries set in place of {was}, open 0 to 24 every day."}, {shop, n: Number(answer.added) || 0, was: Number(answer.removed) || 0})
   : tt("sp.gw.sch.said", {one: "{shop}: {n} entry set in place of {was}.", other: "{shop}: {n} entries set in place of {was}."},
       {shop, n: Number(answer.added) || 0, was: Number(answer.removed) || 0});
+/* --- edit a purchase order (phase 1, web only) ---------------------------
+   TODO(phase 2, Link 0.9.0): amount 0 removes a line, an enabled one-off can
+   be edited, and POST /write/wholesale grows mode:"edit". This phase reuses
+   the existing weekly wholesale write and the imports write. activate stays
+   false, so a stopped contract is never started. A weekly edit lists every
+   current line, because the live write refuses other_products otherwise. */
+const PO_STORE = "ba-po-orders-v1";
+function poLines(contract){
+  return ((contract && contract.lines) || []).map(l => ({...l}));
+}
+function poFromWholesale(c){
+  return {kind: "wholesale", id: c.id, shop: c.shop, s: c.s, supplier: c.supplier,
+    supplierName: c.supplierName || "", enabled: !!c.enabled, mode: c.mode || "weekly",
+    next: Number.isFinite(c.next) ? c.next : null,
+    fee: Number.isFinite(Number(c.fee)) ? Number(c.fee) : null,
+    lines: (c.items || []).map(i => ({slug: i.slug, item: i.item || i.slug, amount: i.amount || 0,
+      price: Number.isFinite(Number(i.price)) ? Number(i.price) : null, expect: i.amount || 0}))};
+}
+function poFromAgent(a){
+  const mode = a.smart ? "smart" : a.repeating ? "weekly" : "once";
+  return {kind: "import", id: a.contract, supplierName: a.importer || "", enabled: !!a.active,
+    mode, urgent: !!a.urgent, next: Number.isFinite(a.next) ? a.next : null, who: a.who || "",
+    lines: (a.products || []).map(p => ({slug: p.slug, item: p.item || p.slug, amount: p.amount || 0,
+      warehouse: p.key || null, where: p.where || "", s: Number.isInteger(p.s) ? p.s : null, expect: p.amount || 0}))};
+}
+function poWholesaleRows(){
+  return ((D && D.wholesale && D.wholesale.contracts) || []).map(poFromWholesale);
+}
+function poImportRows(){
+  return ((srRoles().agents) || []).filter(a => a && a.contract).map(poFromAgent);
+}
+function poFind(kind, id){
+  return (kind === "import" ? poImportRows() : poWholesaleRows()).find(c => c.id === id) || null;
+}
+/* What the edit may send. A missing or older Link, a stopped contract, and a
+   one-off stay read-only. Re-entering a cancelled weekly wholesale order is
+   the existing place-weekly path; a cancelled import has no contract to write. */
+function poGate(contract, link){
+  const kind = contract.kind === "import" ? "imports" : "wholesale";
+  const linked = !!(link && (link.writes || []).includes(kind));
+  if (contract.reenter){
+    if (contract.kind === "wholesale" && contract.mode === "weekly")
+      return {write: linked, reason: linked ? "" : link ? "old" : "missing"};
+    return {write: false, reason: "gone"};
+  }
+  if (!link) return {write: false, reason: "missing"};
+  if (!linked) return {write: false, reason: "old"};
+  if (!contract.enabled) return {write: false, reason: "stopped"};
+  if (contract.kind === "wholesale" && contract.mode !== "weekly") return {write: false, reason: "phase2"};
+  if (contract.kind === "import" && contract.mode === "once") return {write: false, reason: "phase2"};
+  return {write: true, reason: ""};
+}
+function poGateSay(gate, contract){
+  if (gate.reason === "missing" || gate.reason === "old")
+    return gwUpdateMod(contract.kind === "import" ? "imports" : "wholesale");
+  if (gate.reason === "stopped") return `${tt("sb.po.stopped", "This contract is stopped.")} ${tt("sb.po.stoppedStay", "Big Copilot will not start it again.")}`;
+  if (gate.reason === "phase2") return `${tt("sb.po.oneOff", "Editing a one-off order needs a later Link update.")} ${tt("sb.po.oneOffCopy", "Copy the order if you need the list.")}`;
+  if (gate.reason === "gone") return `${tt("sb.po.gone", "This contract is no longer in the save.")} ${tt("sb.po.goneList", "The list below is what was copied, so it can be entered again in BizMan.")}`;
+  return "";
+}
+/* A whole order cleared is a delete. One wholesale line set to 0 is a removal,
+   which this Link cannot do. Either way nothing is sent. */
+function poBlock(contract, lines){
+  if (!lines.length || lines.every(l => !(Number(l.amount) > 0)))
+    return `${tt("sb.po.empty", "This would remove every line.")} ${tt("sb.po.emptyCancel", "Cancel the contract in BizMan.")} ${tt("sb.po.emptyNo", "Big Copilot does not delete an order.")}`;
+  if (lines.some(l => !Number.isInteger(l.amount) || l.amount < 0))
+    return tt("sb.po.whole", "Each amount has to be a whole number of 0 or more.");
+  if (contract.kind === "wholesale" && lines.some(l => l.amount < 1))
+    return `${tt("sb.po.keepLine", "Removing a line needs a later Link update.")} ${tt("sb.po.keepLineHow", "Set each amount to at least 1, or cancel the contract in BizMan.")}`;
+  if (contract.kind === "import" && lines.some(l => !l.warehouse))
+    return tt("sb.po.noWarehouse", "A product has no warehouse, so this edit cannot be written.");
+  return "";
+}
+function poUnchanged(before, lines){
+  if (before.length !== lines.length) return false;
+  return before.every((b, i) => b.slug === lines[i].slug && b.amount === lines[i].amount
+    && (b.warehouse || "") === (lines[i].warehouse || ""));
+}
+function poFinite(v){
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+function poCost(contract, lines){
+  if (!lines.length || lines.some(l => poFinite(l.price) === null)) return null;
+  const goods = lines.reduce((n, l) => n + l.amount * l.price, 0);
+  const fee = poFinite(contract && contract.fee);
+  return goods + (fee === null ? 0 : fee);
+}
+function poImportCosts(before, row){
+  const products = (row && row.products) || [];
+  if (!products.length) return null;
+  let beforeCost = 0, afterCost = 0;
+  for (const line of before){
+    const p = products.find(x => x && x.itemName === line.slug
+      && (!line.warehouse || gwKeyOf(x.warehouse) === line.warehouse));
+    if (!p || !Number.isFinite(Number(p.unitPrice))) return null;
+    beforeCost += Number(line.amount) * Number(p.unitPrice);
+    afterCost += Number(p.amount) * Number(p.unitPrice);
+  }
+  const total = Number(row.nextDeliveryTotal);
+  return {before: beforeCost, after: Number.isFinite(total) ? total : afterCost};
+}
+/* Old against new, one row a line. dayNote is empty when the day stays. */
+function poDiff(before, after, meta = {}){
+  const rows = [];
+  const used = new Set();
+  (before || []).forEach(line => {
+    const hit = (after || []).find(a => !used.has(a) && a.slug === line.slug
+      && (a.warehouse || "") === (line.warehouse || ""));
+    if (hit) used.add(hit);
+    rows.push({slug: line.slug, item: line.item || (hit && hit.item) || line.slug,
+      old: line.amount, neu: hit ? hit.amount : null});
+  });
+  (after || []).forEach(line => {
+    if (used.has(line)) return;
+    rows.push({slug: line.slug, item: line.item || line.slug, old: null, neu: line.amount});
+  });
+  const dayBefore = poFinite(meta.dayBefore), dayAfter = poFinite(meta.dayAfter);
+  const dayNote = dayBefore !== null && dayAfter !== null && dayBefore !== dayAfter
+    ? tt("sb.po.dayMoves", "The next delivery moves from day {from} to day {to}.", {from: dayBefore, to: dayAfter}) : "";
+  return {rows, costBefore: poFinite(meta.costBefore), costAfter: poFinite(meta.costAfter),
+    dayBefore, dayAfter, dayNote};
+}
+function poDiffHtml(diff){
+  const body = diff.rows.map(r => `<tr><td class="l">${spEsc(r.item)}</td><td>${r.old === null ? "—" : num(r.old)}</td><td>${
+    r.neu === null ? "—" : num(r.neu)}</td></tr>`).join("");
+  let cost = "";
+  if (diff.costBefore !== null && diff.costAfter !== null)
+    cost = `<p>${tt("sb.po.cost", "Cost goes from {before:$} to {after:$}.", {before: diff.costBefore, after: diff.costAfter})}</p>`;
+  else if (diff.costAfter !== null)
+    cost = `<p>${tt("sb.po.costAfter", "The game quotes {after:$} for this order.", {after: diff.costAfter})}</p>`;
+  else if (diff.costBefore !== null)
+    cost = `<p>${tt("sb.po.costBefore", "The order on the board costs {before:$}.", {before: diff.costBefore})}</p>`;
+  return `<table class="po-diff"><thead><tr><th class="l">${tt("sb.col.product", "Product")}</th><th>${
+    tt("sb.po.col.now", "Now")}</th><th>${tt("sb.po.col.after", "After")}</th></tr></thead><tbody>${body}</tbody></table>${
+    cost}${diff.dayNote ? `<p>${diff.dayNote}</p>` : ""}`;
+}
+function poAfterLines(contract, asked, row){
+  if (contract.kind === "import" && row && (row.products || []).length)
+    return row.products.filter(p => p && p.itemName).map(p => ({slug: p.itemName, item: itemName(p.itemName),
+      amount: p.amount, warehouse: gwKeyOf(p.warehouse)}));
+  if (contract.kind === "wholesale" && row && (row.items || []).length)
+    return row.items.map(i => ({slug: i.item, item: itemName(i.item), amount: i.amount}));
+  return asked;
+}
+function poAnswerDiff(contract, before, asked, answer){
+  const rows = (answer && answer.rows) || [];
+  const row = rows.find(r => r && !r.error) || rows[0] || {};
+  const after = poAfterLines(contract, asked, row);
+  let costBefore = poCost(contract, before), costAfter = null;
+  if (contract.kind === "import"){
+    const priced = poImportCosts(before, row);
+    if (priced){ costBefore = priced.before; costAfter = priced.after; }
+  }
+  if (costAfter === null) costAfter = poFinite(row.cost);
+  if (costAfter === null) costAfter = poFinite(row.nextDeliveryTotal);
+  return poDiffHtml(poDiff(before, after, {costBefore, costAfter,
+    dayBefore: contract.next, dayAfter: poFinite(row.nextDeliveryDay)}));
+}
+function poWholesaleBody(contract, lines){
+  return {address: gwAddress(contract.shop), supplier: gwAddress(contract.supplier), mode: "weekly",
+    snapshot: (gwLink() || {}).stamp, items: lines.map(l => ({item: l.slug, amount: l.amount}))};
+}
+function poImportBody(contract, lines){
+  /* activate stays false: editing amounts must not start a stopped contract. */
+  return {contracts: [{id: contract.id, activate: false, products: lines.map(l => ({
+    itemName: l.slug, warehouse: gwAddress(l.warehouse), amount: l.amount, expect: l.expect}))}]};
+}
+function poSnapshot(contract, lines){
+  const use = lines || poLines(contract);
+  return {v: 1, kind: contract.kind, id: contract.id, shop: contract.shop || null,
+    supplier: contract.supplier || null, supplierName: contract.supplierName || "", mode: contract.mode,
+    next: Number.isFinite(contract.next) ? contract.next : null, enabled: !!contract.enabled,
+    fee: Number.isFinite(Number(contract.fee)) ? Number(contract.fee) : null,
+    lines: use.map(l => ({slug: l.slug, item: l.item || l.slug, amount: l.amount,
+      warehouse: l.warehouse || null, price: Number.isFinite(Number(l.price)) ? Number(l.price) : null,
+      expect: Number.isFinite(Number(l.expect)) ? Number(l.expect) : l.amount}))};
+}
+function poCopyText(snap){
+  const who = snap.supplierName || "";
+  const mode = poModeLabel(snap.mode);
+  const head = snap.kind === "import"
+    ? tt("sb.po.copyHead.imp", "Import order · {who} · {mode}", {who, mode})
+    : tt("sb.po.copyHead.ws", "Wholesale order · {who} · {mode}", {who, mode});
+  const day = Number.isFinite(snap.next) ? tt("sb.po.copyDay", "Next delivery day {day}", {day: snap.next}) : "";
+  const lines = (snap.lines || []).map(l => tt("sb.po.copyLine", "{item}: {n:,}", {item: l.item || l.slug, n: l.amount}));
+  return [head, day, ...lines].filter(Boolean).join("\n");
+}
+function poKey(snap){ return `${snap.kind}|${snap.id}`; }
+function poReadAll(){
+  let raw;
+  try { raw = localStorage.getItem(PO_STORE); } catch (e) { return {}; }
+  if (typeof raw !== "string" || !raw) return {};
+  try {
+    const data = JSON.parse(raw);
+    return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  } catch (e) { return {}; }
+}
+function poWriteAll(data){
+  try { localStorage.setItem(PO_STORE, JSON.stringify(data)); } catch (e) { /* a private window still has the clipboard */ }
+}
+function poRemember(snap){
+  const all = poReadAll();
+  all[poKey(snap)] = snap;
+  poWriteAll(all);
+  return poCopyText(snap);
+}
+function poRecall(kind, id){
+  return poReadAll()[`${kind}|${id}`] || null;
+}
+function poRestoreLines(current, snap){
+  const saved = (snap && snap.lines) || [];
+  if (!current || !current.length) return saved.map(l => ({...l, item: l.item || l.slug}));
+  const used = new Set();
+  const out = current.map(l => {
+    const hit = saved.find(s => !used.has(s) && s.slug === l.slug && (s.warehouse || "") === (l.warehouse || ""))
+      || saved.find(s => !used.has(s) && s.slug === l.slug);
+    if (!hit) return {...l};
+    used.add(hit);
+    return {...l, amount: hit.amount};
+  });
+  if (snap && snap.kind === "wholesale") saved.forEach(s => {
+    if (used.has(s)) return;
+    used.add(s);
+    out.push({...s, item: s.item || s.slug});
+  });
+  return out;
+}
+function poModeLabel(mode){
+  if (mode === "weekly") return tt("sb.po.mode.weekly", "Weekly");
+  if (mode === "once") return tt("sb.po.mode.once", "One-off");
+  if (mode === "smart") return tt("sb.po.mode.smart", "Smart Delivery");
+  if (mode === "urgent") return tt("sb.po.mode.urgent", "Urgent");
+  return mode || "";
+}
+function poAmount(value){
+  if (typeof value === "number" && Number.isInteger(value)) return value;
+  const text = String(value ?? "").trim();
+  if (!/^-?\d+$/.test(text)) return NaN;
+  return Number(text);
+}
+function poInScope(view, kind, contract){
+  if (kind === "wholesale") return sbInScope(view, Number.isInteger(contract.s) ? contract.s : null);
+  const sites = (contract.lines || []).map(l => Number.isInteger(l.s) ? l.s : null);
+  if (!sites.length) return sbScopeOf(view) === "all";
+  return sites.some(s => sbInScope(view, s));
+}
+function poEditButton(kind, id){
+  return `<button type="button" class="nx-btn sm po-edit" data-po-edit="${attr(kind)}" data-po-id="${attr(String(id))}">${
+    tt("sb.po.edit", "Edit")}</button>`;
+}
+function poShopName(s, key){
+  const b = Number.isInteger(s) && D && D.businesses && D.businesses[s];
+  return spEsc(b ? shortName(b) : key || "—");
+}
+function poSummary(lines){
+  const shown = lines.slice(0, 3).map(l => `${spEsc(l.item || l.slug)} <b>${num(l.amount)}</b>`).join(" · ");
+  return lines.length > 3 ? tt("sb.roles.more", "{list} +{n}", {list: shown, n: lines.length - 3}) : shown || "—";
+}
+function poContractTable(view, kind, rows){
+  const scoped = rows.filter(c => poInScope(view, kind, c));
+  if (!scoped.length) return "";
+  const title = kind === "import" ? tt("sb.po.imports", "Import contracts") : tt("sb.po.wholesale", "Wholesale contracts");
+  const who = kind === "import" ? tt("sb.roles.col.importer", "Importer") : tt("sb.wholesale.supplier", "Wholesaler");
+  const body = scoped.map(c => `<tr><td class="l">${kind === "import" ? spEsc(c.supplierName || "—") : poShopName(c.s, c.shop)}</td>
+    <td class="l">${kind === "import" ? poSummary(c.lines) : spEsc(c.supplierName || "—")}</td>
+    <td class="l">${poModeLabel(c.mode)}${c.enabled ? "" : ` <span class="sub">${tt("sb.roles.paused", "paused")}</span>`}</td>
+    <td class="l">${Number.isFinite(c.next) ? srDay(c.next) : "—"}</td>
+    <td class="l">${kind === "import" ? "" : poSummary(c.lines)}</td>
+    <td class="tg">${poEditButton(kind, c.id)}</td></tr>`).join("");
+  return `<div class="po-contracts"><h3>${spIcon(kind === "import" ? "ship" : "truck")}${title}</h3>
+    <div class="scrollx"><table class="sb-t"><thead><tr><th class="l">${kind === "import" ? who : tt("sb.wholesale.shop", "Shop")}</th>
+    <th class="l">${kind === "import" ? tt("sb.col.product", "Product") : who}</th>
+    <th class="l">${tt("sb.roles.col.delivery", "Delivery")}</th><th class="l">${tt("sb.roles.col.next", "Next delivery")}</th>
+    <th class="l">${kind === "import" ? "" : tt("sb.col.product", "Product")}</th><th></th></tr></thead><tbody>${body}</tbody></table></div></div>`;
+}
+function poWholesaleHtml(view){
+  if (!odNeed("wholesale")) return `<div class="po-contracts">${odWaitHtml("wholesale", true)}</div>`;
+  return poContractTable(view, "wholesale", poWholesaleRows());
+}
+function poImportHtml(view){
+  return poContractTable(view, "import", poImportRows());
+}
+function poCopiedHtml(){
+  const live = new Set([...poWholesaleRows(), ...poImportRows()].map(c => poKey(c)));
+  const rows = Object.entries(poReadAll()).filter(([k, snap]) => snap && snap.v === 1 && !live.has(k));
+  if (!rows.length) return "";
+  const body = rows.map(([k, snap]) => `<tr><td class="l">${spEsc(snap.supplierName || "—")}</td><td class="l">${poModeLabel(snap.mode)}</td>
+    <td class="l">${poSummary(snap.lines || [])}</td><td class="tg"><button type="button" class="nx-btn sm" data-po-copied="${attr(k)}">${
+    tt("sb.po.restore", "Restore")}</button></td></tr>`).join("");
+  return `<div class="po-contracts"><h3>${spIcon("list")}${tt("sb.po.copiedOrders", "Copied orders")}</h3>
+    <p class="quiet">${tt("sb.po.copiedNote", "A cancelled order can be read back from this browser, with or without Link.")}</p>
+    <div class="scrollx"><table class="sb-t"><thead><tr><th class="l">${tt("sb.wholesale.supplier", "Wholesaler")}</th>
+    <th class="l">${tt("sb.roles.col.delivery", "Delivery")}</th><th class="l">${tt("sb.col.product", "Product")}</th><th></th></tr></thead><tbody>${
+    body}</tbody></table></div></div>`;
+}
+function poContractsHtml(view){
+  const imports = view === "deliveries" ? poImportHtml(view) : "";
+  /* Plans already lists each import contract on its own row, with Edit there.
+     Deliveries has no such row, so the same contracts are listed here too. */
+  return poWholesaleHtml(view) + imports + poCopiedHtml();
+}
+function poMetaHtml(contract){
+  const who = spEsc(contract.supplierName || "—"), mode = poModeLabel(contract.mode);
+  return Number.isFinite(contract.next)
+    ? `<p>${tt("sb.po.meta", "{who} · {mode} · next delivery day {day}.", {who, mode, day: contract.next})}</p>`
+    : `<p>${tt("sb.po.metaNone", "{who} · {mode} · no delivery day is set.", {who, mode})}</p>`;
+}
+function poSupplierAdds(contract, lines){
+  if (contract.kind !== "wholesale" || !contract.supplier || !D || !D.wholesale) return [];
+  const vendor = (D.wholesale.suppliers || []).find(s => s.key === contract.supplier);
+  const have = new Set(lines.map(l => l.slug));
+  return ((vendor && vendor.products) || []).filter(slug => slug && !have.has(slug));
+}
+function poFormBody(contract, lines, gate){
+  const read = !gate.write;
+  const fields = lines.map((l, i) => `<label class="po-line"><span>${spEsc(l.item || l.slug)}</span>${read
+    ? `<b>${num(l.amount)}</b>`
+    : `<input type="number" min="0" step="1" inputmode="numeric" data-po-amount="${i}" value="${attr(String(l.amount))}" aria-label="${
+      attr(l.item || l.slug)}">`}</label>`).join("");
+  const adds = read ? [] : poSupplierAdds(contract, lines);
+  const add = adds.length ? `<div class="po-add"><label>${tt("sb.po.add", "Add a product")} <select data-po-add>${
+    adds.map(slug => `<option value="${attr(slug)}">${spEsc(itemName(slug))}</option>`).join("")}</select></label>
+    <input type="number" min="1" step="1" value="1" data-po-add-amount aria-label="${attr(tt("sb.po.addAmount", "Amount to add"))}">
+    <button type="button" class="nx-btn sm" data-po-add-btn>${tt("sb.po.addBtn", "Add")}</button></div>` : "";
+  return `${poMetaHtml(contract)}<div class="po-form">${fields}</div>${add}<p class="po-note" role="status"></p>`;
+}
+function poReadForm(dlg, lines){
+  const next = lines.map(l => ({...l}));
+  if (!dlg) return next;
+  dlg.querySelectorAll("[data-po-amount]").forEach(input => {
+    const i = Number(input.dataset.poAmount);
+    if (next[i]) next[i].amount = poAmount(input.value);
+  });
+  return next;
+}
+function poForm(contract, lines){
+  const gate = poGate(contract, gwLink());
+  let current = lines.map(l => ({...l}));
+  const dlg = gwDialog(contract.kind === "import" ? "crate" : "truck", tt("sb.po.title", "Edit order"),
+    poWhere(contract));
+  const paint = () => {
+    gwPaint(dlg, {phase: "ready", wire: gate.write ? "ok" : "wait",
+      say: `<b>${gate.write ? tt("sb.po.say", "Change the amounts, then review.") : poGateSay(gate, contract)}</b>`,
+      meta: gwNow(), body: poFormBody(contract, current, gate),
+      buttons: [[tt("nav.dlg.cancel", "Cancel"), () => dlg.close(), {kind: "ghost", close: true}], "|",
+        [tt("sb.po.copy", "Copy order"), () => { poCopy(contract, poReadForm(dlg, current), dlg); }, {kind: "ghost", key: "copy"}],
+        ...(poRecall(contract.kind, contract.id) ? [[tt("sb.po.restore", "Restore"), () => {
+          current = poRestoreLines(poLines(contract.reenter ? {lines: []} : contract), poRecall(contract.kind, contract.id));
+          paint();
+        }, {kind: "ghost", key: "restore"}]] : []),
+        ...(gate.write ? [[tt("sb.po.review", "Review"), () => poReview(dlg, contract, current), {kind: "go", icon: "right", key: "review"}]] : [])]});
+    const add = dlg.querySelector("[data-po-add-btn]");
+    if (add) add.onclick = () => {
+      const slug = (dlg.querySelector("[data-po-add]") || {}).value;
+      const amount = poAmount((dlg.querySelector("[data-po-add-amount]") || {}).value);
+      current = poReadForm(dlg, current);
+      if (slug && Number.isInteger(amount) && amount >= 1 && !current.some(l => l.slug === slug))
+        current.push({slug, item: itemName(slug), amount, price: null, expect: 0});
+      paint();
+    };
+  };
+  paint();
+}
+function poWhere(contract){
+  if (contract.kind === "wholesale") return gwWhere((D.businesses || []).find(b => b.key === contract.shop));
+  const key = (contract.lines.find(l => l.warehouse) || {}).warehouse;
+  return key ? gwWhere((D.businesses || []).find(b => b.key === key)) : "";
+}
+async function poCopy(contract, lines, dlg){
+  const text = poRemember(poSnapshot(contract, lines));
+  const status = dlg.querySelector(".po-note");
+  try {
+    await navigator.clipboard.writeText(text);
+    if (status) status.textContent = tt("sb.po.copied", "Order copied");
+  } catch (e) {
+    let box = dlg.querySelector(".po-fallback");
+    if (!box){
+      box = document.createElement("textarea");
+      box.className = "po-fallback";
+      box.setAttribute("aria-label", tt("sb.po.copyText", "Order to copy"));
+      dlg.querySelector(".gw-body").appendChild(box);
+    }
+    box.value = text;
+    box.focus();
+    box.select();
+    if (status) status.textContent = tt("sb.strip.copyByHand", "Copy the selected text below.");
+  }
+}
+function poReview(dlg, contract, lines){
+  const asked = poReadForm(dlg, lines);
+  const err = poBlock(contract, asked);
+  const note = dlg.querySelector(".po-note");
+  if (err){ if (note) note.textContent = err; return; }
+  if (contract.kind === "wholesale") poWholesaleReview(contract, asked);
+  else poImportReview(contract, asked);
+}
+function poWholesaleReview(contract, lines){
+  const before = contract.reenter ? [] : poLines(contract);
+  const shop = contract.shop;
+  gwConfirm({kind: "wholesale", icon: "truck", needs: ["wholesale"], scope: odScope(),
+    title: tt("sb.po.reviewTitle", "Review order"),
+    where: () => gwWhere((D.businesses || []).find(b => b.key === shop)),
+    body: () => poWholesaleBody(contract, lines),
+    applyBody: (answer, body) => ({...body, quote: answer.quote}),
+    nothing: () => poUnchanged(before, lines) ? tt("sb.po.same", "Nothing to change: every amount is already this.") : "",
+    idle: answer => answer.rows?.every(r => !r.set) ? tt("sb.wholesale.alreadySet", "This weekly order is already set.") : "",
+    verdict: answer => answer.ok ? tt("sb.wholesale.checked", "The wholesaler can take this order.") : tt("sp.gw.refuses", "The game refuses this"),
+    object: r => gwSiteName(r),
+    draw: answer => answer.undo ? "" : poAnswerDiff(contract, before, lines, answer),
+    applyLabel: () => tt("sb.po.apply", "Apply the edit"),
+    applying: tt("sb.wholesale.placing", "Placing the wholesale order…"),
+    changed: answer => answer.rows?.some(r => r.set),
+    done: answer => answer.undo ? tt("sb.wholesale.undone", "Wholesale order undone.") : tt("sb.po.done", "Order updated in the game."),
+  });
+}
+function poImportReview(contract, lines){
+  const before = poLines(contract);
+  gwConfirm({kind: "imports", icon: "crate",
+    title: tt("sb.po.reviewTitle", "Review order"),
+    where: () => poWhere(contract),
+    body: () => poImportBody(contract, lines),
+    nothing: () => poUnchanged(before, lines) ? tt("sb.po.same", "Nothing to change: every amount is already this.") : "",
+    verdict: answer => {
+      const bad = (answer.rows || []).filter(r => r && r.error).length;
+      return bad ? tt("sp.gw.refuses", "The game refuses this") : tt("sb.gw.takes.one", "The game takes the change");
+    },
+    object: () => spEsc(contract.supplierName || tt("sb.gw.aContract", "A contract")),
+    draw: answer => answer.undo ? "" : poAnswerDiff(contract, before, lines, answer),
+    applyLabel: () => tt("sb.po.apply", "Apply the edit"),
+    applying: tt("sb.gw.applying", "Changing the imports in the game…"),
+    changed: answer => (answer.rows || []).some(r => (r.products || []).some(p => p && p.before !== p.amount)),
+    done: answer => answer.undo ? tt("sb.gw.undone", "Undone: the imports are back as they were.") : tt("sb.po.done", "Order updated in the game."),
+  });
+}
+function poOpen(kind, id){
+  const contract = poFind(kind, id);
+  if (contract) poForm(contract, poLines(contract));
+}
+function poFromSnap(snap){
+  return {kind: snap.kind, id: snap.id, shop: snap.shop, supplier: snap.supplier, supplierName: snap.supplierName || "",
+    enabled: !!snap.enabled, mode: snap.mode, next: snap.next, fee: snap.fee, reenter: true,
+    lines: (snap.lines || []).map(l => ({...l}))};
+}
+function poOpenCopied(storeKey){
+  const snap = poReadAll()[storeKey];
+  if (!snap) return;
+  const live = poFind(snap.kind, snap.id);
+  if (live){ poForm(live, poRestoreLines(poLines(live), snap)); return; }
+  const contract = poFromSnap(snap);
+  poForm(contract, poLines(contract));
+}
+const bindPurchaseOrders = once(() => {
+  on("click", "[data-po-edit]", (btn, e) => {
+    e.preventDefault(); e.stopPropagation();
+    poOpen(btn.dataset.poEdit, btn.dataset.poId);
+  }, true);
+  on("click", "[data-po-copied]", (btn, e) => {
+    e.preventDefault(); e.stopPropagation();
+    poOpenCopied(btn.dataset.poCopied);
+  }, true);
+});
 const bindWrites = once(() => {
   on("click", "[data-gw]", (btn, e) => {
     /* Capture phase: a button inside a finding row must not open the row. */
@@ -2725,4 +3186,4 @@ const bindWrites = once(() => {
     else if(kind === "streetFoodRoute") gwStreetFoodRoute(btn.dataset.gwPlan);
   }, true);
 });
-function wireWrites(){ bindWrites(); gwToast(); gwReadBack(); }
+function wireWrites(){ bindWrites(); bindPurchaseOrders(); gwToast(); gwReadBack(); }

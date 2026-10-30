@@ -7064,6 +7064,60 @@ def _wholesale_buy(need: float, stock: float, deliveries: list) -> float:
     return max(extra, need - stock - received, 0.0)
 
 
+def _wholesale_contract_list(save: Save, names: Names, businesses: list, suppliers: list, products: dict) -> list:
+    """Each DeliveryContract the board can edit or copy, in the save's order.
+
+    A contract with no positive line is left out: there is nothing to pre-fill.
+    `mode` is weekly, once or urgent. A stopped contract stays in the list so
+    it can be copied; the board never starts one again. `price` is the
+    catalogue wholesale price, for the cost shown before the game quotes one.
+    """
+    index = {b["key"]: s for s, b in enumerate(businesses)}
+    named = {s["key"]: s for s in suppliers}
+    seen = collections.Counter()
+    out = []
+    for contract in save.items(save.root.get("DeliveryContracts")):
+        if not isinstance(contract, dict):
+            continue
+        shop_addr = save.address(contract.get("businessAddress"))
+        sup_addr = save.address(contract.get("wholesaleAddress"))
+        if not shop_addr or not sup_addr:
+            continue
+        shop, supplier = site_key(shop_addr), site_key(sup_addr)
+        items = []
+        for entry in save.items(contract.get("items")):
+            if not isinstance(entry, dict):
+                continue
+            slug, amount = entry.get("itemName"), entry.get("amount") or 0
+            if not slug or isinstance(amount, bool) or not isinstance(amount, (int, float)) or amount <= 0:
+                continue
+            raw = products.get(slug) or {}
+            price = raw.get("w")
+            items.append({"slug": slug, "item": names.label(slug), "amount": int(amount),
+                          "price": price if isinstance(price, (int, float)) and not isinstance(price, bool) else None})
+        if not items:
+            continue
+        urgent, repeating = bool(contract.get("isUrgentOrder")), bool(contract.get("repeatingOrder"))
+        due = contract.get("nextDeliveryDay")
+        n = seen[(shop, supplier)]
+        seen[(shop, supplier)] += 1
+        vendor = named.get(supplier) or {}
+        fee = contract.get("deliveryFee")
+        if not isinstance(fee, (int, float)) or isinstance(fee, bool):
+            fee = vendor.get("fee")
+        out.append({
+            "id": f"w:{shop}|{supplier}|{n}",
+            "shop": shop, "s": index.get(shop), "supplier": supplier,
+            "supplierName": vendor.get("name") or names.addr(sup_addr),
+            "mode": "urgent" if urgent else "weekly" if repeating else "once",
+            "enabled": bool(contract.get("enabled")),
+            "next": due if isinstance(due, int) and not isinstance(due, bool) else None,
+            "fee": fee if isinstance(fee, (int, float)) and not isinstance(fee, bool) else None,
+            "items": items,
+        })
+    return out
+
+
 def _wholesale_shopping(save: Save, names: Names, businesses: list) -> dict:
     """Wholesale purchases and weekly setup amounts; existing supply is unchanged.
 
@@ -7072,6 +7126,7 @@ def _wholesale_shopping(save: Save, names: Names, businesses: list) -> dict:
     Wholesale contracts keep their individual dates: an early small drop
     cannot stand in for a larger drop later in the week. An outstanding drop
     without a future date makes Buy now unknown until the player checks it.
+    `contracts` lists each delivery contract for the edit form.
     """
     products = load_store_rules().get("products") or {}
     contacts = {(c.get("streetName"), c.get("streetNumber")) for c in save.items(save.root.get("Contacts"))}
@@ -7086,7 +7141,8 @@ def _wholesale_shopping(save: Save, names: Names, businesses: list) -> dict:
                           "closed": bool(reg.get("temporarilyClosed")),
                           "products": sorted(live_suppliers.get(address, {}).get("products", [])),
                           "fee": live_suppliers.get(address, {}).get("fee")})
-    result = {"rows": [], "margin": SUPPLY_MARGIN, "available": bool(products), "suppliers": suppliers}
+    result = {"rows": [], "margin": SUPPLY_MARGIN, "available": bool(products), "suppliers": suppliers,
+              "contracts": _wholesale_contract_list(save, names, businesses, suppliers, products)}
     if not products:
         return result
     _edges, targets = _supply_plans(save, businesses)
