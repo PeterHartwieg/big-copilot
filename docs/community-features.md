@@ -250,7 +250,10 @@ invalid entry or repeats an identity stops the run before anything is sent.
 The webhook is the secret `BIGCOPILOT_DISCORD_WEBHOOK`
 (`npx wrangler secret put BIGCOPILOT_DISCORD_WEBHOOK`), a
 `https://discord.com/api/webhooks/<id>/<token>` URL; anything else stops the run. It is
-not in `secrets.required`, so a deploy without it goes through. To pause the
+not in `secrets.required`, so a deploy without it goes through. Apply
+`migrations/0004_discord_announcements.sql` with
+`npx wrangler d1 migrations apply big-copilot-community --remote` before setting the
+secret: with the secret set and the tables missing, every due run fails. To pause the
 announcer, delete the secret (`npx wrangler secret delete BIGCOPILOT_DISCORD_WEBHOOK`):
 each due run then logs `unconfigured` and does nothing else.
 
