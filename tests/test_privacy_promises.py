@@ -154,6 +154,16 @@ class PrivacyPromises(unittest.TestCase):
                         r'\}\);\s*', helper.group(1),
                     ), "failure event must contain only fixed, allowlisted fields")
                     source = source[:helper.start()] + source[helper.end():]
+                if path.name == "discord_announcer.mjs":
+                    helper = re.search(r"function report\(outcome\) \{(.*?)\n\}", source, re.S)
+                    self.assertIsNotNone(helper, "missing bounded announcer event helper")
+                    self.assertIsNotNone(re.fullmatch(
+                        r'\s*console\.error\(\{\s*'
+                        r'event: "discord_announcer",\s*'
+                        r'outcome: \[(?:"[a-z_]+", )*"[a-z_]+"\]\.includes\(outcome\) \? outcome : "unexpected",\s*'
+                        r'\}\);\s*', helper.group(1),
+                    ), "announcer event must contain only fixed, allowlisted fields")
+                    source = source[:helper.start()] + source[helper.end():]
                 self.assertNotRegex(source, r"\bconsole\s*(?:\.|\[)")
 
     def test_daily_cleanup_is_scheduled(self):

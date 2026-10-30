@@ -19,7 +19,10 @@ export function announcerDue(controller) {
 // Only application constants reach console output; never the webhook, a response
 // body or an exception.
 function report(outcome) {
-  console.error({ event: "discord_announcer", outcome });
+  console.error({
+    event: "discord_announcer",
+    outcome: ["unconfigured", "invalid_webhook", "configuration", "changelog_unavailable", "invalid_changelog", "leased", "pending", "pending_write_failed", "discord_failed", "record_failed"].includes(outcome) ? outcome : "unexpected",
+  });
 }
 
 class Stop extends Error {
