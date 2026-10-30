@@ -22,13 +22,15 @@ namespace BigCopilotLink
     [ModEntryOnCityLoad]
     public class LinkMod : IModBigAmbitions
     {
-        public const string Version = "0.8.2";
+        public const string Version = "0.8.3";
 
         /// <summary>
         /// docs/game-link-api.md. Bump when a client must refuse a mod that does
         /// not speak the new contract. runningBuild on /health is optional, so
         /// schema 5 stays: an older page ignores the field, and a newer page
-        /// treats a mod that omits it as an unknown running build.
+        /// treats a mod that omits it as an unknown running build. The 0.8.3
+        /// host allowlist refuses a foreign Host; it adds no field, so schema 5
+        /// stays for that too.
         /// </summary>
         public const int SchemaVersion = 5;
 

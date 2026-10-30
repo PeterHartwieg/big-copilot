@@ -30,6 +30,8 @@ Approving a browser (POST /pair/request, GET /pair/status) answers after about
 a second as --pair says: approve (the default), deny, expire, or popup_open
 (refused at once); a token is issued per origin, as the mod issues them, and
 /health's `paired` and every write check it against the request's Origin.
+A request whose Host is not `127.0.0.1:<port>` or `localhost:<port>` is
+`403 host_not_allowed` before any route, including OPTIONS, as the mod from 0.8.3.
 --refuse-write <error>[:<detail>] makes every
 apply answer that refusal, --busy-writes <n> answers the next n writes busy,
 --writes names the kinds /health lists ("" for a 0.1.0 mod that lists none).
@@ -157,6 +159,14 @@ def market_rent_per_sqm(building_row) -> float | None:
 
 def allowed_origin(origin: str | None) -> bool:
     return bool(origin) and (origin.lower() in ALLOWED_ORIGINS or bool(LOCAL_ORIGIN.match(origin)))
+
+
+def allowed_host(host: str | None, port: int) -> bool:
+    """As LinkHttpServer.IsAllowedHost and the watcher's BoardHandler: this
+    listener's loopback name, port required, in any case. A DNS-rebinding page
+    sends its own Host and no Origin."""
+    value = (host or "").strip().lower()
+    return value in (f"127.0.0.1:{port}", f"localhost:{port}")
 
 
 def origin_of(origin: str | None) -> str:
@@ -2686,7 +2696,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Vary", "Origin")
             self.send_header("Access-Control-Expose-Headers", EXPOSED)
 
-    def _json(self, status: int, body: dict, extra: dict | None = None) -> None:
+    def _json(self, status: int, body: dict, extra: dict | None = None, *, cors: bool = True) -> None:
         data = json.dumps(body).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -2694,17 +2704,40 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         for key, value in (extra or {}).items():
             self.send_header(key, value)
-        self._cors()
+        if cors:
+            self._cors()
         self.end_headers()
         self.wfile.write(data)
 
     def _route(self) -> str:
         return self.path.split("?")[0].rstrip("/") or "/"
 
+    def _bad_host(self) -> bool:
+        """As the mod from 0.8.3: a Host other than 127.0.0.1:<port> or
+        localhost:<port> is turned away before any route, including OPTIONS.
+        No CORS headers. True when the 403 has been sent."""
+        port = self.server.server_address[1]
+        if allowed_host(self.headers.get("Host"), port):
+            return False
+        self._drain()
+        self.close_connection = True
+        if self.command == "HEAD":
+            self.send_response(403)
+            self.send_header("Content-Length", "0")
+            self.send_header("Connection", "close")
+            self.end_headers()
+        else:
+            self._json(403, {"error": "host_not_allowed"}, {"Connection": "close"}, cors=False)
+        return True
+
     def _foreign(self) -> bool:
         """As the mod from 0.3.1: an Origin off the allowlist is turned away
         before any work, on every method but OPTIONS. A request with no Origin
-        (curl, the CLI watcher) is served. True when the 403 has been sent."""
+        (curl, the CLI watcher) is served when its Host was allowed. The host
+        check runs first, on this path and on OPTIONS. True when the 403 has
+        been sent."""
+        if self._bad_host():
+            return True
         origin = origin_of(self.headers.get("Origin"))
         if not origin or allowed_origin(origin):
             return False
@@ -2720,6 +2753,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return True
 
     def do_OPTIONS(self):
+        if self._bad_host():
+            return
         self.send_response(204)
         self.send_header("Content-Length", "0")
         self._cors()

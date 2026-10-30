@@ -9,6 +9,9 @@ Schema version **5**. Current clients also accept versions 1, 2, 3 and 4.
 Version 5 (mod 0.8.1) adds independent marketing capability validation, registered
 vehicle prices and conservative HMP/RLO economy observations in paired facts.
 Mod 0.8.2 adds optional `runningBuild` on `/health` without a new schema version.
+Mod 0.8.3 refuses a `Host` other than `127.0.0.1:<port>` or `localhost:<port>`
+before a route is served, without a new schema version. Clients that already
+call `http://127.0.0.1:<port>` are unchanged.
 Version 4 (mod 0.8.0) adds reviewed Street Food route writes (`streetFoodRoute`, capability `streetFood.routes`).
 Version 3 adds wholesale orders (`wholesale`, mod 0.7.0) and guarded same-day undo.
 Version 2 adds the paired building-facts snapshot and marketing prediction guard below.
@@ -317,6 +320,18 @@ facts participate in the existing before/after consistency fingerprint.
 is **8322**; the mod's options panel offers 8322 to 8325. 8321 belongs to Peter's MCP
 bridge and 8765 to the Companion mod, so neither is used.
 
+From mod 0.8.3 the listener also compares the `Host` header, and so does the mock.
+It answers only `127.0.0.1:<port>` or `localhost:<port>`: either spelling, any
+case, surrounding whitespace ignored, and the port required and equal to the
+port this listener bound. Anything else is `403 {"error":"host_not_allowed"}`
+with no `Access-Control-*` headers, before CORS, before `OPTIONS`, and before
+`/health`, `/save`, `/facts` or any write. A `HEAD` is `403` with no body.
+Binding to `127.0.0.1` is not the whole guard. A DNS-rebinding page is
+same-origin to its own name, sends no `Origin`, and would be served the save
+if the runtime accepted that `Host`. The site and the watcher already call
+`http://127.0.0.1:<port>`, which matches. `localhost` and `[::1]` in a client
+URL are spelt `127.0.0.1` before the call, because `[::1]` is not on this list.
+
 The listener runs only while a city is loaded (`[ModEntryOnCityLoad]`): it starts in
 `OnLoadAsync` and stops in `OnUnloadAsync`. A client that gets a connection error
 treats it as "the game is not running or no save is loaded".
@@ -525,8 +540,9 @@ approved it (see "Approving a browser" below).
 - A request that names the same site, contract or product twice is `400 bad_request`.
 - **Approval.** A missing, unknown, expired or forgotten token, or one used from another
   allowed origin than the one it was issued to, answers `401 {"error":"not_paired"}` before
-  the body is read (an origin off the allowlist is `403` before that; see "CORS and the
-  browser"); the page drops its token and asks the game again. Reads (`/health`, `/save`,
+  the body is read (a `Host` off the allowlist is `403 {"error":"host_not_allowed"}`
+  before that, and an origin off the allowlist is `403` before the body; see "Where
+  the mod listens" and "CORS and the browser"); the page drops its token and asks the game again. Reads (`/health`, `/save`,
   `/refresh`) never need one.
 - **Dry run.** `"dryRun": true` in the body runs every check and answers the verdict and
   the values the game would hold, applying nothing. A well-formed, paired dry run normally
@@ -559,6 +575,7 @@ approved it (see "Approving a browser" below).
 | `200` | `{"ok": true, "kind", "dryRun", ...}` | Applied, or a dry run's verdict (`ok` false when an apply would be refused) |
 | `400` | `{"error":"bad_request","detail":"<what>"}` | Not JSON, a missing or mistyped field |
 | `401` | `{"error":"not_paired"}` | No valid token for this origin: ask the game to approve this browser |
+| `403` | `{"error":"host_not_allowed"}` | `Host` is not `127.0.0.1:<port>` or `localhost:<port>` (mod 0.8.3). Before the origin check and before any route, including `OPTIONS`. A `HEAD` has no body |
 | `403` | `{"error":"origin_not_allowed"}` | An `Origin` off the allowlist (mod 0.3.1 and later; a write got `401` before) |
 | `409` | `{"error":"changed","rows":[...]}` | An `expect` no longer holds; nothing written |
 | `409` | `{"error":"refused","rows":[...]}` | A rule refused a row (`rows[i].error`); nothing written |
@@ -638,6 +655,7 @@ Refusals of `POST /pair/request`:
 | `409` | `{"error":"cannot_pair","reason":"no_ui"}` | The game has no popup to show right now |
 | `409` | `{"error":"cannot_pair","reason":"saving"}` | As `cannot_write`: `saving`, `placement`, `interior`, `casino`, `other` |
 | `429` | `{"error":"throttled","retryAfter":<s>}` | A request is already pending, or this origin was just denied or let one expire (10 s, then 30 s, then 120 s on repeats) |
+| `403` | `{"error":"host_not_allowed"}` | `Host` is not `127.0.0.1:<port>` or `localhost:<port>`: no popup is shown |
 | `403` | `{"error":"origin_not_allowed"}` | An `Origin` off the allowlist: no popup is shown |
 | `400` / `413` | `bad_request` / `too_large` | Not JSON, or a body over 4 KiB |
 | `503` | `{"error":"busy"}` / `{"error":"main_thread_unavailable"}` | The game's main thread did not take the request within three seconds; no popup was shown |
@@ -1369,8 +1387,10 @@ of work requests waiting for the game's main thread. When admission or the
 32-item external main-thread queue is full, an allowed origin receives
 `503 {"error":"busy"}` with `Retry-After: 1` and readable CORS headers. An
 unapproved origin still receives 403 on actual requests (its preflight receives
-204 without CORS permission). HEAD refusals have no body; OPTIONS
-preflights remain available even when both admission pools are full.
+204 without CORS permission). A `Host` off the allowlist is refused with
+`403 {"error":"host_not_allowed"}` before admission, so it never receives `busy`
+or a preflight. HEAD refusals have no body; OPTIONS
+preflights for an allowed Host remain available even when both admission pools are full.
 
 The dispatcher runs at most eight queued actions per frame, checking a two
 millisecond budget between actions. An individual game operation cannot be
@@ -1408,12 +1428,18 @@ Access-Control-Allow-Private-Network: true     (only when the request carried
                                                 Access-Control-Request-Private-Network: true)
 ```
 
+Before that allowlist, mod 0.8.3 compares `Host` (see "Where the mod listens").
+A `Host` that is not `127.0.0.1:<port>` or `localhost:<port>` is
+`403 {"error":"host_not_allowed"}` for every method, including `OPTIONS` and
+`HEAD` (`HEAD` has no body), with no `Access-Control-*` headers. The origin
+allowlist is not consulted for that request.
+
 An `Origin` that is not on the list is turned away before the mod does any work: every
 method but `OPTIONS` answers `403 {"error":"origin_not_allowed"}` (a `HEAD`, `403` with
 no body), without any `Access-Control-*` headers, so the browser blocks even that. A
 preflight from it answers `204` without the headers above, which the browser refuses.
 Mods before 0.3.1 did the work (a `/refresh` serialized, a `/save` sent the bytes) and
-only withheld the headers; `/pair/request` alone already answered `403`. A request with no `Origin` (curl, the CLI watcher) is served
+only withheld the headers; `/pair/request` alone already answered `403`. A request with no `Origin` (curl, the CLI watcher) and an allowed `Host` is served
 as is.
 
 The allowlist: `https://bigcopilot.com`, `https://www.bigcopilot.com`, and any
