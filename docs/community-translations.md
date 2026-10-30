@@ -26,8 +26,8 @@ opening the contribution page never uploads a save or reads its company data.
   **Your vote** identifies the connection's choice after its details have loaded.
 - A suggestion includes its contributor's vote. The first contribution can replace
   a bundled draft, which starts with zero community votes.
-- Suggestions have their own best-effort budget of ten a minute per IP at each
-  Cloudflare location (`TRANSLATION_SUGGEST_LIMITER`, namespace 1005), since each
+- Suggestions have their own best-effort budget of ten a minute per IPv4 address or IPv6 /64
+  at each Cloudflare location (`TRANSLATION_SUGGEST_LIMITER`, namespace 1005), since each
   one stores a candidate. Past it the API answers 429 with `Retry-After: 60`.
   Votes share the general 120-a-minute budget.
 - One active choice is recorded per connection, target language, phrase and English

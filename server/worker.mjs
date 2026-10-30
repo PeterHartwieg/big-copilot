@@ -46,14 +46,14 @@ const GITHUB_TIMEOUT_MS = 15000;
 const REPORT_TRIES = 3;
 const REPORT_SWEEP_AFTER_MS = 60 * 60 * 1000;
 // Accepted reports per UTC day, across every client. Counted in D1
-// (migrations/0005_report_budget.sql), separate from the per-IP REPORT_LIMITER.
+// (migrations/0005_report_budget.sql), separate from the per-client REPORT_LIMITER.
 const REPORT_DAILY_CAP = 50;
 
 // Presence has its own, tighter limiter: a real tab sends one heartbeat every five
 // minutes, so a loop of fresh browser ids cannot inflate the online count on the
 // budget meant for voting. Feature suggestions and translation suggestions each have a
 // small separate budget; other routes, translation votes included, share COMMUNITY_LIMITER.
-// A bug report has a per-IP limiter of its own, a global daily cap counted in D1
+// A bug report has a per-client limiter of its own, a global daily cap counted in D1
 // (report_budget), the R2 bucket and the GitHub token, and reads its own multipart body.
 const routes = {
   "/api/translations": { operation: "translations", method: "GET", write: false, handler: handleTranslations },
@@ -140,7 +140,9 @@ async function handleApi(request, env, diagnostic, ctx) {
   const ip = clientIp(request);
   if (!ip) return json({ error: "Invalid request" }, 400);
   const sign = await signer(secret);
-  const key = await sign("rate:" + ip);
+  // Limiters use the /64 for IPv6. `ip` itself stays the full address, and the
+  // vote hashes below keep using it.
+  const key = await sign("rate:" + rateIdentity(ip));
   diagnostic.category = "limiter";
   const { success } = await limiter.limit({ key });
   diagnostic.category = "unexpected";
@@ -666,6 +668,90 @@ async function signer(secret) {
     const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
     return [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
   };
+}
+
+// Limiter identity only. An IPv4 address is used as given. An IPv6 address, once
+// brackets and a zone id are stripped and `::` is expanded, contributes its /64.
+// IPv4-mapped IPv6 (::ffff:0:0/96) is the embedded IPv4, so those clients do not
+// share the ::/64 bucket. Vote hashes stay on the full address from clientIp.
+function rateIdentity(ip) {
+  const raw = String(ip).trim();
+  let bare = raw;
+  if (bare.startsWith("[")) {
+    const end = bare.indexOf("]");
+    if (end > 1) bare = bare.slice(1, end);
+  }
+  const zone = bare.indexOf("%");
+  const addr = (zone === -1 ? bare : bare.slice(0, zone)).trim();
+  if (isIpv4(addr)) return addr;
+  const groups = parseIpv6(addr);
+  if (!groups) return raw;
+  return ipv4Mapped(groups) || formatIpv6([groups[0], groups[1], groups[2], groups[3], 0, 0, 0, 0]);
+}
+
+function isIpv4(addr) {
+  const parts = addr.split(".");
+  if (parts.length !== 4) return false;
+  return parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255);
+}
+
+// Eight hextets, or null when `addr` is not an IPv6 address. A dotted quad in
+// the last 32 bits counts as two hextets.
+function parseIpv6(addr) {
+  if (!addr) return null;
+  let text = addr.toLowerCase();
+  if (text.includes("%") || text.includes("[") || text.includes("]")) return null;
+  if (text.includes(".")) {
+    const v4 = /^(.*:)(\d{1,3}(?:\.\d{1,3}){3})$/.exec(text);
+    if (!v4) return null;
+    const octets = v4[2].split(".");
+    if (octets.some((part) => Number(part) > 255)) return null;
+    const high = (Number(octets[0]) << 8) | Number(octets[1]);
+    const low = (Number(octets[2]) << 8) | Number(octets[3]);
+    text = `${v4[1]}${high.toString(16)}:${low.toString(16)}`;
+  }
+  const halves = text.split("::");
+  if (halves.length > 2) return null;
+  const read = (side) => {
+    if (side === "") return [];
+    const parts = side.split(":");
+    if (parts.some((part) => !/^[0-9a-f]{1,4}$/.test(part))) return null;
+    return parts.map((part) => parseInt(part, 16));
+  };
+  const compressed = halves.length === 2;
+  const left = read(halves[0]);
+  const right = compressed ? read(halves[1]) : [];
+  // An empty side is a real `::`, not a parse failure.
+  if (left === null || right === null) return null;
+  const missing = 8 - left.length - right.length;
+  if (compressed ? missing < 1 : missing !== 0) return null;
+  return compressed ? [...left, ...Array(missing).fill(0), ...right] : left;
+}
+
+// Dotted IPv4 embedded in ::ffff:0:0/96, or null when `groups` is some other prefix.
+function ipv4Mapped(groups) {
+  for (let i = 0; i < 5; i++) if (groups[i] !== 0) return null;
+  if (groups[5] !== 0xffff) return null;
+  return `${groups[6] >> 8}.${groups[6] & 255}.${groups[7] >> 8}.${groups[7] & 255}`;
+}
+
+// RFC 5952 text: lowercase, no leading zeros, longest zero run compressed.
+function formatIpv6(groups) {
+  let bestStart = -1;
+  let bestLen = 0;
+  for (let i = 0; i < groups.length; i++) {
+    if (groups[i] !== 0) continue;
+    let end = i;
+    while (end < groups.length && groups[end] === 0) end++;
+    if (end - i > bestLen) {
+      bestStart = i;
+      bestLen = end - i;
+    }
+    i = end - 1;
+  }
+  const hex = groups.map((group) => group.toString(16));
+  if (bestLen < 2) return hex.join(":");
+  return `${hex.slice(0, bestStart).join(":")}::${hex.slice(bestStart + bestLen).join(":")}`;
 }
 
 function clientIp(request) {

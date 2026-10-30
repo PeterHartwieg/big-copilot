@@ -89,6 +89,17 @@ beforeEach(async()=>{
 });
 after(async()=>{if(mf) await mf.dispose();});
 
+test('two addresses in one IPv6 /64 remain two translation voters', async () => {
+  const a = '2001:db8:9:9::1';
+  const b = '2001:db8:9:9::2';
+  const first = await json(await suggest('Salve {n}', a));
+  assert.equal(selected(first).votes, 1);
+  const second = await json(await vote(first.selectedId, b));
+  assert.equal(selected(second).votes, 2, 'a /64 is not one translation voter');
+  const again = await json(await vote(first.selectedId, a));
+  assert.equal(selected(again).votes, 2, 'the first address is still that one voter');
+});
+
 test('bundled starts with zero votes; first suggestion wins; repeats are idempotent',async()=>{
   const user=ip();
   const initial=await json(await entry(user));

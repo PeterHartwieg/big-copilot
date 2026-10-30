@@ -36,15 +36,16 @@
       "migrations_dir": "migrations"
     }
   ],
-  // Best-effort per-IP guards for /api/*. Keys are HMACs of the client IP, so raw
-  // IPs never reach D1 or responses. Not a global enforcement promise. Presence
-  // heartbeats have their own budget (a real tab sends one every five minutes);
-  // bug reports have a small one of their own, a burst guard (it counts per
-  // minute and per Cloudflare location). The global daily cap is a D1 counter
-  // (report_budget), not this limiter. Visitor suggestions also have a separate
-  // small budget, and so do translation suggestions, since each accepted one
-  // stores a candidate of up to 2,000 characters. Every other route, translation
-  // votes included, shares COMMUNITY_LIMITER.
+  // Best-effort guards for /api/*, per IPv4 address or IPv6 /64. Keys are HMACs
+  // of that identity, so raw IPs never reach D1 or responses. Not a global
+  // enforcement promise. Presence heartbeats have their own budget (a real tab
+  // sends one every five minutes); bug reports have a small one of their own, a
+  // burst guard (it counts per minute and per Cloudflare location). The global
+  // daily cap is a D1 counter (report_budget), not this limiter. Visitor
+  // suggestions also have a separate small budget, and so do
+  // translation suggestions, since each accepted one stores a candidate of up to
+  // 2,000 characters. Every other route, translation votes included, shares
+  // COMMUNITY_LIMITER.
   "ratelimits": [
     {
       "name": "SUGGEST_LIMITER",
