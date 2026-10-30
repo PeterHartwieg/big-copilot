@@ -77,6 +77,7 @@ public static class BclQueueTests
                 // Empty SDK scene; never invoke serialize, gameplay writes or
                 // pairing/persistence. All queue payloads and HTTP bytes are synthetic.
                 dispatcher = MainThreadDispatcher.Install();
+                HostAllowlist();
                 DispatcherLimits();
                 CancellationAndLifecycle();
                 WriteWithdrawal();
@@ -113,6 +114,39 @@ public static class BclQueueTests
         }
         catch (Exception e) { UnityEngine.Debug.LogError("[BclQueueTests] scene restoration failed: " + e); code = 1; }
         finally { SessionState.SetString(PreviousScenes, ""); EditorApplication.Exit(code); }
+    }
+
+    // IsAllowedHost is the DNS-rebinding guard. The listener calls it before
+    // OPTIONS, admission and every route; this assembly cannot open the game,
+    // so the call site is what the in-game rig still has to exercise.
+    private static bool AllowedHost(string host, int port)
+    {
+        var method = typeof(LinkHttpServer).GetMethod("IsAllowedHost", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+        Check(method != null, "IsAllowedHost is present");
+        return (bool)method.Invoke(null, new object[] { host, port });
+    }
+
+    private static void HostAllowlist()
+    {
+        const int port = 8322;
+        Check(AllowedHost("127.0.0.1:8322", port), "numeric loopback with this port");
+        Check(AllowedHost("localhost:8322", port), "localhost with this port");
+        Check(AllowedHost("LocalHost:8322", port), "localhost is case-insensitive");
+        Check(AllowedHost(" 127.0.0.1:8322 ", port), "surrounding whitespace is ignored");
+        Check(AllowedHost("127.0.0.1:8325", 8325), "the listener port is the one that matches");
+        Check(!AllowedHost("127.0.0.1", port), "a missing port is refused");
+        Check(!AllowedHost("localhost", port), "localhost without the port is refused");
+        Check(!AllowedHost("127.0.0.1:8323", port), "a different port is refused");
+        Check(!AllowedHost("localhost:8323", port), "localhost on another port is refused");
+        Check(!AllowedHost("127.0.0.1:08322", port), "a padded port is refused");
+        Check(!AllowedHost("evil.example:8322", port), "a foreign name is refused");
+        Check(!AllowedHost("attacker.example", port), "a foreign name without a port is refused");
+        Check(!AllowedHost("notlocalhost:8322", port), "a name that only ends in localhost is refused");
+        Check(!AllowedHost("127.0.0.11:8322", port), "a longer address is refused");
+        Check(!AllowedHost("[::1]:8322", port), "IPv6 loopback is refused");
+        Check(!AllowedHost(null, port), "a missing Host is refused");
+        Check(!AllowedHost("", port), "an empty Host is refused");
+        Check(!AllowedHost("   ", port), "a blank Host is refused");
     }
 
     private static void DispatcherLimits()

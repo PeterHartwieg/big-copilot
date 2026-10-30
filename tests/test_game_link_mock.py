@@ -295,6 +295,59 @@ class MockContract(unittest.TestCase):
             self.assertEqual(call(self.url + "/health", headers=headers)[0], 200, headers)
             self.assertEqual(call(self.url + "/save", headers=headers)[0], 200, headers)
 
+    def test_only_a_loopback_host_is_served(self):
+        """A page on a name rebound to 127.0.0.1 sends its own Host and no Origin.
+        Same rule as the watcher and LinkHttpServer.IsAllowedHost (mod 0.8.3)."""
+        port = self.server.server.server_address[1]
+        before = self.link.stamp
+        self.link.last_refresh = 0  # a refresh would run
+        reads = ("/health", "/save", "/facts")
+        writes = ("/refresh", "/write/uniforms", "/write/schedule", "/write/hire")
+        foreign = ("attacker.example", f"attacker.example:{port}", f"127.0.0.1:{port + 1}",
+                   "127.0.0.1", "localhost", f"localhost:{port + 1}", "", f"[::1]:{port}",
+                   "notlocalhost:8322", f"127.0.0.11:{port}")
+        for route in reads + writes:
+            method = "POST" if route in writes else "GET"
+            for host in foreign:
+                status, headers, body = call(
+                    self.url + route, method,
+                    headers={"Host": host, "Content-Length": "0", "Origin": "https://bigcopilot.com"})
+                self.assertEqual((status, json.loads(body)), (403, {"error": "host_not_allowed"}), (method, route, host))
+                self.assertNotIn("Access-Control-Allow-Origin", headers, (route, host))
+                self.assertNotIn(b"not really a save", body, (route, host))
+        self.assertEqual(self.link.stamp, before, "a foreign Host did not refresh")
+        self.assertEqual(self.link.applied, [], "a foreign Host did not write")
+        status, _, body = call(self.url + "/save", "HEAD", headers={"Host": f"attacker.example:{port}"})
+        self.assertEqual((status, body), (403, b""))
+        status, headers, body = call(self.url + "/save", "OPTIONS", headers={
+            "Host": f"attacker.example:{port}", "Origin": "https://bigcopilot.com",
+            "Access-Control-Request-Method": "GET"})
+        self.assertEqual((status, json.loads(body)), (403, {"error": "host_not_allowed"}))
+        self.assertNotIn("Access-Control-Allow-Origin", headers)
+        self.assertNotIn("Access-Control-Allow-Methods", headers)
+        # The site's origin still needs an allowed Host. A bad origin on an
+        # allowed Host is still the origin refusal, not this one.
+        status, headers, body = call(self.url + "/save", headers={
+            "Host": f"127.0.0.1:{port}", "Origin": "https://evil.example"})
+        self.assertEqual((status, json.loads(body)), (403, {"error": "origin_not_allowed"}))
+        for host in (f"127.0.0.1:{port}", f"localhost:{port}", f"LocalHost:{port}", f"  localhost:{port}"):
+            status, headers, _ = call(self.url + "/health", headers={"Host": host, "Origin": "https://bigcopilot.com"})
+            self.assertEqual(status, 200, host)
+            self.assertEqual(headers.get("Access-Control-Allow-Origin"), "https://bigcopilot.com", host)
+        status, headers, _ = call(self.url + "/health", "OPTIONS", headers={
+            "Host": f"127.0.0.1:{port}", "Origin": "https://bigcopilot.com",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Private-Network": "true"})
+        self.assertEqual(status, 204, "an allowed Host still preflights")
+        self.assertEqual(headers.get("Access-Control-Allow-Origin"), "https://bigcopilot.com")
+        self.assertEqual(headers.get("Access-Control-Allow-Private-Network"), "true")
+        # No Origin, as curl and the CLI watcher, on either loopback name.
+        self.assertEqual(call(self.url + "/health", headers={"Host": f"127.0.0.1:{port}"})[0], 200)
+        self.assertEqual(call(self.url + "/save", headers={"Host": f"localhost:{port}"})[0], 200)
+        self.assertTrue(game_link_mock.allowed_host(f" LocalHost:{port} ", port))
+        self.assertFalse(game_link_mock.allowed_host(None, port))
+        self.assertFalse(game_link_mock.allowed_host("localhost", port))
+
     def test_no_save_yet_before_the_first_refresh(self):
         self.link.stamp = ""
         status, _, body = call(self.url + "/save")

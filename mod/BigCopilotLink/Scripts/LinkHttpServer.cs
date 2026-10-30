@@ -144,6 +144,9 @@ namespace BigCopilotLink
                 HttpListenerContext context;
                 try { context = session.Listener.GetContext(); }
                 catch (Exception) { break; }
+                // Before the preflight shortcut and before admission. A foreign
+                // Host must not reach OPTIONS, a busy answer, or any route.
+                if (RefuseForeignHost(context)) continue;
                 string method;
                 try { method = context.Request.HttpMethod; }
                 catch (Exception) { TryAbort(context); continue; }
@@ -225,6 +228,10 @@ namespace BigCopilotLink
 
         private void Handle(HttpListenerContext context, CancellationToken cancellation)
         {
+            // Before OPTIONS and the origin allowlist. A DNS-rebinding page sends
+            // no Origin, so that allowlist would otherwise serve it the save.
+            if (RefuseForeignHost(context)) return;
+
             var request = context.Request;
             var url = request.Url;
             var path = url == null ? "" : url.AbsolutePath.TrimEnd('/');
@@ -243,7 +250,7 @@ namespace BigCopilotLink
             // An Origin off the allowlist is turned away before any work (0.3.1). A
             // body-less POST is a CORS "simple" request, so without this any page could
             // make the game serialize, or be handed the bytes it cannot read. A request
-            // with no Origin (curl, the CLI watcher) is served as before.
+            // with no Origin (curl, the CLI watcher) is served when its Host was allowed.
             if (!corsAllowed && !string.IsNullOrEmpty(request.Headers["Origin"]))
             {
                 if (method == "HEAD") WriteNoBody(context, 403);
@@ -359,6 +366,55 @@ namespace BigCopilotLink
                 if (string.Equals(origin, AllowedOrigins[i], StringComparison.OrdinalIgnoreCase)) return true;
             }
             return LoopbackOrigin.IsMatch(origin);
+        }
+
+        /// <summary>
+        /// True when <paramref name="host"/> is this listener, port required:
+        /// <c>127.0.0.1:&lt;port&gt;</c> or <c>localhost:&lt;port&gt;</c>, any case,
+        /// after trimming. The same rule as the watcher's BoardHandler. A missing
+        /// port, another port, or any other name is refused, so a page on a name
+        /// that merely resolves here cannot read the save.
+        /// </summary>
+        internal static bool IsAllowedHost(string host, int port)
+        {
+            if (string.IsNullOrEmpty(host)) return false;
+            var value = host.Trim();
+            var suffix = ":" + port.ToString(CultureInfo.InvariantCulture);
+            return string.Equals(value, "127.0.0.1" + suffix, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "localhost" + suffix, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// 403 <c>{"error":"host_not_allowed"}</c> (a HEAD has no body) when Host
+        /// is not this listener. Returns true when the response has been sent or
+        /// the context was aborted. No CORS headers: the refusal is the answer,
+        /// not something another origin should be allowed to read.
+        /// </summary>
+        private bool RefuseForeignHost(HttpListenerContext context)
+        {
+            string host;
+            string method;
+            try
+            {
+                host = context.Request.Headers["Host"];
+                method = context.Request.HttpMethod;
+            }
+            catch (Exception)
+            {
+                TryAbort(context);
+                return true;
+            }
+            if (IsAllowedHost(host, _port)) return false;
+            try
+            {
+                if (method == "HEAD") WriteNoBody(context, 403);
+                else WriteJson(context, 403, "{\"error\":\"host_not_allowed\"}");
+            }
+            catch (Exception)
+            {
+                TryAbort(context);
+            }
+            return true;
         }
 
         private static void WritePreflight(HttpListenerContext context, bool corsAllowed)
