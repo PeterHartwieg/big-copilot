@@ -112,11 +112,12 @@ STRING_CACHE_CHARS = 64  # keys and type names are short; prose is not worth cac
 # Uncompressed ES3 bytes, not the much smaller gzip file. A safety ceiling,
 # not a promise that every browser has enough memory for a tree of this size.
 MAX_DECOMPRESSED_BYTES = 512 * 1024 * 1024
-# instance(), body() and items() each open one level. The deepest synthetic
-# fixture with a real save's shape, a shelf's cargo in data_company, opens 19.
-# Four times that stays far under a CPython RecursionError and a Pyodide stack
-# overflow.
-MAX_DEPTH = 19 * 4
+# instance(), body() and items() each open one level. A read-only measurement
+# across 1196 real saves peaked at 30, through a text message's ContextButtonData
+# list -> UnityAction -> EmployeeInstance -> CharacterData -> AppearanceElementData
+# list. Four times that, rounded up to 128, leaves a large margin for real saves
+# while staying far below CPython's recursion limit and a Pyodide stack overflow.
+MAX_DEPTH = 128
 _DECOMPRESS_CHUNK = 1024 * 1024
 
 
