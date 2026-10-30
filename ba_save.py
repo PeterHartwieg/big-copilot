@@ -51,6 +51,10 @@ An instance header is one of::
     30 <int32 type_slot>                      reuses a slot defined earlier
     2e                                        type implied by context
 
+A hostile stream can nest instances, bodies and item lists without bound.
+Each of those opens one level, and past ``MAX_DEPTH`` the reader raises
+``SaveFormatError`` instead of recursing until Python gives up.
+
 Usage
 -----
     from ba_save import load_save
@@ -108,6 +112,12 @@ STRING_CACHE_CHARS = 64  # keys and type names are short; prose is not worth cac
 # Uncompressed ES3 bytes, not the much smaller gzip file. A safety ceiling,
 # not a promise that every browser has enough memory for a tree of this size.
 MAX_DECOMPRESSED_BYTES = 512 * 1024 * 1024
+# instance(), body() and items() each open one level. A read-only measurement
+# across 1196 real saves peaked at 30, through a text message's ContextButtonData
+# list -> UnityAction -> EmployeeInstance -> CharacterData -> AppearanceElementData
+# list. Four times that, rounded up to 128, leaves a large margin for real saves
+# while staying far below CPython's recursion limit and a Pyodide stack overflow.
+MAX_DEPTH = 128
 _DECOMPRESS_CHUNK = 1024 * 1024
 
 
@@ -221,19 +231,19 @@ class _Reader:
         return f"{msg} at offset {self.p:#x}\n  {window}"
 
     # --- structure -----------------------------------------------------
-    def value(self, tag: int):
+    def value(self, tag: int, depth: int = 0):
         # Tested in the order a real save uses them, commonest first: this runs
         # once for every value in the file, well over a million times.
         if tag == 0x17:
             return self.i32()
         if tag == 0x01:
-            return self.instance(with_ref_id=True)
+            return self.instance(True, depth)
         if tag == 0x27:
             return self.string()
         if tag == 0x1F:
             return self.f32()
         if tag == 0x03:
-            return self.instance(with_ref_id=False)
+            return self.instance(False, depth)
         if tag == 0x2B:
             return bool(self.u8())
         if tag == 0x2D:
@@ -281,7 +291,10 @@ class _Reader:
             return None
         raise SaveFormatError(self._where(f"value tag {tag:#04x}"))
 
-    def instance(self, with_ref_id: bool):
+    def instance(self, with_ref_id: bool, depth: int = 0):
+        depth += 1
+        if depth > MAX_DEPTH:
+            raise SaveFormatError(self._where(f"nesting deeper than {MAX_DEPTH}"))
         head = self.d[self.p]  # u8(), in place: once per object in the save
         self.p += 1
         type_name = None
@@ -300,12 +313,15 @@ class _Reader:
             raise SaveFormatError(self._where(f"instance header {head:#04x}"))
 
         ref_id = self.i32() if with_ref_id else None
-        obj = self.body(type_name, ref_id)
+        obj = self.body(type_name, ref_id, depth)
         if ref_id is not None:
             self.refs[ref_id] = obj
         return obj
 
-    def body(self, type_name: str | None, ref_id: int | None) -> dict:
+    def body(self, type_name: str | None, ref_id: int | None, depth: int = 0) -> dict:
+        depth += 1
+        if depth > MAX_DEPTH:
+            raise SaveFormatError(self._where(f"nesting deeper than {MAX_DEPTH}"))
         obj: dict = {}
         if type_name:
             obj["$type"] = type_name
@@ -316,6 +332,8 @@ class _Reader:
         # a local: the tag, a key already in the string cache, and the two
         # commonest values, an int32 and a float. Anything else goes through
         # the methods above, with the position handed over and taken back.
+        # `depth` is passed only on that slower path; the two common values
+        # never read it.
         d, strings = self.d, self._strings
         p = self.p
         while True:
@@ -344,23 +362,26 @@ class _Reader:
                     p += 4
                 else:
                     self.p = p
-                    obj[key] = self.value(tag)
+                    obj[key] = self.value(tag, depth)
                     p = self.p
                 continue
             self.p = p
             if tag == END_OBJECT:
                 return obj
             if tag == BEGIN_ITEMS:
-                obj["$items"] = self.items()
+                obj["$items"] = self.items(depth)
             elif tag == PACKED_ITEMS:
                 obj["$items"] = self.packed(type_name)
             elif tag - 1 in PROP_TAGS:
-                obj.setdefault("$vals", []).append(self.value(tag - 1))
+                obj.setdefault("$vals", []).append(self.value(tag - 1, depth))
             else:
                 raise SaveFormatError(self._where(f"body tag {tag:#04x} in {type_name}"))
             p = self.p
 
-    def items(self) -> list:
+    def items(self, depth: int = 0) -> list:
+        depth += 1
+        if depth > MAX_DEPTH:
+            raise SaveFormatError(self._where(f"nesting deeper than {MAX_DEPTH}"))
         self.i64()  # declared count; the terminator is authoritative
         out = []
         d, value = self.d, self.value
@@ -371,7 +392,7 @@ class _Reader:
                 return out
             if mark - 1 not in PROP_TAGS:
                 raise SaveFormatError(self._where(f"element marker {mark:#04x}"))
-            out.append(value(mark - 1))
+            out.append(value(mark - 1, depth))
 
     def packed(self, type_name: str | None) -> list:
         count = self.i32()
@@ -463,6 +484,10 @@ def load_save(path: str, *, facts_path: str | None = None,
     gc.disable()
     try:
         root = r.instance(with_ref_id=True)
+    except RecursionError as exc:
+        # Depth is checked while the tree is walked. A path that still recurses
+        # stays a format error; the finally below puts the caller's gc state back.
+        raise SaveFormatError(f"nesting deeper than {MAX_DEPTH}") from exc
     except (IndexError, struct.error) as exc:
         raise SaveFormatError("truncated Easy Save 3 stream") from exc
     finally:
