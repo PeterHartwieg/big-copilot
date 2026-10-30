@@ -33,7 +33,7 @@ const PYODIDE_VERSION = "314.0.6";
 const PINNED_WORKER = /\/assets\/[a-f0-9]{64}\/worker\.js$/.test(new URL(self.location.href).pathname);
 const SITE_URL = new URL(PINNED_WORKER ? "../../" : "./", self.location.href);
 const PYODIDE_URL = new URL(`pyodide/v${PYODIDE_VERSION}/`, SITE_URL).href;
-const CODE_FILES = ["ba_save.py", "ba_dashboard.py", "ba_facts.py", "ba_mods.py"];
+const CODE_FILES = ["ba_save.py", "ba_dashboard.py", "ba_facts.py", "ba_mods.py", "ba_street_food.py"];
 const DATA_FILES = ["gametext.json", "ba_buildings.json", "ba_demand_curves.json", "ba_item_prices.json", "ba_store_rules.json"];
 
 const SAVE_DIR = "/save";
@@ -188,10 +188,11 @@ function heldSave(msg) {
 
 // The build Python holds becomes `gen` only once it is through: one that
 // fails leaves none, and its sections are stale.
+let liveSource = false;
 function build(path, gen) {
   heldGen = null;
   // A JSON string crosses the worker boundary cheaply; a proxy would not.
-  const data = py.runPython(`ba_dashboard.browser_build(${JSON.stringify(path)}, ${JSON.stringify(LOCALE)}, ${JSON.stringify(HISTORY)}, ${JSON.stringify(NAMES)}, ${JSON.stringify(gen)})`);
+  const data = py.runPython(`ba_dashboard.browser_build(${JSON.stringify(path)}, ${JSON.stringify(LOCALE)}, ${JSON.stringify(HISTORY)}, ${JSON.stringify(NAMES)}, ${JSON.stringify(gen)}, ${liveSource ? "True" : "False"})`);
   heldGen = gen;
   return data;
 }
@@ -247,6 +248,7 @@ onmessage = (e) => {
         const path = placeSave(msg.name, msg.bytes, msg.mtime);
         say("build", `Reading ${msg.name}`);
         const t = performance.now();
+        liveSource = msg.live === true;
         const data = build(path, msg.id);
         // A damaged copy Python set aside (.bad) is dropped by the page too
         // (""), so the next build starts a fresh record, as the CLI does.

@@ -1704,6 +1704,7 @@ class Link:
         return parsed_sites, parsed_hires, parsed_moves
 
     def _hire(self, save, body, dry):
+        from ba_street_food import reserved as street_food_reserved
         sites, hires, moves = self._parse_hire(body, "hire.reschedule" in self.features)
         blocked = self.myemployees
         if blocked and not dry:
@@ -1745,6 +1746,8 @@ class Link:
                 error = "changed"
             elif person.get("trainingSession"):
                 error = "in_training"  # the game's move turns them away
+            elif street_food_reserved(save, person):
+                error = "changed"
             elif not takes(move["to"], self._skills(save, person)):
                 error = "no_skill"
             if error:

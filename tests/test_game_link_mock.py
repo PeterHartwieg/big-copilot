@@ -908,6 +908,22 @@ class MockHire(LinkedMock):
         body.update(over)
         return body
 
+    def test_street_food_crew_cannot_be_moved_even_from_an_old_plan(self):
+        from tests.test_real_estate import load
+        root = es3_fixture.link_company()
+        person = next(e for e in root["EmployeeInstances"] if e["id"] == BEN)
+        person["assignedAddress"] = None
+        root.setdefault("VehicleInstances", []).append({"id": "cart", "vehicleTypeName": "foodtrucks:vehicletype_foodcart"})
+        root["modData"] = [{"$k": "foodtrucks:state", "$v": json.dumps({
+            "schemaVersion": 1, "vehicles": [{"vehicleId": "cart", "crew": [BEN]}]})}]
+        body = self.body(moves=[{"employeeId": BEN, "from": None, "to": CORNER}])
+        for dry in (True, False):
+            with self.subTest(dry=dry):
+                code, reply = self.link._hire(load(root), body, dry)
+                row = next(r for r in reply["rows"] if r["scope"] == "move" and r["id"] == BEN)
+                self.assertEqual(row["error"], "changed")
+                self.assertFalse(reply.get("applied", False))
+
     def test_health_lists_hire(self):
         self.assertIn("hire", json.loads(call(self.url + "/health")[2])["writes"])
 

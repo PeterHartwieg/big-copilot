@@ -168,6 +168,27 @@ trying the worker thread again after 10 fallback refreshes.
 the worker thread failed again on its second chance; serializing on the main thread; the worker gets another chance after 10 fallback refreshes.
 ```
 
+## Street Food snapshots
+
+The link optionally discovers `FoodTrucks.BigCopilotSnapshot.CaptureV1(GameInstance)`.
+On the main thread it captures current mod JSON into a copied root and copied
+`modData` dictionary before serialization. It never fires a save event, settles
+takings or changes the live dictionary. A marker inside the served save records
+whether the provider supplied fresh state. Without the provider, Street Food
+records are marked unavailable for live planning.
+
+Hire preflight also calls `IsCrewV1(GameInstance, string)` before moving an
+unassigned employee. Vehicle crew, or unknown ownership when Street Food is present,
+is refused as `changed`; refresh the board to rebuild the plan.
+
+Compile both mods in an isolated SDK and copy `mod/build/street-food-tests/` into
+`Assets/Editor/BclStreetFoodTests/`, then run Unity with
+`-batchmode -projectPath <SDK> -executeMethod BclStreetFoodTests.Run -logFile <log>`.
+This synthetic check verifies snapshot isolation, unchanged save counters, unavailable
+sessions and crew ownership that changes after a read. It restores the test's static
+state and does not read a player save. In-game refresh and hire checks remain necessary
+before release.
+
 ## Queue validation in the SDK
 
 HTTP admission and main-thread work are bounded as described in
