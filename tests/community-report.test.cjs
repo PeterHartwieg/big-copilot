@@ -23,7 +23,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const {Miniflare, convertV4MiniflareOptions, Response: MfResponse} = require('miniflare');
-const {vmWorkerSource} = require('./_community.cjs');
+const {migrate, vmWorkerSource} = require('./_community.cjs');
 
 const ROOT = path.join(__dirname, '..');
 const WORKER_PATH = path.join(ROOT, 'server', 'worker.mjs');
@@ -36,6 +36,7 @@ const SAVE_SENTINEL = 'private-save-bytes-sentinel';
 
 let mf = null;
 let bucket = null;
+let db = null;
 let workerScript = '';
 let vmScript = ''; // the Worker as a classic script, for vmWorker()
 let ipCounter = 0;
@@ -141,6 +142,8 @@ before(async () => {
   mf = new Miniflare(convertV4MiniflareOptions(baseOptions()));
   await mf.ready;
   bucket = await mf.getR2Bucket('REPORTS');
+  db = await mf.getD1Database('COMMUNITY_DB');
+  await migrate(db);
 });
 
 beforeEach(async () => {
@@ -148,6 +151,9 @@ beforeEach(async () => {
   github.answer = null;
   const keys = await objects();
   if (keys.length) await bucket.delete(keys);
+  // Each test starts on an empty day, so one test's reports cannot fill the
+  // global budget for the next.
+  await db.prepare('DELETE FROM report_budget').run();
 });
 
 after(async () => { if (mf) await mf.dispose(); });
@@ -365,15 +371,87 @@ test('rate limit: a few reports a minute per IP, then 429 without touching GitHu
   assert.deepEqual(statuses, [...Array(limit).fill(201), 429, 429]);
   assert.equal(github.calls.length, limit);
   assert.equal((await objects()).length, limit * 3, 'report.json, save.hsg and issue.json per accepted report');
-  // Another connection still has its budget.
+  // Another connection still has its per-IP budget.
   assert.equal((await send([['report', reportJson()]])).status, 201);
 });
 
-test('config: without the bucket or the token the route answers 503 and the community API still works', async () => {
-  for (const drop of ['REPORTS', 'GITHUB_REPORT_TOKEN', 'REPORT_LIMITER']) {
+function dailyCap() {
+  const m = /const REPORT_DAILY_CAP = (\d+);/.exec(fs.readFileSync(WORKER_PATH, 'utf8'));
+  assert.ok(m, 'REPORT_DAILY_CAP is a named constant');
+  const cap = Number(m[1]);
+  assert.equal(cap, 50);
+  return cap;
+}
+
+test('daily cap: the budget plus one, across distinct IPs, is refused with no R2 write and no GitHub call; the next UTC day starts again', async () => {
+  const cap = dailyCap();
+  const ips = new Set();
+  for (let i = 0; i < cap; i++) {
+    const ip = nextIp();
+    ips.add(ip);
+    await expectStatus(await send([['report', reportJson()]], {ip}), 201, `report ${i + 1} of ${cap}`);
+  }
+  assert.equal(ips.size, cap, 'each accepted report came from its own IP');
+  const today = await db.prepare('SELECT day, n FROM report_budget').all();
+  assert.equal(today.results.length, 1);
+  assert.equal(today.results[0].n, cap);
+
+  github.calls = [];
+  const blockedIp = nextIp();
+  assert.equal(ips.has(blockedIp), false);
+  const blocked = await send([
+    ['report', reportJson()],
+    ['save', new Blob(['over-cap']), 'save.hsg'],
+  ], {ip: blockedIp});
+  const body = await expectStatus(blocked, 503, 'over the daily cap');
+  assert.deepEqual(body, {error: 'Service unavailable'});
+  const retry = blocked.headers.get('retry-after');
+  assert.match(retry, /^[1-9]\d*$/);
+  assert.ok(Number(retry) <= 86400, retry);
+  assert.equal(github.calls.length, 0, 'a report past the budget never calls GitHub');
+  assert.deepEqual(await objects(), [], 'a report past the budget never writes to R2');
+  const held = await db.prepare('SELECT day, n FROM report_budget').all();
+  assert.equal(held.results.length, 1);
+  assert.equal(held.results[0].n, cap, 'a refusal does not take another slot');
+
+  // The row is keyed by the UTC date the worker computed. Moving the full row
+  // to the previous day is that date rolling over: today has no row, so the
+  // next report starts a new counter, and the previous day's count stays put.
+  const filledDay = held.results[0].day;
+  const previous = new Date(Date.parse(`${filledDay}T00:00:00.000Z`) - 86400000).toISOString().slice(0, 10);
+  await db.prepare('UPDATE report_budget SET day = ?1 WHERE day = ?2').bind(previous, filledDay).run();
+  github.calls = [];
+  await expectStatus(await send([['report', reportJson()]], {ip: nextIp()}), 201, 'the next UTC day');
+  assert.equal(github.calls.length, 1);
+  const fresh = await db.prepare('SELECT n FROM report_budget WHERE day = ?1').bind(filledDay).first();
+  const kept = await db.prepare('SELECT n FROM report_budget WHERE day = ?1').bind(previous).first();
+  assert.equal(fresh.n, 1);
+  assert.equal(kept.n, cap);
+});
+
+test('daily cap: two reports racing for the last slot leave the counter at the cap and call GitHub once', async () => {
+  const cap = dailyCap();
+  const day = new Date().toISOString().slice(0, 10);
+  await db.prepare('INSERT INTO report_budget (day, n) VALUES (?1, ?2)').bind(day, cap - 1).run();
+  const [a, b] = await Promise.all([
+    send([['report', reportJson()]], {ip: nextIp()}),
+    send([['report', reportJson()]], {ip: nextIp()}),
+  ]);
+  assert.deepEqual([a.status, b.status].sort(), [201, 503]);
+  const refused = a.status === 503 ? a : b;
+  assert.match(refused.headers.get('retry-after'), /^[1-9]\d*$/);
+  assert.equal(github.calls.length, 1, 'only the report that took the slot calls GitHub');
+  assert.deepEqual(await objects(), []);
+  const row = await db.prepare('SELECT n FROM report_budget WHERE day = ?1').bind(day).first();
+  assert.equal(row.n, cap);
+});
+
+test('config: without the bucket, the token or the database the route answers 503 and the community API still works', async () => {
+  for (const drop of ['REPORTS', 'GITHUB_REPORT_TOKEN', 'REPORT_LIMITER', 'COMMUNITY_DB']) {
     const options = baseOptions();
     if (drop === 'REPORTS') delete options.r2Buckets;
     else if (drop === 'GITHUB_REPORT_TOKEN') delete options.bindings.GITHUB_REPORT_TOKEN;
+    else if (drop === 'COMMUNITY_DB') delete options.d1Databases;
     else delete options.ratelimits.REPORT_LIMITER;
     const scoped = new Miniflare(convertV4MiniflareOptions(options));
     try {
@@ -418,8 +496,10 @@ function vmWorker(fetchImpl) {
 }
 
 function vmEnv(bucketImpl) {
+  const statement = {bind() { return statement; }, first: async () => ({n: 1})};
   return {
     COMMUNITY_IP_SECRET: 'secret',
+    COMMUNITY_DB: {prepare: () => statement},
     GITHUB_REPORT_TOKEN: TOKEN,
     REPORT_LIMITER: {limit: async () => ({success: true})},
     REPORTS: bucketImpl,

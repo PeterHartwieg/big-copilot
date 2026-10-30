@@ -45,13 +45,16 @@ const REPORT_ISSUE_URL = /^https:\/\/github\.com\/PeterHartwieg\/big-copilot\/is
 const GITHUB_TIMEOUT_MS = 15000;
 const REPORT_TRIES = 3;
 const REPORT_SWEEP_AFTER_MS = 60 * 60 * 1000;
+// Accepted reports per UTC day, across every client. Counted in D1
+// (migrations/0005_report_budget.sql), separate from the per-IP REPORT_LIMITER.
+const REPORT_DAILY_CAP = 50;
 
 // Presence has its own, tighter limiter: a real tab sends one heartbeat every five
 // minutes, so a loop of fresh browser ids cannot inflate the online count on the
 // budget meant for voting. Feature suggestions and translation suggestions each have a
 // small separate budget; other routes, translation votes included, share COMMUNITY_LIMITER.
-// A bug report has a budget of its own, needs no D1 but the R2 bucket and the
-// GitHub token, and reads its own multipart body.
+// A bug report has a per-IP limiter of its own, a global daily cap counted in D1
+// (report_budget), the R2 bucket and the GitHub token, and reads its own multipart body.
 const routes = {
   "/api/translations": { operation: "translations", method: "GET", write: false, handler: handleTranslations },
   "/api/translations/entry": { operation: "translations", method: "GET", write: false, handler: handleTranslations },
@@ -64,7 +67,7 @@ const routes = {
   "/api/community/features": { operation: "features", method: "GET", write: false, handler: features },
   "/api/report": {
     operation: "report", method: "POST", write: false, handler: report, limiter: "REPORT_LIMITER",
-    database: false, bindings: ["REPORTS", "GITHUB_REPORT_TOKEN"],
+    bindings: ["REPORTS", "GITHUB_REPORT_TOKEN"],
   },
 };
 
@@ -275,7 +278,9 @@ async function features(request, env, _body, ip, sign, diagnostic) {
 // again, so no save sits in R2 without an issue that names it. Only the
 // validated fields of the report part reach the public issue: the save and the
 // details are stored as they came and never read here (a broken save is exactly
-// what gets reported, so there is no gzip check and no decompression).
+// what gets reported, so there is no gzip check and no decompression). Once the
+// report is valid it claims one slot of the global daily budget (REPORT_DAILY_CAP,
+// one D1 row per UTC day). Past the cap the answer is 503 and nothing is written.
 async function report(request, env, _body, _ip, _sign, diagnostic, ctx) {
   const { origin } = new URL(request.url);
   if (request.headers.get("Origin") !== origin) return json({ error: "Invalid request" }, 400);
@@ -297,6 +302,13 @@ async function report(request, env, _body, _ip, _sign, diagnostic, ctx) {
   const parts = reportParts(form);
   const facts = parts && reportFacts(parts.report, parts.details !== null);
   if (!facts) return json({ error: "Invalid request" }, 400);
+  // The insert is the check, so two reports at once cannot both take the last
+  // slot. A refusal stores nothing. A report that passes counts even if R2 or
+  // GitHub then fails, so a failing flood still spends the budget.
+  diagnostic.category = "database";
+  const allowed = await claimReportSlot(env.COMMUNITY_DB);
+  diagnostic.category = "unexpected";
+  if (!allowed) return json({ error: "Service unavailable" }, 503, { "retry-after": reportRetryAfter() });
   // From the first write to the issue or the cleanup is one piece of work. A
   // player closing the tab cancels the request; waitUntil() keeps the work
   // running to its end, so a write is never left without its issue or its
@@ -304,6 +316,25 @@ async function report(request, env, _body, _ip, _sign, diagnostic, ctx) {
   const work = fileReport(env, parts, facts, diagnostic);
   if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(work.catch(() => {}));
   return work;
+}
+
+// One row per UTC day. RETURNING is empty once n is already at the cap, and the
+// row is left unchanged: that empty result is the refusal.
+async function claimReportSlot(db) {
+  const day = new Date().toISOString().slice(0, 10);
+  const row = await db.prepare(
+    "INSERT INTO report_budget (day, n) VALUES (?1, 1) " +
+      "ON CONFLICT (day) DO UPDATE SET n = n + 1 WHERE n < ?2 " +
+      "RETURNING n"
+  ).bind(day, REPORT_DAILY_CAP).first();
+  return Boolean(row);
+}
+
+// Seconds until the next UTC midnight, when today's row stops being today's.
+function reportRetryAfter() {
+  const now = Date.now();
+  const next = Date.parse(new Date(now).toISOString().slice(0, 10) + "T00:00:00.000Z") + 24 * 60 * 60 * 1000;
+  return String(Math.max(1, Math.ceil((next - now) / 1000)));
 }
 
 async function fileReport(env, parts, facts, diagnostic) {
