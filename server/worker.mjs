@@ -8,6 +8,7 @@ import FEATURES from "./features.json";
 import {isRequestId, listRequests, voteRequest, suggestRequest, cleanupRequestVotes, cleanupRequestText} from "./feature_requests.mjs";
 import { handleTranslations, cleanupTranslationVotes } from "./translations.mjs";
 import { json, singleString } from "./http.mjs";
+import { announcerDue, announceChangelog } from "./discord_announcer.mjs";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Pseudo IPv4 "overwrite headers" mode fills CF-Connecting-IP with a 240.0.0.0/4
@@ -89,6 +90,9 @@ export default {
     const db = dailyTick ? env.COMMUNITY_DB : null;
     const results = await Promise.allSettled([
       env.REPORTS && (reportTick || !controller.cron) ? sweepReports(env.REPORTS) : null,
+      // New changelog entries go to Discord four times an hour
+      // (docs/community-features.md, "Discord announcements").
+      announcerDue(controller) ? announceChangelog(env) : null,
       db && env.ASSETS ? cleanupTranslationVotes(env) : null,
       // The privacy notice promises both: presence rows go within two days, and a
       // poll's vote hashes go once its curated option or stored request closes.

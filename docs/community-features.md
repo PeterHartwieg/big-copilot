@@ -237,6 +237,63 @@ not a token, so a local report fails at GitHub and the form shows the Discord fa
 never put a real token in `.dev.vars`. The tests replace GitHub with a stub
 (`tests/community-report.test.cjs`, `tests/report_flow.test.cjs`).
 
+## Discord announcements
+
+The Worker posts each new `web/changelog.json` entry to the BigCopilot Discord channel
+through a webhook (`server/discord_announcer.mjs`). It runs on the existing minute cron
+when the scheduled minute is :07, :22, :37 or :52, reads the changelog the Worker itself
+serves (`env.ASSETS`), and sends at most five entries a run, oldest first. Every post
+suppresses mentions. An entry's identity is the SHA-256 of `<pr>:<title>`, so a reworded
+summary is not announced again but a retitled entry is. A changelog that is empty, has an
+invalid entry or repeats an identity stops the run before anything is sent.
+
+The webhook is the secret `BIGCOPILOT_DISCORD_WEBHOOK`
+(`npx wrangler secret put BIGCOPILOT_DISCORD_WEBHOOK`), a
+`https://discord.com/api/webhooks/<id>/<token>` URL; anything else stops the run. It is
+not in `secrets.required`, so a deploy without it goes through. Apply
+`migrations/0004_discord_announcements.sql` with
+`npx wrangler d1 migrations apply big-copilot-community --remote` before setting the
+secret: with the secret set and the tables missing, every due run fails. To pause the
+announcer, delete the secret (`npx wrangler secret delete BIGCOPILOT_DISCORD_WEBHOOK`):
+each due run then logs `unconfigured` and does nothing else.
+
+State lives in D1 (`migrations/0004_discord_announcements.sql`): `discord_announced`
+holds every identity already announced, and the single row of `discord_announcer_state`
+holds the run's lease, when the baseline was taken, the pending entry and the last
+Discord message id. The first run with no state row is the baseline: it records every
+current entry as announced and sends nothing. Each send writes the entry as pending
+first and posts only when that write succeeds; once Discord answers 2xx with a message
+id, the entry is recorded and pending cleared. Anything else (an error status, no id, a
+network failure, a failed record) leaves the entry pending, and while an entry is pending
+every run logs `pending` and sends nothing, so an uncertain delivery is never posted
+twice.
+
+To resolve a pending entry, look at the channel and the pending payload:
+
+```sh
+npx wrangler d1 execute big-copilot-community --remote --command "SELECT pending_key, pending_payload FROM discord_announcer_state"
+```
+
+If the message is in the channel, record it as announced and clear pending:
+
+```sh
+npx wrangler d1 execute big-copilot-community --remote --command "INSERT OR IGNORE INTO discord_announced(key, announced_at) SELECT pending_key, unixepoch() FROM discord_announcer_state WHERE id = 1 AND pending_key IS NOT NULL; UPDATE discord_announcer_state SET pending_key = NULL, pending_payload = NULL WHERE id = 1"
+```
+
+If it is not, clear pending only, and the next due run sends it:
+
+```sh
+npx wrangler d1 execute big-copilot-community --remote --command "UPDATE discord_announcer_state SET pending_key = NULL, pending_payload = NULL WHERE id = 1"
+```
+
+The announcer logs one structured line, `{event: "discord_announcer", outcome}`, with
+an outcome from a fixed list: `unconfigured`, `invalid_webhook`, `configuration`,
+`changelog_unavailable`, `invalid_changelog`, `leased` (another run holds the lease),
+`pending`, `pending_write_failed`, `discord_failed`, `record_failed` or `unexpected`.
+It never logs the webhook, a response body or an exception. A failure fails the cron
+run without stopping the report sweep or the daily cleanup beside it. The tests are
+`tests/community-discord.test.cjs`.
+
 ## Configuration and release
 
 The browser Python worker is still `web/worker.js`. The server entry point is
