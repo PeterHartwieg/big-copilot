@@ -211,9 +211,18 @@ GitHub created the issue but its answer never arrived, the issue names a folder 
 already gone; that direction is accepted. With nothing attached the report request writes
 nothing to R2.
 
-`REPORT_LIMITER` allows three reports a minute per IP at each Cloudflare location: a
-burst guard, not a daily cap. If spam shows up, add a daily cap counted in D1, then
-Turnstile.
+`REPORT_LIMITER` allows three reports a minute per IP at each Cloudflare location:
+a burst guard. A global budget of 50 reports a UTC day (`REPORT_DAILY_CAP` in
+`server/worker.mjs`) sits on top of it, as a D1 counter with one row per day in
+`report_budget` (`migrations/0005_report_budget.sql`). The Worker claims the slot
+only once the report is valid, and before any R2 write or GitHub call, so two
+reports at once cannot both take the last slot. The next report that day, from
+any address, answers 503 with `Retry-After` set to the seconds until the next UTC
+midnight, and stores nothing. A report that fails validation does not count. One
+that is accepted counts even when R2 or GitHub then fails. Apply the migration
+(`npx wrangler d1 migrations apply big-copilot-community --remote`) before the
+Worker that reads the table is deployed, or every report answers 503. Turnstile
+is the next step if this budget is not enough.
 
 The bucket `big-copilot-reports` is in the EU jurisdiction, so its binding carries
 `"jurisdiction": "eu"`, and its lifecycle rule `delete-after-30-days` deletes objects
