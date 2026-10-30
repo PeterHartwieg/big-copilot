@@ -112,7 +112,7 @@ a nonzero exit status, including partially matched bulk commands.
 The cursor is exclusive, so later insertions do not shift subsequent pages. Bulk
 hide accepts up to 100 validated visitor IDs in one atomic UPDATE.
 
-Publishing has a separate best-effort limit of three requests per minute per IP
+Publishing has a separate best-effort limit of three requests per minute per IPv4 address or IPv6 /64
 at each Cloudflare location (`SUGGEST_LIMITER`, namespace 1004). The database also
 atomically caps active requests at 1,000 across all connections. A full list
 returns 503 with `Request list full`; voting and duplicate submission retries
@@ -211,7 +211,7 @@ GitHub created the issue but its answer never arrived, the issue names a folder 
 already gone; that direction is accepted. With nothing attached the report request writes
 nothing to R2.
 
-`REPORT_LIMITER` allows three reports a minute per IP at each Cloudflare location: a
+`REPORT_LIMITER` allows three reports a minute per IPv4 address or IPv6 /64 at each Cloudflare location: a
 burst guard, not a daily cap. If spam shows up, add a daily cap counted in D1, then
 Turnstile.
 
@@ -299,14 +299,14 @@ run without stopping the report sweep or the daily cleanup beside it. The tests 
 The browser Python worker is still `web/worker.js`. The server entry point is
 `server/worker.mjs`, outside the publicly served `web/` directory. It handles only
 API requests; the existing assets continue to be served directly. D1 holds the
-presence, curated votes, visitor requests and request votes. Cloudflare rate-limit bindings limit requests per IP at
+presence, curated votes, visitor requests and request votes. Cloudflare rate-limit bindings limit requests per IPv4 address or IPv6 /64 at
 each edge location: heartbeats have their own budget of 20 a minute
 (`PRESENCE_LIMITER`), since a real tab sends one every five minutes. Listing
 and votes share 120 a minute (`COMMUNITY_LIMITER`); publishing suggestions has its
 own three-a-minute budget (`SUGGEST_LIMITER`), and translation suggestions have ten
 a minute (`TRANSLATION_SUGGEST_LIMITER`). Translation votes stay on the shared
 budget. None of these is a global identity or
-fraud-prevention guarantee.
+fraud-prevention guarantee. Vote hashes stay the full connection address.
 
 Install the pinned development dependencies with `npm ci`. For local development:
 
