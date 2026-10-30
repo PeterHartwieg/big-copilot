@@ -8,3 +8,8 @@ COMMUNITY_IP_SECRET=local-dev-sample-secret-not-for-production
 # with one would open a real public issue. The production secret is set with:
 # npx wrangler secret put GITHUB_REPORT_TOKEN
 GITHUB_REPORT_TOKEN=local-dev-sample-not-a-github-token
+# The Discord webhook for changelog announcements. Leave it unset locally: unset,
+# the announcer does nothing, and a real webhook here would post to the real
+# channel. The production secret is set with:
+# npx wrangler secret put BIGCOPILOT_DISCORD_WEBHOOK
+# BIGCOPILOT_DISCORD_WEBHOOK=

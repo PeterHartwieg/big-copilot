@@ -85,12 +85,18 @@
   // Secrets, by name only: the values are set with `npx wrangler secret put`,
   // and .dev.vars.example has local samples. GITHUB_REPORT_TOKEN is a
   // fine-grained token with Issues read and write on this one repository.
+  // BIGCOPILOT_DISCORD_WEBHOOK, the Discord webhook the changelog announcer posts
+  // to, is optional and left out of "required" on purpose: unset, the announcer
+  // does nothing and deploys still go through (docs/community-features.md,
+  // "Discord announcements").
   "secrets": {
     "required": ["COMMUNITY_IP_SECRET", "GITHUB_REPORT_TOKEN"]
   },
   // Daily cleanup of presence rows older than 24 hours, of votes for polls
   // no longer in server/features.json. Bounded report cleanup runs every minute
-  // to preserve the two-day orphan retention promise across large backlogs.
+  // to preserve the two-day orphan retention promise across large backlogs, and
+  // the minute cron's :07, :22, :37 and :52 runs also announce new changelog
+  // entries to Discord.
   "triggers": {
     "crons": ["17 3 * * *", "* * * * *"]
   },
