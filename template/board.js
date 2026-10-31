@@ -11468,6 +11468,7 @@ function drawDeliveriesView(){
   const every = shops.rows.concat(wh.every), kept = shops.kept.concat(wh.kept);
   sbFill(sec, sbToolbar("deliveries", {kinds: ["shops", "warehouses"]})
     + swHtml()
+    + poContractsHtml("deliveries")
     + (every.length ? sbVerdict("deliveries", [shops.rows.length ? shops.verdict : "", wh.every.length ? sbLinesVerdict(wh.every) : ""].filter(Boolean).join(" "), false)
       : sbVerdict("deliveries", tt("sb.del.none2", "No shelf or second-tier warehouse is on a delivery plan yet."), true, {keep: true}))
     + group("shelves", tt("sb.del.shops2", "Shops"), tt("sb.del.shops.tip", "Daily top-ups and wholesale deliveries"), shopsBody)
@@ -11771,7 +11772,7 @@ function srAgentRow(a){
   const finds = [...new Set((a.products || []).flatMap(srProductFinds))];
   return `<tr class="sr-row sr-opens${open ? " sr-opened" : ""}${a.who ? "" : " sr-gap"}${lit ? " sr-lit" : ""}" data-sr-row="${attr(id)}"${lit ? " data-sb-at" : ""}>
     <td class="l who">${who}</td><td class="l site">${srImporterHtml(a)}</td><td class="l dl">${srDeliveryCell(a)}</td><td class="l">${srDelivers(a) ? srDay(a.next) : srDash}</td>
-    <td>${(a.products || []).length}</td><td class="l to">${to}</td><td class="l st">${flags}${srCountChips(finds)}</td><td class="tg">${srTog}</td></tr>${srAgentDetail(a, id)}`;
+    <td>${(a.products || []).length}</td><td class="l to">${to}</td><td class="l st">${flags}${srCountChips(finds)}</td><td class="tg">${poEditButton("import", a.contract)}${srTog}</td></tr>${srAgentDetail(a, id)}`;
 }
 function srAgentsTable(rows){
   return `<div class="scrollx"><table class="sb-t sr-t"><thead><tr><th class="l">${tt("sb.roles.col.agent", "Purchasing Agent")}</th><th class="l">${tt("sb.roles.col.importer", "Importer")}</th><th class="l">${
@@ -11816,7 +11817,7 @@ function drawRolesView(){
     + (agents.length ? srAgentsTable(agents) : `<p class="quiet">${tt("sb.roles.noneInScope", "Nothing in this scope.")}</p>`)
     : srEmpty("ship", tt("sb.roles.empty.agents", "No Purchasing Agent yet"), tt("sb.roles.empty.agents.how", "Import contracts: <b>BizMan › Purchasing Agents</b>"));
   const bar = none ? "" : sbToolbar("roles", {kinds: ["warehouses", "factories"]});
-  sbFill(sec, bar + sbVerdict("roles", "", true) + (none ? `<div class="sr-empty">${lm}${pa}</div>` : lm + pa));
+  sbFill(sec, bar + sbVerdict("roles", "", true) + (none ? `<div class="sr-empty">${lm}${pa}</div>` : lm + pa) + poContractsHtml("roles"));
   if(sub.supply === "roles") sbPlaceFlow();
 }
 /* Land on Plans & contracts with one row lit and opened (and a stop of it),

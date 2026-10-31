@@ -448,3 +448,60 @@ test('a board with no supply.roles draws without throwing', async () => {
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
+
+test('Edit opens the current lines without Link, and a copied order can be restored after it is gone', async () => {
+  const page = await board(fixture());
+  try {
+    const edit = '#secRoles tr[data-sr-row="a:C1"] .po-edit';
+    assert.equal(await page.locator(edit).count(), 1);
+    assert.equal(await page.locator('#secRoles tr.sr-row:not(.sr-opens) .po-edit').count(), 0, 'an agent with no contract has nothing to edit');
+    assert.equal(await page.locator('#secRoles tr[data-sr-of="a:C1"].sr-hide').count(), 1);
+    await page.click(edit);
+    assert.equal(await page.locator('#secRoles tr[data-sr-of="a:C1"].sr-hide').count(), 1, 'Edit does not open the row');
+    const dlg = 'dialog.gw-dlg';
+    const text = await page.$eval(dlg, el => el.innerText);
+    assert.match(text, /Edit order/);
+    assert.match(text, /Jet Cargo Imports/);
+    assert.match(text, /Sugar/);
+    assert.match(text, /5,000/);
+    assert.match(text, /Update the Big Copilot Link mod to change imports from here/);
+    assert.equal(await page.locator(`${dlg} input[data-po-amount]`).count(), 0);
+    assert.equal(await page.locator(`${dlg} [data-gw-b="review"]`).count(), 0);
+    await page.click(`${dlg} [data-gw-b="copy"]`);
+    assert.match(await page.evaluate(() => localStorage.getItem('ba-po-orders-v1')), /sugar/);
+    await page.click(`${dlg} [data-od-close]`);
+
+    await page.evaluate(() => {
+      D.supply.roles.agents = D.supply.roles.agents.filter(a => a.contract !== 'C1');
+      drawRolesView();
+    });
+    assert.equal(await page.locator('#secRoles [data-po-copied]').count(), 1);
+    assert.match(await page.$eval('#secRoles', el => el.innerText), /with or without Link/);
+    await page.click('#secRoles [data-po-copied]');
+    const restored = await page.$eval(dlg, el => el.innerText);
+    assert.match(restored, /no longer in the save/);
+    assert.match(restored, /Sugar/);
+    assert.equal(await page.locator(`${dlg} [data-gw-b="review"]`).count(), 0);
+    await page.click(`${dlg} [data-od-close]`);
+
+    await page.evaluate(() => {
+      D.wholesale = {rows: [], margin: 0.15, available: true, suppliers: [], contracts: [{
+        id: 'w:shop#3|wh#1|0', shop: 'shop#3', s: 2, supplier: 'wh#1', supplierName: 'Warehouse Market',
+        mode: 'weekly', enabled: true, next: 40, fee: 25,
+        items: [{slug: 'soda', item: 'Soda', amount: 40, price: 2}]}]};
+      document.querySelectorAll('#pageSupply section').forEach(el => { el.hidden = false; });
+      drawDeliveriesView();
+    });
+    const ws = '#secDeliveries .po-edit[data-po-edit="wholesale"]';
+    assert.equal(await page.locator(ws).count(), 1);
+    assert.ok(await page.locator('#secDeliveries .po-edit[data-po-edit="import"]').count() >= 1);
+    await page.click(ws);
+    const order = await page.$eval(dlg, el => el.innerText);
+    assert.match(order, /Warehouse Market/);
+    assert.match(order, /Soda/);
+    assert.match(order, /40/);
+    assert.match(order, /Update Big Copilot Link to version 0\.7\.0 or later/);
+    assert.equal(await page.locator(`${dlg} input[data-po-amount]`).count(), 0);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});

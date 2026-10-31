@@ -170,6 +170,32 @@ class WholesaleWrite(unittest.TestCase):
         self.link.hour = 23  # undo may cancel an untouched order after the supplier closes
         self.assertEqual(self.link.write('undo', {'kind': 'wholesale'})[0], 200)
 
+    def test_phase1_weekly_edit_changes_both_lines_in_place(self):
+        # The board's edit sends every current line. Dropping one is other_products;
+        # amount 0 is not a removal this Link accepts.
+        self.shop["cachedAvailableProducts"] = [SODA, GIFT]
+        self.link.wholesale_terms[KEY]["products"][GIFT] = {"price": 4, "cap": 1000}
+        self.apply()
+        contract = self.link.wholesale_contracts[0]
+        contract["items"].append({"item": GIFT, "amount": 30, "ordered": 5, "last": 12})
+        contract["day"] = 43
+        self.refuse("other_products", self.body(items=[{"item": SODA, "amount": 900}]))
+        self.assertEqual(len(self.link.wholesale_contracts), 1)
+        body = self.body(items=[{"item": SODA, "amount": 900}, {"item": GIFT, "amount": 20}])
+        quoted = self.quote(body)
+        self.assertTrue(quoted["ok"], quoted)
+        row = quoted["rows"][0]
+        self.assertEqual((row["set"], row["cost"], row["nextDeliveryDay"]), (True, 1980, self.link._monday()))
+        self.assertNotEqual(row["nextDeliveryDay"], 43)
+        status, result = self.link.write("wholesale", dict(body, quote=quoted["quote"]))
+        self.assertEqual(status, 200, result)
+        self.assertEqual(len(self.link.wholesale_contracts), 1)
+        items = {i["item"]: i for i in self.link.wholesale_contracts[0]["items"]}
+        self.assertEqual((items[SODA]["amount"], items[SODA]["ordered"]), (900, 0))
+        self.assertEqual((items[GIFT]["amount"], items[GIFT]["ordered"], items[GIFT]["last"]), (20, 5, 12))
+        with self.assertRaises(BadRequest):
+            self.quote(self.body(items=[{"item": SODA, "amount": 0}, {"item": GIFT, "amount": 20}]))
+
     def test_parser_rejects_bad_or_empty_quantities_and_missing_identity(self):
         for changes in ({'items': []}, {'items': [{'item': SODA, 'amount': True}]},
                         {'items': [{'item': SODA, 'amount': 1.5}]}, {'mode': 'rush'}, {'expect': {}},

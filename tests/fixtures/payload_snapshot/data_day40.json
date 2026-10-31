@@ -36928,6 +36928,27 @@
  ],
  "wholesale": {
   "available": true,
+  "contracts": [
+   {
+    "enabled": true,
+    "fee": null,
+    "id": "w:ba:street_broadwaystreet#19|ba:street_eighthavenue#10|0",
+    "items": [
+     {
+      "amount": 450,
+      "item": "Gift (Cheap)",
+      "price": 5,
+      "slug": "ba:itemname_cheapgift"
+     }
+    ],
+    "mode": "weekly",
+    "next": 43,
+    "s": 1,
+    "shop": "ba:street_broadwaystreet#19",
+    "supplier": "ba:street_eighthavenue#10",
+    "supplierName": "10 Eighth Avenue"
+   }
+  ],
   "margin": 0.15,
   "rows": [
    {
