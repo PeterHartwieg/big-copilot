@@ -806,6 +806,23 @@ function hrShiftWho(req, row){
   const day = site && site.days.find(x => x.d === row.d);
   return ((day && day.shifts || [])[row.i] || {}).employeeId;
 }
+/* A parser refusal has a request path rather than the structured rows of a
+   dry-run refusal. Resolve it against the exact batch that was sent. Leave
+   unknown paths alone; gwProblem escapes the resulting plain text. */
+function hrRequestProblem(res, req, m){
+  if(res.status !== 400 || typeof res.body?.detail !== "string") return res;
+  const detail = res.body.detail.replace(/body\.(moves|hires|sites)\[(\d+)\](?:\.\w+|\[\d+\])*/g, (path, kind, i) => {
+    const row = req.body[kind][Number(i)];
+    if(!row) return path;
+    const address = kind === "moves" ? row.to : row.address;
+    const S = m.sites.find(s => s.key === gwKeyOf(address));
+    if(!S) return path;
+    const p = req.names.get(kind === "moves" ? row.employeeId : row.candidateId);
+    const who = p?.name ? tt("co.hire.refuse.path", "{name} at {site}", {name: p.name, site: hrSiteName(S)}) : hrSiteName(S);
+    return `${path} (${who})`;
+  });
+  return Object.assign({}, res, {body: Object.assign({}, res.body, {detail})});
+}
 /* The action, one call: who is hired and moved where, and every week it
    writes, with what the review needs to name every row of it.
      mode   "both": hire, move, and write the week at every site the call
@@ -833,12 +850,51 @@ function hrRequest(m, o = {}){
   };
   const names = new Map();    // id -> {name, skill, c | move}
   const hires = [], moves = [], away = new Set(), arriving = new Set(), zero = [];
+  /* All sites share one employee namespace, including candidates. A site's
+     bench can still name somebody another plan uses, or somebody who has
+     left since that plan was read. Recheck the current board on every build
+     (also before Apply), before adding either the assignment or its hours.
+     Single-site and Quick hire keep their own planning paths. */
+  const batch = !o.site && !Q && !only;
+  const people = (D.hiring || {}).people || {};
+  const claimed = new Map(), skipped = new Map(), excluded = new Map(), staleMoves = new Map();
+  const skip = (S, id, name, reason) => {
+    if(!skipped.has(S.key)) skipped.set(S.key, new Map());
+    skipped.get(S.key).set(id, {name: name || id, reason});
+    /* Rejected people must not survive in a plan's existing entries either.
+       Keep hours only at their accepted destination or current assignment. */
+    excluded.set(id, claimed.get(id) || (people[id] && people[id].site) || null);
+  };
+  if(batch){
+    const check = (S, id, from, name) => {
+      const p = people[id];
+      const reason = !p ? "gone" : p.site !== from ? "moved" : null;
+      if(reason) skip(S, id, name || (p || hrPerson(id, S.row)).name, reason);
+      return reason;
+    };
+    m.sites.filter(inScope).forEach(S => {
+      (S.plan.bench || []).forEach(id => check(S, id, null));
+      (S.plan.spare || []).forEach(id => check(S, id, S.key));
+    });
+    /* A refreshed model may no longer know the spare's skill or intended
+       destination. Keep the skipped result at the site already reviewed. */
+    (o.reviewedMoves || []).forEach(x => {
+      const S = m.sites.find(S => S.key === x.to);
+      if(S){ const reason = check(S, x.id, x.from, x.name); if(reason) staleMoves.set(x.id, reason); }
+    });
+  }
   /* One site's action: where each of its own spares can go (hrOutWeek()),
      worked out whatever the mode, for the review to say why. */
   /* One site's action: where each of its own spares goes (hrOutPlan()). */
   const out = o.site && !Q && !only ? hrOutPlan(m, m.sites.find(S => S.key === o.site)) : new Map();
   const left = Object.assign({}, only || {});
   const hire = (c, S, w, skill, misfit, nofit) => {
+    if(batch){
+      const reason = claimed.has(c.id) ? "duplicate" : people[c.id] ? "employed"
+        : !(D.candidates || []).some(p => p.id === c.id) ? "candidate" : null;
+      if(reason){ skip(S, c.id, c.name, reason); return; }
+      claimed.set(c.id, S.key);
+    }
     hires.push({candidateId: c.id, address: gwAddress(S.key), expect: {wage: c.wage}, seenHoursLeft: c.hoursLeft ?? null});
     names.set(c.id, {name: c.name, skill, c});
     const at = touch(S);
@@ -863,6 +919,12 @@ function hrRequest(m, o = {}){
         ? [...[...out.values()].filter(r => r.x && !r.x.off).map(r => r.x), ...t.moves.filter(x => inScope(x.to) && !(x.from && x.from.key === o.site))]
         : t.moves.filter(x => inScope(x.to));
       if(!only) sent.forEach(x => {
+        if(batch){
+          const p = people[x.id];
+          const reason = staleMoves.get(x.id) || (claimed.has(x.id) ? "duplicate" : !p ? "gone" : p.site !== (x.from ? x.from.key : null) ? "moved" : null);
+          if(reason){ skip(x.to, x.id, x.p.name, reason); return; }
+          claimed.set(x.id, x.to.key);
+        }
         moves.push({employeeId: x.id, from: x.from ? gwAddress(x.from.key) : null, to: gwAddress(x.to.key)});
         names.set(x.id, {name: x.p.name, skill: x.skill, move: x});
         arriving.add(x.id);
@@ -895,7 +957,8 @@ function hrRequest(m, o = {}){
     if(!at && !may) return;
     const address = gwAddress(S.key);
     if(!weekly){ sites.push({address, expect: null, days: null}); return; }
-    const wk = hrSiteWeek(S, at ? at.fill : [], away, arriving, !!(at && at.inbound), !!(at && at.additive && !inScope(S)));
+    const siteAway = batch ? new Set([...away, ...[...excluded].filter(([id, key]) => (claimed.get(id) || key) !== S.key).map(([id]) => id)]) : away;
+    const wk = hrSiteWeek(S, at ? at.fill : [], siteAway, arriving, !!(at && at.inbound), !!(at && at.additive && !inScope(S)));
     if(!at && !wk.changes) return;
     const unreadableOffice = S.site.kind === "office" && spOfficeReplaces(S.row)
       && gwRosterWeek(Object.assign({}, S.row, {office: true})).unreadable;
@@ -926,11 +989,13 @@ function hrRequest(m, o = {}){
      in scope the places nobody fills. */
   const gaps = new Map();
   if(!Q) m.sites.filter(inScope).forEach(S => {
-    const open = S.weeks.filter(x => !x.who || (x.who.type === "move" && x.who.m.off));
+    const open = S.weeks.filter(x => !x.who || (x.who.type === "move" && x.who.m.off)
+      || (batch && mode !== "week" && ["hire", "move"].includes(x.who.type)
+        && !((touched.get(S.key) || {}).fill || []).some(f => f.w === x.w)));
     if(open.length) gaps.set(S.key, open);
   });
-  const shown = m.sites.filter(S => touched.has(S.key) || gaps.has(S.key));
-  return {body: {sites, hires, moves}, names, touched, rest, unreadableSites, zero, gaps, shown, mode, one, out, inScope, quick: !!Q, only: !!only,
+  const shown = m.sites.filter(S => touched.has(S.key) || gaps.has(S.key) || skipped.has(S.key));
+  return {body: {sites, hires, moves}, names, touched, rest, unreadableSites, zero, gaps, shown, skipped, mode, one, out, inScope, quick: !!Q, only: !!only,
           weeks: sites.filter(s => s.days).length + rest.length};
 }
 /* --- drawing -------------------------------------------------------------- */
@@ -1991,6 +2056,16 @@ const hrModeHtml = (modes, mode) => modes.length < 2 ? ""
   : `<div class="gw-pick hr-mode"><span class="nx-sr" id="hrModeLab">${tt("co.hire.mode.label", "What this does")}</span><span class="gw-presets" role="group" aria-labelledby="hrModeLab">${
     modes.map(k => `<button type="button" class="gw-preset" aria-pressed="${k === mode ? "true" : "false"}" data-hr-mode="${k}"><span class="ic">${
       gwSvg(HR_MODE_ICON[k])}</span>${hrModeWord(k)}</button>`).join("")}</span></div>`;
+const hrSkippedSay = x => {
+  const name = spEsc(x.name);
+  switch(x.reason){
+    case "duplicate": return tt("co.hire.skip.duplicate", "{name} skipped: already included in this batch.", {name});
+    case "moved": return tt("co.hire.skip.moved", "{name} skipped: their assignment has changed since this plan was read.", {name});
+    case "employed": return tt("co.hire.skip.employed", "{name} skipped: already works for you.", {name});
+    case "candidate": return tt("co.hire.skip.candidate", "{name} skipped: their application is no longer on this board.", {name});
+    default: return tt("co.hire.skip.gone", "{name} skipped: no longer among the employees on this board.", {name});
+  }
+};
 /* Who goes where, one site a row, opened for its people. `phase`: ready,
    wait (applying) or done; `status`, once done, the outcome of each week an
    older mod writes after the hire, one by one: "wait", "done" or {say}. */
@@ -2055,7 +2130,8 @@ function hrReviewSites(req, phase, gone, status){
         missed ? `<span class="mvc gap">${tt("co.hire.c.open", "{n} still open", {n: missed})}</span>` : ""}`;
     return `<div class="hr-dsite${open ? " open" : ""}"><button type="button" class="hr-dhead" data-hr-site="${attr(S.key)}" aria-expanded="${open}">
       <span><span class="nm">${hoodHtml(S.b)}<span class="s">${spEsc(S.b ? shortName(S.b) : S.site.name || "?")}</span>${S.site.new ? `<span class="hr-new">${tt("co.hire.new", "new")}</span>` : ""}</span><span class="plan">${
-        spEsc(S.b && S.b.type ? S.b.type : S.site.kind)} · ${plan}${mark}</span></span>
+        spEsc(S.b && S.b.type ? S.b.type : S.site.kind)} · ${plan}${mark}${[...((req.skipped || new Map()).get(S.key) || new Map()).values()]
+          .map(x => `<span class="hr-st no">${hrSkippedSay(x)}</span>`).join("")}</span></span>
       <span class="hr-dots">${dots}</span><span class="c">${counts}<span class="cst">+${fmt(cost)}</span></span>${hrSvg("chev")}</button>${drawer}</div>`;
   }).join("");
   return `<div class="hr-dsites">${rows}</div>`;
@@ -2077,8 +2153,8 @@ function hrLeftEmpty(req, answer){
   }).filter(Boolean);
 }
 /* The action for one of the three, from the page's model now. */
-const hrAction = (o, mode, m) => hrRequest(m, {mode, only: o.only || null, site: o.scope === "site" ? o.site : null,
-  quick: o.scope === "quick" ? m.quick : null});
+const hrAction = (o, mode, m, reviewedMoves = []) => hrRequest(m, {mode, only: o.only || null, site: o.scope === "site" ? o.site : null,
+  quick: o.scope === "quick" ? m.quick : null, reviewedMoves});
 /* Which of the three can do anything here, the first the one it opens on:
    hire and schedule where somebody is hired or moved and some week is
    written; hire only where somebody is (a headquarters' or a warehouse's
@@ -2154,14 +2230,20 @@ function hrReview(o = {}, hooks = {}){
   o = Object.assign({scope: "all"}, o);
   let pick = o.mode || null;
   let planned = false;
+  const reviewedMoves = new Map();
   const build = () => {
     if(hooks.onPlan) hooks.onPlan();
     const m = hrModel();
     const reqs = {};
-    HR_MODES.forEach(k => { reqs[k] = hrAction(o, k, m); });
+    HR_MODES.forEach(k => { reqs[k] = hrAction(o, k, m, [...reviewedMoves.values()]); });
     const modes = hrModesOf(o, reqs);
     const mode = modes.includes(pick) ? pick : modes[0] || "both";
     hrLast = {m, req: reqs[mode], o, modes, mode, one: reqs[mode].one, answer: null, chain: {}};
+    if(o.scope === "all") hrLast.req.body.moves.forEach(x => {
+      const to = gwKeyOf(x.to);
+      reviewedMoves.set(`${x.employeeId}|${to}`, {id: x.employeeId, to, from: x.from ? gwKeyOf(x.from) : null,
+        name: hrLast.req.names.get(x.employeeId)?.name});
+    });
     planned = true;
     return hrLast;
   };
@@ -2204,7 +2286,8 @@ function hrReview(o = {}, hooks = {}){
       build();
       const c = counts();
       if(!c.hire && !c.move && !c.weeks) return o.scope === "quick" ? tt("co.hire.none.quick", "Nobody matches: change the role, the site or the filters.")
-        : tt("co.hire.none", "Nothing to do: every planned site has its people and its week, or nobody matches your filters.");
+        : tt("co.hire.none", "Nothing to do: every planned site has its people and its week, or nobody matches your filters.")
+          + (hrLast.req.skipped.size ? hrReviewSites(hrLast.req, "ready", new Set(), {}) : "");
       if(hrLast.req.body.sites.some(s => s.days && typeof s.expect !== "string"))
         return tt("co.hire.reread", "Read the game again first: this board does not know a site's schedule well enough to replace it.");
       const bytes = hrBodyBytes(hrLast.req.body);
@@ -2215,6 +2298,7 @@ function hrReview(o = {}, hooks = {}){
     },
     nothingSay: () => hrLast && hrBodyBytes(hrLast.req.body) > HR_MAX_BODY ? `<b>${tt("co.hire.toomuch", "Too much for one go")}</b>` : "",
     body: () => hrLast.req.body,
+    problem: res => o.scope === "all" ? hrRequestProblem(res, hrLast.req, hrLast.m) : res,
     verdict: answer => answer.ok ? (goneOf(answer).size ? `<b>${tt("co.hire.v.some", "The game can take {n} of {of}", {n: counts().hire - goneOf(answer).size, of: counts().hire})}</b>`
         : `<b>${tt("co.hire.v.all", "The game can take all of it")}</b>`)
       : answer.blocked === "myemployees" ? `<b>${tt("co.hire.v.myemployees", "Close MyEmployees in the game")}</b>` : `<b>${tt("sp.gw.refuses", "The game refuses this")}</b>`,
