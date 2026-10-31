@@ -856,7 +856,21 @@ function hrRequest(m, o = {}){
      (also before Apply), before adding either the assignment or its hours.
      Single-site and Quick hire keep their own planning paths. */
   const batch = !o.site && !Q && !only;
-  const people = (D.hiring || {}).people || {};
+  const hiringPeople = (D.hiring || {}).people || {};
+  const people = Object.assign({}, hiringPeople);
+  /* Hiring names only the bench and spares. An ordinary employee can leave
+     that table while still working a current schedule. Resolve those people
+     from the fresh roster entries, never from a plan's people table alone:
+     that table can also name unassigned people the plan hopes to use. */
+  if(batch){
+    const offices = D.officeStaffing || [];
+    const rows = [...(D.staffing || []), ...Object.values(D.factoryStaffing || {}).flat(),
+      ...(Array.isArray(offices) ? offices : Object.values(offices).flat())];
+    rows.forEach(row => ((row.current || {}).list || []).forEach(s => {
+      const p = (row.people || [])[s.p];
+      if(p && spHasId(p.id) && !hiringPeople[p.id]) people[p.id] = {name: p.name, site: row.key};
+    }));
+  }
   const claimed = new Map(), skipped = new Map(), excluded = new Map(), staleMoves = new Map();
   const skip = (S, id, name, reason) => {
     if(!skipped.has(S.key)) skipped.set(S.key, new Map());
@@ -868,7 +882,7 @@ function hrRequest(m, o = {}){
   if(batch){
     const check = (S, id, from, name) => {
       const p = people[id];
-      const reason = !p ? "gone" : p.site !== from ? "moved" : null;
+      const reason = !p ? "gone" : !hiringPeople[id] || p.site !== from ? "moved" : null;
       if(reason) skip(S, id, name || (p || hrPerson(id, S.row)).name, reason);
       return reason;
     };
@@ -921,7 +935,8 @@ function hrRequest(m, o = {}){
       if(!only) sent.forEach(x => {
         if(batch){
           const p = people[x.id];
-          const reason = staleMoves.get(x.id) || (claimed.has(x.id) ? "duplicate" : !p ? "gone" : p.site !== (x.from ? x.from.key : null) ? "moved" : null);
+          const reason = staleMoves.get(x.id) || (claimed.has(x.id) ? "duplicate" : !p ? "gone"
+            : !hiringPeople[x.id] || p.site !== (x.from ? x.from.key : null) ? "moved" : null);
           if(reason){ skip(x.to, x.id, x.p.name, reason); return; }
           claimed.set(x.id, x.to.key);
         }

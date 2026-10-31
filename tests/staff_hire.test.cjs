@@ -822,7 +822,12 @@ test('a departed spare stays named at the reviewed destination after the model r
   await uniqueAnswer(page);
   await page.locator(REVIEW).click();
   await phase(page, 'ready');
-  await page.evaluate(() => { delete D.hiring.people.SPARE1; });
+  await page.evaluate(() => {
+    delete D.hiring.people.SPARE1;
+    const corner = D.staffing.find(s => s.key === 'ba:street_broadway#2');
+    corner.current.list = corner.current.list.filter(s => corner.people[s.p]?.id !== 'SPARE1');
+    corner.current.shifts = corner.current.list.length;
+  });
   const dlg = page.locator('dialog.gw-dlg');
   await dlg.locator('[data-gw-b="apply"]').click();
   await phase(page, 'ready');
@@ -834,6 +839,48 @@ test('a departed spare stays named at the reviewed destination after the model r
   const sent = await page.evaluate(() => window.hrWrites.at(-1).body);
   assert.ok(!sent.moves.some(x => x.employeeId === 'SPARE1'));
   assert.ok(!sent.sites.some(s => s.days?.some(d => d.shifts.some(s => s.employeeId === 'SPARE1'))));
+});
+
+for(const [kind, key, skill, variant] of [
+  ['shop', G, CS, 'demand'], ['factory', F, FW, 'cap'], ['office', O, LAW, 'office'],
+]) test(`a reviewed mover absent from hiring.people keeps their current ${kind} hours beside a new hire`, async t => {
+  const page = await board(t, {link: ONE});
+  await uniqueAnswer(page);
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  await page.evaluate(({key, skill, variant, kind}) => {
+    const fresh = JSON.parse(JSON.stringify(D));
+    delete fresh.hiring.people.SPARE1;
+    fresh.hiring.sites.find(s => s.key === 'ba:street_broadway#2').plans.demand.spare = [];
+    const corner = fresh.staffing.find(s => s.key === 'ba:street_broadway#2');
+    corner.people = corner.people.filter(p => p.id !== 'SPARE1');
+    corner.current.list = corner.current.list.filter(s => s.p === 0);
+    corner.current.shifts = corner.current.list.length;
+    const row = kind === 'shop' ? fresh.staffing.find(s => s.key === key)
+      : kind === 'factory' ? fresh.factoryStaffing[variant].find(s => s.key === key)
+      : fresh.officeStaffing.find(s => s.key === key);
+    row.people = [{id: 'SPARE1', name: 'Sam Spare'}];
+    row.shifts = [{d: 1, s: 0, f: 8, t: 20, p: 0}, {d: 2, s: 0, f: 8, t: 20, p: null}];
+    row.current = {list: [row.shifts[0]], shifts: 1};
+    fresh.hiring.sites.find(s => s.key === key).plans[variant].hireWeeks = [
+      {skill, hours: 12, days: 1, band: 'part', slots: [{shift: 1, d: 2, f: 8, t: 20, station: row.stations[0].id}]}];
+    window.calmWatch.changed(fresh);
+  }, {key, skill, variant, kind});
+  const dlg = page.locator('dialog.gw-dlg');
+  await dlg.locator('[data-gw-b="apply"]').click();
+  await phase(page, 'ready');
+  const gifts = dlg.locator('.hr-dsite', {has: page.locator(`[data-hr-site="${G}"]`)});
+  await dlg.locator('[data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  const sent = await page.evaluate(() => window.hrWrites.at(-1).body);
+  assert.ok(!sent.moves.some(x => x.employeeId === 'SPARE1'), 'the outdated move stays skipped');
+  const site = sent.sites.find(s => s.address.street === addr(key).street && s.address.number === addr(key).number);
+  const hire = sent.hires.find(h => h.address.street === addr(key).street && h.address.number === addr(key).number);
+  assert.ok(hire, 'the current site receives another hire in the same batch');
+  assert.deepEqual(site.days.flatMap(d => d.shifts.map(s => [d.d, s.f, s.t, s.employeeId])), [
+    [1, 8, 20, 'SPARE1'], [2, 8, 20, hire.candidateId],
+  ], 'both the existing Monday hours and the new Tuesday hours survive');
+  assert.match(await gifts.textContent(), textRe('co.hire.skip.moved', {name: 'Sam Spare'}));
 });
 
 test('Staff all sites refuses with the site and person for a request path', async t => {
