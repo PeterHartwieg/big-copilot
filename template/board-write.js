@@ -1328,7 +1328,7 @@ function gwApprovalView(dlg, allowed){
    no answer, once the board has read the game again: the dry run afresh,
    never the write itself. */
 function gwFailed(dlg, spec, res, retry, recheck){
-  const p = gwProblem(res);
+  const p = gwProblem(spec.problem ? spec.problem(res) : res);
   const close = [tt("nav.dlg.close", "Close"), () => dlg.close(), {kind: "ghost", close: true}];
   if(p.uncertain){
     gwPaint(dlg, {phase: "uncertain", wire: "wait", say: `<b>${tt("nav.dlg.say.noanswer", "No answer")}</b>`, meta: gwNow(),
@@ -1373,6 +1373,7 @@ function gwFailed(dlg, spec, res, retry, recheck){
      meta(answer)              optional: the verdict's right-hand note (the
                                game's clock otherwise)
      object(row)               the name a refused row is about, as a chip
+     problem(res)              optional: name request paths in a failure
      inline                    optional: refusals are drawn in draw(), not
                                as cards above it
      refusedHint(answer)       optional: the foot's note when the game refuses

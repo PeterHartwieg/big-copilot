@@ -20,7 +20,7 @@ const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const {chromium} = require('playwright');
+const H = require('./_page.cjs');
 
 const root = path.join(__dirname, '..');
 const PYTHON = process.env.PYTHON || 'python';
@@ -178,7 +178,7 @@ before(async () => {
   {cwd: root, maxBuffer: 16 * 1024 * 1024});
   assert.equal(page.status, 0, page.stderr?.toString());
   html = page.stdout.toString();
-  browser = await chromium.launch({headless: true, channel: process.env.PLAYWRIGHT_CHANNEL});
+  browser = await H.launch();
 });
 after(async () => { await browser?.close(); });
 
@@ -189,10 +189,8 @@ async function board(t, {link = {writes: ['uniforms', 'imports', 'schedule', 'hi
   const context = await browser.newContext({viewport, reducedMotion: 'reduce'});
   t.after(() => context.close());
   const page = await context.newPage();
-  const errors = [];
-  page.on('pageerror', e => errors.push(String(e)));
-  t.after(() => assert.deepEqual(errors, [], 'no script error on the page'));
-  await context.route('https://**', route => route.abort());
+  H.collectErrors(page, t);
+  await H.abortExternal(context);
   await context.route('https://hire.test/', route => route.fulfill({contentType: 'text/html; charset=utf-8', body: html}));
   await context.addInitScript(l => { window.hrLink = l; }, link);
   await page.goto('https://hire.test/', {waitUntil: 'load'});
@@ -706,6 +704,228 @@ const answering = (page, gone) => page.evaluate(async ([src, gone]) => {
   window.hrAnswer = async (kind, body, o) => ({status: 200, error: null,
     body: window.answerFor(body, {dryRun: !!o.dryRun, gone: o.dryRun ? [] : gone})});
 }, [`(${answerFor.toString()})`, gone]);
+
+// The link parses hires first, then moves, sharing one set of people for
+// the whole batch. Exercise that guard, rather than accepting any request.
+const uniqueAnswer = page => page.evaluate(src => {
+  window.answerFor = eval(src);
+  window.hrAnswer = async (kind, body, o) => {
+    const seen = new Set();
+    for(const field of ['hires', 'moves']) for(const [i, row] of body[field].entries()) {
+      const id = row.candidateId || row.employeeId;
+      if(seen.has(id)) return {status: 400, error: 'bad_request', body: {detail: `body.${field}[${i}] names someone twice`}};
+      seen.add(id);
+    }
+    return {status: 200, error: null, body: window.answerFor(body, {dryRun: o.dryRun})};
+  };
+}, `(${answerFor.toString()})`);
+
+test('Staff all sites assigns a shared unassigned person once and says which site skipped them', async t => {
+  const d = JSON.parse(payload);
+  d.hiring.sites.find(s => s.key === G).plans.demand.bench = ['BENCH1'];
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await uniqueAnswer(page);
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  assert.equal(await dlg.locator('[data-gw-b="apply"]').isEnabled(), true);
+  await dlg.locator('[data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  const sent = await page.evaluate(() => window.hrWrites.at(-1).body);
+  assert.equal(sent.moves.filter(x => x.employeeId === 'BENCH1').length, 1);
+  const bare = dlg.locator('.hr-dsite', {has: page.locator(`[data-hr-site="${B}"]`)});
+  assert.match(await bare.textContent(), textRe('co.hire.skip.duplicate', {name: 'Bo Bench'}));
+  assert.ok(!sent.sites.find(s => s.address.street === addr(B).street).days
+    .some(d => d.shifts.some(s => s.employeeId === 'BENCH1')), 'the rejected assignment leaves no hours at the other site');
+});
+
+test('Staff all sites shares one id set across moves, hires and extra picks', async t => {
+  const d = JSON.parse(payload);
+  d.candidates.unshift(cand('BENCH1', 'Bo Bench', [[CS, 100]], 10));
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  // Also defend the request boundary against repeated hire picks, including
+  // duplicates within one site. Normal candidate selection already nets these.
+  await page.evaluate(() => {
+    const original = hrModel;
+    hrModel = () => {
+      const m = original();
+      const x = m.sites.flatMap(S => S.weeks).find(x => x.who?.type === 'hire' && x.who.c.id !== 'BENCH1');
+      for(const S of m.sites.filter(S => S.planned)) m.overs.push({c: x.who.c, S, skill: x.w.skill});
+      return m;
+    };
+  });
+  await uniqueAnswer(page);
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  await page.locator('dialog.gw-dlg [data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  const sent = await page.evaluate(() => window.hrWrites.at(-1).body);
+  const ids = [...sent.moves.map(x => x.employeeId), ...sent.hires.map(x => x.candidateId)];
+  assert.equal(ids.length, new Set(ids).size);
+  assert.equal(sent.hires.some(h => h.candidateId === 'BENCH1'), false);
+  const gifts = page.locator('.hr-dsite', {has: page.locator(`[data-hr-site="${G}"]`)});
+  assert.match(await gifts.textContent(), textRe('co.hire.skip.duplicate', {name: 'Bo Bench'}));
+});
+
+test('Staff all sites rechecks departed and reassigned people before Apply', async t => {
+  const page = await board(t, {link: ONE});
+  await uniqueAnswer(page);
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  const initial = await page.evaluate(() => window.hrWrites.at(-1).body);
+  assert.deepEqual(initial.moves.map(x => x.employeeId), ['BENCH1', 'SPARE1']);
+  // A newer employee read while the displayed plans still name both people.
+  await page.evaluate(key => {
+    delete D.hiring.people.BENCH1;
+    D.hiring.people.SPARE1.site = key;
+    D.hiring.sites.find(s => s.key === 'ba:street_broadway#2').plans.demand.spare = [];
+    D.hiring.sites.find(s => s.key === key).plans.office.spare = ['SPARE1'];
+  }, O);
+  assert.equal(await page.evaluate(() => hrModel().moves.find(x => x.id === 'SPARE1').from.key), O,
+    'even a rebuilt model must not move them again from their new assignment');
+  const dlg = page.locator('dialog.gw-dlg');
+  await dlg.locator('[data-gw-b="apply"]').click();
+  await phase(page, 'ready');
+  assert.deepEqual(await page.evaluate(() => window.hrWrites.map(w => w.dryRun)), [true, true], 'changed plan is reviewed again');
+  await dlg.locator('[data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  const sent = await page.evaluate(() => window.hrWrites.at(-1).body);
+  assert.ok(!sent.moves.some(x => ['BENCH1', 'SPARE1'].includes(x.employeeId)));
+  assert.ok(!sent.sites.some(s => s.days?.some(d => d.shifts.some(s => ['BENCH1', 'SPARE1'].includes(s.employeeId)))));
+  const bare = dlg.locator('.hr-dsite', {has: page.locator(`[data-hr-site="${B}"]`)});
+  const gifts = dlg.locator('.hr-dsite', {has: page.locator(`[data-hr-site="${G}"]`)});
+  assert.match(await bare.textContent(), textRe('co.hire.skip.gone', {name: 'Bo Bench'}));
+  assert.match(await gifts.textContent(), textRe('co.hire.skip.moved', {name: 'Sam Spare'}));
+});
+
+test('Staff all sites still names a skipped person when nothing remains to send', async t => {
+  const d = JSON.parse(payload);
+  d.hiring.sites = d.hiring.sites.filter(s => s.key === B);
+  d.hiring.sites[0].plans.open.hireWeeks = [];
+  d.hiring.people = {};
+  d.hiring.bench = [];
+  d.candidates = [];
+  const row = d.staffing.find(r => r.key === B);
+  row.openCover.shifts = [];
+  row.current = {list: [], shifts: 0};
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.evaluate(() => hrReview({scope: 'all'}));
+  await phase(page, 'nothing');
+  const text = await page.locator('dialog.gw-dlg').textContent();
+  assert.match(text, /HART\. Bare/);
+  assert.match(text, textRe('co.hire.skip.gone', {name: 'Bo Bench'}));
+  assert.equal(await page.evaluate(() => window.hrWrites.length), 0);
+});
+
+test('a departed spare stays named at the reviewed destination after the model replans', async t => {
+  const page = await board(t, {link: ONE});
+  await uniqueAnswer(page);
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  await page.evaluate(() => {
+    delete D.hiring.people.SPARE1;
+    const corner = D.staffing.find(s => s.key === 'ba:street_broadway#2');
+    corner.current.list = corner.current.list.filter(s => corner.people[s.p]?.id !== 'SPARE1');
+    corner.current.shifts = corner.current.list.length;
+  });
+  const dlg = page.locator('dialog.gw-dlg');
+  await dlg.locator('[data-gw-b="apply"]').click();
+  await phase(page, 'ready');
+  const gifts = dlg.locator('.hr-dsite', {has: page.locator(`[data-hr-site="${G}"]`)});
+  assert.match(await gifts.textContent(), textRe('co.hire.skip.gone', {name: 'Sam Spare'}));
+  await dlg.locator('[data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  assert.match(await gifts.textContent(), textRe('co.hire.skip.gone', {name: 'Sam Spare'}), 'the note survives the Apply rebuild too');
+  const sent = await page.evaluate(() => window.hrWrites.at(-1).body);
+  assert.ok(!sent.moves.some(x => x.employeeId === 'SPARE1'));
+  assert.ok(!sent.sites.some(s => s.days?.some(d => d.shifts.some(s => s.employeeId === 'SPARE1'))));
+});
+
+for(const [kind, key, skill, variant] of [
+  ['shop', G, CS, 'demand'], ['factory', F, FW, 'cap'], ['office', O, LAW, 'office'],
+]) test(`a reviewed mover absent from hiring.people keeps their current ${kind} hours beside a new hire`, async t => {
+  const page = await board(t, {link: ONE});
+  await uniqueAnswer(page);
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  await page.evaluate(({key, skill, variant, kind}) => {
+    const fresh = JSON.parse(JSON.stringify(D));
+    delete fresh.hiring.people.SPARE1;
+    fresh.hiring.sites.find(s => s.key === 'ba:street_broadway#2').plans.demand.spare = [];
+    const corner = fresh.staffing.find(s => s.key === 'ba:street_broadway#2');
+    corner.people = corner.people.filter(p => p.id !== 'SPARE1');
+    corner.current.list = corner.current.list.filter(s => s.p === 0);
+    corner.current.shifts = corner.current.list.length;
+    const row = kind === 'shop' ? fresh.staffing.find(s => s.key === key)
+      : kind === 'factory' ? fresh.factoryStaffing[variant].find(s => s.key === key)
+      : fresh.officeStaffing.find(s => s.key === key);
+    row.people = [{id: 'SPARE1', name: 'Sam Spare'}];
+    row.shifts = [{d: 1, s: 0, f: 8, t: 20, p: 0}, {d: 2, s: 0, f: 8, t: 20, p: null}];
+    row.current = {list: [row.shifts[0]], shifts: 1};
+    fresh.hiring.sites.find(s => s.key === key).plans[variant].hireWeeks = [
+      {skill, hours: 12, days: 1, band: 'part', slots: [{shift: 1, d: 2, f: 8, t: 20, station: row.stations[0].id}]}];
+    window.calmWatch.changed(fresh);
+  }, {key, skill, variant, kind});
+  const dlg = page.locator('dialog.gw-dlg');
+  await dlg.locator('[data-gw-b="apply"]').click();
+  await phase(page, 'ready');
+  const gifts = dlg.locator('.hr-dsite', {has: page.locator(`[data-hr-site="${G}"]`)});
+  await dlg.locator('[data-gw-b="apply"]').click();
+  await phase(page, 'done');
+  const sent = await page.evaluate(() => window.hrWrites.at(-1).body);
+  assert.ok(!sent.moves.some(x => x.employeeId === 'SPARE1'), 'the outdated move stays skipped');
+  const site = sent.sites.find(s => s.address.street === addr(key).street && s.address.number === addr(key).number);
+  const hire = sent.hires.find(h => h.address.street === addr(key).street && h.address.number === addr(key).number);
+  assert.ok(hire, 'the current site receives another hire in the same batch');
+  assert.deepEqual(site.days.flatMap(d => d.shifts.map(s => [d.d, s.f, s.t, s.employeeId])), [
+    [1, 8, 20, 'SPARE1'], [2, 8, 20, hire.candidateId],
+  ], 'both the existing Monday hours and the new Tuesday hours survive');
+  assert.match(await gifts.textContent(), textRe('co.hire.skip.moved', {name: 'Sam Spare'}));
+});
+
+test('Staff all sites refuses with the site and person for a request path', async t => {
+  const d = JSON.parse(payload);
+  // Removing Bo's repeated move shifts Sam to index 1 in the actual body.
+  d.hiring.sites.find(s => s.key === G).plans.demand.bench = ['BENCH1'];
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await page.evaluate(() => {
+    window.hrAnswer = async () => ({status: 400, error: 'bad_request', body: {detail: 'body.moves[1] names someone twice'}});
+  });
+  await page.locator(REVIEW).click();
+  await phase(page, 'failed');
+  const text = await page.locator('dialog.gw-dlg').textContent();
+  assert.match(text, /Sam Spare/);
+  assert.match(text, /HART\. Gifts/);
+  assert.match(text, /Nothing was changed\./);
+});
+
+for(const [path, person, site] of [
+  ['body.moves[0].from', 'Bo Bench', 'HART. Bare'],
+  ['body.hires[0].expect.wage', 'Bram Castell', 'HART. Gifts'],
+  ['body.sites[0].days', null, 'HART. Gifts'],
+  ['body.moves[999]', null, null],
+]) test(`Staff all sites names a 400 path on Apply: ${path}`, async t => {
+  const page = await board(t, {link: ONE});
+  await answering(page, []);
+  await page.locator(REVIEW).click();
+  await phase(page, 'ready');
+  await page.evaluate(path => {
+    window.hrAnswer = async () => ({status: 400, error: 'bad_request', body: {detail: `${path} is invalid`}});
+    // The error renderer must treat the resolved person and site as text.
+    D.hiring.people.BENCH1.name = '<b>Bo Bench</b>';
+  }, path);
+  await page.locator('dialog.gw-dlg [data-gw-b="apply"]').click();
+  await phase(page, 'failed');
+  const text = await page.locator('dialog.gw-dlg').textContent();
+  if(person) assert.ok(text.includes(person), text);
+  if(site) assert.ok(text.includes(site), text);
+  assert.ok(text.includes(path), 'unknown paths also stay readable');
+  if(person === 'Bo Bench') {
+    assert.ok(text.includes('<b>Bo Bench</b>'));
+    assert.equal(await page.locator('dialog.gw-dlg .gw-body b').count(), 0, 'resolved names are escaped');
+  }
+  assert.match(text, /Nothing was changed\./);
+});
 
 test('Review: the dry run, who goes where, one confirm with no undo, and a partial result', async (t) => {
   const page = await board(t);
