@@ -2052,6 +2052,30 @@ mod's DLL with its version, rescale the sales ratio Open a store uses
 switches on only when the save carries that mod's data; `tools/payload_diff.py` on
 vanilla saves shows no difference.
 
+The existing-site EE adapter in `ba_mods.py` shares #412's detection and constants.
+`ee_records()` indexes recurring `occupancyComponent` transactions, setup purchases and
+`OcupancyCosts.State` active plans once per immutable Save. `ModRules.occupancy_records`
+and `office_capacity()` expose them to extraction and office planning. No module or
+worker fetch is added. These are optional nested extensions, present only for detected EE:
+
+- `businesses[].economyExpansion` and `chains[].economyExpansion`: `cost`, `components`
+  and `installation` for the same statement day; business rows also carry
+  `connectivityForcedClosed`. Recurring costs and internet installation are separate.
+- `kpi.economyExpansionBill` and `daily[].economyExpansionBill`: observed recurring site
+  bills for the last statement day and each historical day whose transactions survive.
+- `payback.sites[key].cost.economyExpansion` and the corresponding chain cost: observed
+  setup investment; local payback history keeps `eeSetup` as `[day, amount, deducted]`
+  rows so overlapping saves and a rolling transaction log do not duplicate it.
+- Existing `staffDemands` rows can carry EE technology slugs, readable message labels,
+  tier-derived priority and the existing site scope. The existing `notrading` kind
+  carries a dedicated internet-plan message for a forced closure, including old offices;
+  no new finding kind, top-level payload key or section is added.
+
+Source symbols and differences from the older issue's description are documented in the
+#416 implementation PR. Values follow EE Workshop 2026-10-14, DLL SHA-256
+`4b29fe1d3e293d06943ec7e41c1f28d0802dea400acfc19b95b08d16165e5f76`.
+No modded save has checked these figures yet.
+
 `capabilities(save)` is the shared registry of unsupported calculations. Its
 capability names identify consumers (`storeProfit`, `officeProfit`,
 `factoryRunning`, `factoryOpening`, `marketing`); reason codes identify the

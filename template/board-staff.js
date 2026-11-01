@@ -22,7 +22,16 @@ const HR_P = {
   phone: PATHS.phone,
 };
 const hrSvg = (name, cls) => `<svg${cls ? ` class="${cls}"` : ""} viewBox="0 0 24 24" aria-hidden="true">${HR_P[name] || GW_P[name] || ""}</svg>`;
-const hrName = slug => spEsc(gameName(slug) || String(slug || "").replace(/^ba:[a-z]+_/, ""));
+function hrName(slug){
+  const tech = (D?.mods?.economyExpansion) && /^oc:jobdemand_technology_(internet|workspace|software)_t([1-3])$/i.exec(slug);
+  if(tech){
+    const tier = +tech[2], category = tech[1].toLowerCase();
+    if(category === "internet") return spEsc(tt("co.ee.demand.internet", "Internet plan, tier {tier}", {tier}));
+    if(category === "workspace") return spEsc(tt("co.ee.demand.workspace", "Workspace software, tier {tier}", {tier}));
+    return spEsc(tt("co.ee.demand.software", "Specialist software, tier {tier}", {tier}));
+  }
+  return spEsc(gameName(slug) || String(slug || "").replace(/^ba:[a-z]+_/, ""));
+}
 const hrRole = skill => gameName(skill) ? spEsc(gameName(skill)) : gwSkillName(skill);
 const hrNum = n => num(Number(n || 0));
 const hrWage = n => n == null || !Number.isFinite(Number(n)) ? tt("co.mod.wageNotQuoted", "Unavailable") : `$${num(Number(n), {maximumFractionDigits: 2})}`;

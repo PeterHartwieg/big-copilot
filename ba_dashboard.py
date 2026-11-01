@@ -90,6 +90,14 @@ class ModRules:
             return None
         return ba_mods.ee_inputs(self.save, load_buildings(self.save), _rent_estimate)
 
+    @functools.cached_property
+    def occupancy_records(self):
+        """EE's saved bills and active plans, absent unless detected."""
+        return ba_mods.ee_records(self.save)
+
+    def office_capacity(self, addr, business_type, capacity):
+        return ba_mods.ee_office_capacity(self.save, addr, business_type, capacity)
+
     def vehicle_prices(self, motor: dict, non_motor) -> tuple[dict, bool]:
         """The vehicle prices wealth counts, and whether every model has one."""
         return ba_mods.vehicle_prices(self.save, motor, non_motor)
@@ -4174,6 +4182,8 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
             "employees": len(staff),
             "wageBill": wage_total,
             "rentBill": rent_total,
+            **({"economyExpansionBill": money(sum(b["economyExpansion"]["cost"] for b in businesses))}
+               if build.mod_rules.occupancy_records is not None else {}),
             "customers": sum(b["customers"] for b in businesses),
         },
         "daily": daily,
@@ -4544,6 +4554,15 @@ def _holds_demanded_item(save: Save, here: dict, setting) -> bool:
     return False
 
 
+def _ee_demand_label(slug):
+    category, tier = ba_mods.ee_technology(slug)
+    if category == "internet":
+        return msg("co.ee.demand.internet", "Internet plan, tier {tier}", tier=tier)
+    if category == "workspace":
+        return msg("co.ee.demand.workspace", "Workspace software, tier {tier}", tier=tier)
+    return msg("co.ee.demand.software", "Specialist software, tier {tier}", tier=tier)
+
+
 def _job_demands(save: Save, names: Names, businesses: list) -> None:
     """Which staff demands go unmet at each site, written onto its business row.
 
@@ -4578,6 +4597,14 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
     plans = {p.get("id"): p for p in save.items(root.get("hrManagerPlans"))}
     happiness = root.get("Happiness") or 0
     held, clean = {}, {}
+    rules = JOB_DEMANDS
+    if ba_mods.ee_records(save) is not None:
+        rules = dict(JOB_DEMANDS)
+        for e in employees:
+            for slug in save.items(e.get("demands")):
+                tech = ba_mods.ee_technology(slug)
+                if tech:
+                    rules[slug] = ("technology", tech, tech[1] - 1)
 
     def items_at(key):
         if key not in held:
@@ -4636,6 +4663,14 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
             if key not in clean:
                 clean[key] = _cleanliness(save, regs[key])
             return clean[key] >= setting
+        if kind == "technology":
+            if by_key[key]["status"] != "office" and by_key[key].get("typeSlug") != "ba:businesstype_headquarters":
+                return True
+            office = ba_mods.ee_office(save, _address_of(regs[key]), regs[key].get("businessTypeName", ""))
+            if office is None:
+                return True  # Unmatched EE location: no evidence this demand is unmet.
+            category, tier = setting
+            return (category == "software" and not office["required"]) or office[category] >= tier
         raise ValueError(kind)
 
     unmet = collections.defaultdict(collections.Counter)
@@ -4656,7 +4691,7 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
             continue
         lacks = set()
         for slug in dict.fromkeys(save.items(e.get("demands"))):  # one person, one count
-            rule = JOB_DEMANDS.get(slug)
+            rule = rules.get(slug)
             if rule and not met(e, key, rule[0], rule[1]):
                 unmet[key][slug] += 1
                 if rule[0] in ("hours", "days") and rostered(e, rule[0], rule[1]):
@@ -4672,16 +4707,16 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
         rows = [
             {
                 "slug": slug,
-                "demand": names.label(slug),
+                "demand": _ee_demand_label(slug) if rules[slug][0] == "technology" else names.label(slug),
                 "count": count,
-                "priority": JOB_DEMANDS[slug][2],
-                "company": JOB_DEMANDS[slug][0] in COMPANY_DEMAND_KINDS,
+                "priority": rules[slug][2],
+                "company": rules[slug][0] in COMPANY_DEMAND_KINDS,
             }
             for slug, count in unmet[b["key"]].items()
         ]
         for row in rows:
             if worked[b["key"]][row["slug"]]:
-                kind, setting, _ = JOB_DEMANDS[row["slug"]]
+                kind, setting, _ = rules[row["slug"]]
                 row["workedOver"] = {
                     "count": worked[b["key"]][row["slug"]],
                     "max": setting[1] if kind == "hours" else setting,
@@ -5002,6 +5037,19 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
     wants_uniforms = status == "retail" and UNIFORM_DEMAND not in not_made
     uniform_gaps = _uniform_gaps(save, b, crew, names) if wants_uniforms else []
     campaigns, marketing = _marketing(save, b, building, status, neighbourhood, promo, agencies, mod_rules)
+    occupancy = (mod_rules or ModRules(save)).occupancy_records
+    ee = {}
+    if occupancy is not None:
+        recorded_day = history[-1][0] if history else day - 1
+        components = occupancy["charges"].get((addr, recorded_day), {}) if st is booked else {}
+        office = ba_mods.ee_office(save, addr, btype) if status == "office" or btype == "ba:businesstype_headquarters" else None
+        ee = {"economyExpansion": {
+            "cost": money(sum(components.values())),
+            "components": {k: money(components[k]) for k in ba_mods.EE_COMPONENTS if k in components},
+            "installation": money(sum(amount for stamp, amount, deducted in occupancy["setup"].get(addr, ())
+                                      if deducted and stamp == recorded_day)) if st is booked else 0,
+            "connectivityForcedClosed": bool(office and office["forcedClosed"]),
+        }}
 
     return {
         "name": name or "Vacant lease",
@@ -5025,6 +5073,7 @@ def _business(save, names, b, addr, latest, history, staff_by_addr, day, agencie
         "marketing": money(st.get("MarketingExpenses", 0)),
         "theft": money(st.get("Theft", 0)),
         "licensing": money(st.get("LicensingFees", 0)),
+        **ee,
         "profit": profit,
         "profitBefore": money(0 if st is booked else booked.get("TotalProfit", 0)),
         "margin": round(profit / revenue * 100, 1) if revenue else None,
@@ -5422,10 +5471,13 @@ def _sites_gone(save: Save, names: Names, latest: dict, rented: set, residential
 
 
 def _daily_series(save: Save, summaries: list) -> list:
+    occupancy = ba_mods.ee_records(save)
     out = []
     for s in summaries:
         revenue = cogs = wages = rent = marketing = theft = 0.0
+        business_addresses = set()
         for st in save.items(s["businessIncomeStatements"]):
+            business_addresses.add(save.address(st.get("Address")))
             revenue += st.get("TotalSales", 0)
             cogs += st.get("TotalResources", 0)
             wages += st.get("SalaryExpenses", 0)
@@ -5457,6 +5509,10 @@ def _daily_series(save: Save, summaries: list) -> list:
             }
         )
         food = ba_street_food.statement(save, s)
+        if occupancy is not None:
+            out[-1]["economyExpansionBill"] = money(sum(
+                sum(occupancy["charges"].get((addr, s["dayNumber"]), {}).values())
+                for addr in _in_order(business_addresses)))
         if food is not None:
             row = out[-1]
             row["streetFood"] = food
@@ -17886,7 +17942,14 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
          "rate": OFFICE_POST_RATE}
         for s in grid["stations"]
     ]
-    runs, always = _office_runs(len(stations), grid["open"], grid["door"])
+    office_capacity = None
+    if ba_mods.ee_office(save, _address_of(building), business["typeSlug"]) is not None:
+        baseline = _size_cap(load_buildings(save).get(_address_of(building), {}), _door_caps(names or Names({})))
+        office_capacity = ModRules(save).office_capacity(
+            _address_of(building), business["typeSlug"], baseline if baseline is not None else grid["door"])
+    default_computers = min(len(stations), office_capacity) if office_capacity is not None else len(stations)
+    runs, always = _office_runs(default_computers, grid["open"],
+                               office_capacity if office_capacity is not None else grid["door"])
     slots_open = grid["open"] if any(grid["open"]) else ALL_DAY_OPEN
     demand_based = False
     if every_open:
@@ -17901,6 +17964,11 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
         run = _days_open(save, building)
         daily = _open_day_average(save, building, slots_open) if run >= DEMAND_RUN_DAYS else None
         need, demand_based = _office_need(grid, skill, runs, run, daily, _office_recent(save, building))
+    if not every_open and office_capacity is not None:
+        for wd in range(7):
+            need[skill]["need"][wd] = [min(n, office_capacity) for n in need[skill]["need"][wd]]
+        if not office_capacity:
+            need[skill]["stations"] = {}
     if not every_open and _mod_office_fallback_issue(save, building, need, skill):
         return _mod_staffing_blocked(business, ["office-unread-hours-with-mod-demand"]), []
     replaces = demand_based or every_open
@@ -19905,7 +19973,8 @@ COST_KEYS = ("cogs", "wages", "rent", "marketing", "theft", "licensing")
 def _chain(name: str, members: list, fed_by: dict, by_key: dict, by_trend: dict) -> dict:
     index = {b["key"]: b for b in members}
     revenue = sum(b["revenue"] for b in members)
-    cost = sum(sum(b[k] for k in COST_KEYS) for b in members)
+    cost = sum(sum(b[k] for k in COST_KEYS) + b.get("economyExpansion", {}).get("cost", 0)
+               + b.get("economyExpansion", {}).get("installation", 0) for b in members)
     profit = sum(b["profit"] for b in members)
     # Revenue booked away from the shop counter is a sale to somebody outside the
     # company — a factory shipping to a pier. It is real money, but it is not
@@ -19943,6 +20012,13 @@ def _chain(name: str, members: list, fed_by: dict, by_key: dict, by_trend: dict)
             by_key[k]["name"] for k in outside if k in by_key
         ),
         **{k: money(sum(b[k] for b in members)) for k in COST_KEYS},
+        **({"economyExpansion": {
+            "cost": money(sum(b.get("economyExpansion", {}).get("cost", 0) for b in members)),
+            "installation": money(sum(b.get("economyExpansion", {}).get("installation", 0) for b in members)),
+            "components": {component: money(sum(b.get("economyExpansion", {}).get("components", {}).get(component, 0)
+                                                for b in members)) for component in ba_mods.EE_COMPONENTS
+                           if any(component in b.get("economyExpansion", {}).get("components", {}) for b in members)},
+        }} if any("economyExpansion" in b for b in members) else {}),
     }
 
 
@@ -20032,7 +20108,7 @@ def item_price(name: str, paid, prices: dict | None = None) -> float:
 
 
 def setup_cost(items, materials, square_metres, deposit, prices: dict | None = None,
-               vehicles: float = 0) -> dict:
+               vehicles: float = 0, occupancy_setup: float = 0) -> dict:
     """What a store costs to set up, in both install modes.
 
     `items` are (item name, price paid) pairs, the paid price 0 or None where
@@ -20041,7 +20117,8 @@ def setup_cost(items, materials, square_metres, deposit, prices: dict | None = N
     that exists passes its save's furniture and slots and its lastDeposit; a
     planned one passes its shopping list and its deposit estimate. `vehicles`
     is what the business's own vehicles cost, delivery included
-    (_site_vehicles()). `firm` and `self` are the investment in each mode,
+    (_site_vehicles()). `occupancy_setup` is EE's observed setup investment.
+    `firm` and `self` are the investment in each mode,
     deposit and vehicles included.
     """
     prices = prices if prices is not None else load_item_prices()
@@ -20057,8 +20134,9 @@ def setup_cost(items, materials, square_metres, deposit, prices: dict | None = N
         "fee": money(fee),
         "deposit": money(deposit),
         "vehicles": money(vehicles),
-        "firm": money(furniture + fee + deposit + vehicles),
-        "self": money(furniture + walls + deposit + vehicles),
+        "firm": money(furniture + fee + deposit + vehicles + occupancy_setup),
+        "self": money(furniture + walls + deposit + vehicles + occupancy_setup),
+        **({"economyExpansion": money(occupancy_setup)} if occupancy_setup else {}),
     }
 
 
@@ -20353,6 +20431,7 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
     regs = {site_key(_address_of(b, strict=True)): b for b in buildings}
     addresses = {key: _address_of(b, strict=True) for key, b in regs.items()}
     bills = _install_bills(save, names, addresses)
+    occupancy = ba_mods.ee_records(save)
     vehicle_prices = load_store_rules().get("vehicles") or {}
     deliveries = _vehicle_deliveries(save, vehicle_prices)
     start = stmt_history[0][0] if stmt_history else None
@@ -20424,6 +20503,29 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
         if billed:
             cost["billed"] = money(billed)
             cost["firm"] = money(cost["deposit"] + billed + cost["vehicles"])
+        # Keep observed setup fees by accounting day as the short transaction
+        # log rolls off. Re-reading an overlapping save never counts a fee twice.
+        # Internet installation is in statement profit; software/cloud purchases
+        # are cash-only in this EE DLL and must not be added back to profit.
+        if occupancy is not None:
+            fees = {str(stamp): [amount, deducted] for stamp, amount, deducted in memory.get("eeSetup", [])
+                    if stamp <= today}
+            # This memory belongs to the same business opening. Already accepted
+            # pre-opening fees survive even after its lease statements roll off.
+            observed = collections.defaultdict(lambda: [0, 0])
+            for stamp, amount, deducted in occupancy["setup"].get(addr, ()):
+                if stamp >= lease and stamp <= today:
+                    observed[str(stamp)][0] += amount
+                    observed[str(stamp)][1] += amount if deducted else 0
+            fees.update(observed)
+            if fees:
+                memory["eeSetup"] = [[int(stamp), *fees[stamp]] for stamp in sorted(fees, key=int)]
+                setup = setup_cost([], [], 0, 0, prices, occupancy_setup=sum(amount for amount, _ in fees.values()))
+                cost["economyExpansion"] = setup["economyExpansion"]
+                for mode in ("firm", "self"):
+                    cost[mode] = money(cost[mode] + setup[mode])
+                days = [(stamp, profit + fees.get(str(stamp), [0, 0])[1], sales)
+                        for stamp, profit, sales in days]
         kept_sites[key] = memory
         series[key] = days
         row = {"costCentre": b["costCentre"], "cost": cost}
@@ -20474,6 +20576,8 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
             continue
         cost = {field: money(sum(sites[k]["cost"].get(field, 0) for k in members))
                 for field in ("furniture", "materials", "fee", "deposit", "vehicles", "billed", "firm", "self")}
+        if any("economyExpansion" in sites[k]["cost"] for k in members):
+            cost["economyExpansion"] = money(sum(sites[k]["cost"].get("economyExpansion", 0) for k in members))
         # Every member's whole run known (the record's, or a kept trail): the
         # chain's is their sum and exact. Otherwise the record's days, and
         # the record's own reach.
