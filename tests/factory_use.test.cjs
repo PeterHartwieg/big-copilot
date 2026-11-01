@@ -191,8 +191,8 @@ test('unsettled demand keeps hour and ingredient estimates without checklist or 
           fit: 'short', catchUp: 100, shortBy: 1};
         // Cover unsourced inputs and raw one-off/import rows too: neither
         // canonical nor stale facts may manufacture an actionable checklist.
-        const rawChanges = buildOrderChecklist([{s: site.s, rows: [raw]}], [raw],
-          [{s: site.s, rows: [raw]}], [], [raw], D.businesses);
+        const rawChanges = buildOrderChecklist({imports: [{s: site.s, rows: [raw]}], loose: [raw],
+          sites: [{s: site.s, rows: [raw]}], checks: [raw], businesses: D.businesses});
         const staffing = drawFactoryStaffing();
         const flour = site.needs.find(n => n.slug === 'flour');
         Object.assign(flour, {from: null, directImport: false, factoryImportSite: null});
