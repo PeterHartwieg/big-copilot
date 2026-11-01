@@ -14,12 +14,14 @@ const OpenFactoryModel = ((storeModel, economyModel, ownerModel) => {
    * investment/running take explicit counts, building, owned and current
    * machine counts. investment additionally takes a selected depot building;
    * running takes wantsDepot (HQ needs even when no depot is available yet).
+   * occupancy is explicit EE adapter input with preferences already applied;
+   * runningCosts can supply {daily} directly (or a list of those site quotes).
    * Methods never change their arguments. Missing kits/building yield a null
    * investment; other missing facts retain the board's existing zero/fallbacks,
    * except a game value a present table lacks (driverHours, hqHours, shelf.cc),
    * which throws: Python ships each one, and the model keeps no copy of it.
    */
-  function create({facts = {}, recipes = {}, aliases = {}, sources = {}, hours = 24} = {}){
+  function create({facts = {}, recipes = {}, aliases = {}, sources = {}, hours = 24, occupancy = null} = {}){
     const game = facts.game || {};
     const companion = facts.modEconomy, modded = !!(companion?.rlo || companion?.hart);
     const economy = modded && economyModel ? economyModel.create(companion) : null;
@@ -240,11 +242,15 @@ const OpenFactoryModel = ((storeModel, economyModel, ownerModel) => {
       const agents = need && (hq.agents || 0) <= (hq.contracts || 0) ? 1 : 0;
       return {managers, agents};
     }
-    function ofRunning({counts, owned = false, current = {}, building = null, wantsDepot = false}, inv){
+    function ofRunning({counts, owned = false, current = {}, building = null, wantsDepot = false, runningCosts = null}, inv){
       if(facts.compatibility?.factoryRunning?.length && !modded) return null;
       const machines = Object.values(counts).reduce((n, m) => n + m, 0);
       const modCosts=modded ? (inv?.modCosts || modOperating({counts,building,owned,lines:inv?.out.lines || [...ofKit(owned ? Object.fromEntries(Object.entries(counts).map(([k,n])=>[k,Math.max(0,n-(current[k]||0))])) : counts)],depot:inv?.depot,wantsDepot})) : null;
       const finish = result => {
+        const ee=runningCosts ?? (!owned && occupancy ? [building || inv?.b, inv?.depot?.b].filter(Boolean)
+          .map(b=>economyModel.eeCosts({rules:occupancy,building:b})).filter(Boolean) : []);
+        const daily=Array.isArray(ee)?ee.reduce((sum,c)=>sum+c.daily,0):ee?.daily || 0;
+        if(daily){result.occupancyCosts={daily,entries:Array.isArray(ee)?ee:[ee]};result.total=sum([result.total,daily*7]);}
         if(!modded) return result;
         const incomplete=[...(facts.compatibility?.factoryRunning || []),...(modCosts?.reasons || [])];
         if(!wageKnown() && result.wages !== 0) incomplete.push("new-hire-wage-unavailable");
@@ -257,7 +263,7 @@ const OpenFactoryModel = ((storeModel, economyModel, ownerModel) => {
         const cityWages = result.wages === null ? null : rentCost(result.wages/7);
         if(cityWages === null) incomplete.push("wage-adjustment-unavailable");
         const wages=cityWages === null ? null : cityWages*7;
-        return {...result,wages,modCosts,incomplete:[...new Set(incomplete)],total:incomplete.length || modCosts?.dailyCents == null ? null : sum([result.raw,wages,result.rent,modCosts.dailyCents*7/100])};
+        return {...result,wages,modCosts,incomplete:[...new Set(incomplete)],total:incomplete.length || modCosts?.dailyCents == null ? null : sum([result.raw,wages,result.rent,modCosts.dailyCents*7/100,daily*7])};
       };
       if(owned){
         const now = Object.fromEntries(Object.keys(counts).map(slug => [slug, current[slug] || 0]));

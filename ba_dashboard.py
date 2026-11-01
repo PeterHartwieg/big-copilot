@@ -83,6 +83,13 @@ class ModRules:
         """The `mods` payload key: the adapters this save needs, {} for a vanilla save."""
         return ba_mods.detect(self.save)
 
+    @functools.cached_property
+    def occupancy(self) -> dict | None:
+        """EE's estimated lease and occupancy inputs, absent for other saves."""
+        if "economyExpansion" not in self.detect():
+            return None
+        return ba_mods.ee_inputs(self.save, load_buildings(self.save), _rent_estimate)
+
     def vehicle_prices(self, motor: dict, non_motor) -> tuple[dict, bool]:
         """The vehicle prices wealth counts, and whether every model has one."""
         return ba_mods.vehicle_prices(self.save, motor, non_motor)
@@ -1810,8 +1817,10 @@ def _size_cap(row: dict, caps: dict):
     return kind.get(row.get("z"))
 
 
-def _rent_estimate(row: dict) -> int | None:
+def _rent_estimate(row: dict, occupancy: dict | None = None, owned: bool = False) -> int | None:
     """Estimated rent per day for one building, from the static table's row."""
+    if occupancy and owned:
+        return 0
     # The rates were fitted and written down by neighbourhood name.
     rate = RENT_RATES.get(HOOD_LABEL.get(hood_key(row)))
     # The casino boat is the one row with no floor area: the table does not
@@ -1821,18 +1830,24 @@ def _rent_estimate(row: dict) -> int | None:
     rent = row["m"] * (RENT_TRAFFIC_OFFSET + row["x"]) * rate
     if row.get("t") == "office":
         rent *= RENT_OFFICE_FACTOR
-    return int(round(rent))
+    vanilla = int(round(rent))
+    return ba_mods.ee_rent(vanilla, row, occupancy, owned) if occupancy else vanilla
 
 
-def _deposit_estimate(row: dict, rent: int | None) -> int | None:
+def _deposit_estimate(row: dict, rent: int | None, occupancy: dict | None = None,
+                      owned: bool = False) -> int | None:
     """The upfront deposit a lease asks for, to the nearest ten dollars."""
+    if occupancy and owned:
+        return 0
+    if occupancy and rent is not None and occupancy["rent"]["rebalance"]:
+        return rent * occupancy["depositDays"]
     if not rent:
         return None
     factor = DEPOSIT_FACTORS["warehouse" if row.get("t") == "warehouse" else "lease"]
     return int(round(rent * factor / DEPOSIT_ROUNDING)) * DEPOSIT_ROUNDING
 
 
-def _deposit_check(save: Save, table: dict) -> dict:
+def _deposit_check(save: Save, table: dict, occupancy: dict | None = None) -> dict:
     """The estimate against every lease deposit this character has actually paid.
 
     A deposit transaction can also be a building purchase, or one of the small
@@ -1840,19 +1855,27 @@ def _deposit_check(save: Save, table: dict) -> dict:
     the leases sit in counts.
     """
     worst, paid_count = 0.0, 0
+    owned = set()
+    if occupancy:
+        owned = {save.address(e.get("address")) for e in save.items(save.root.get("realEstate"))}
+        owned.update(_address_of(r) for r in save.items(save.root.get("BuildingRegistrations"))
+                     if r.get("BuildingOwnedByPlayer"))
     for tx in save.items(save.root.get("Transactions")):
         if tx.get("transactionType") != DEPOSIT_TRANSACTION:
             continue
         addr = save.address(tx.get("address"))
+        if occupancy and addr in owned:
+            continue
         row = table.get(addr) if addr else None
         if not row:
             continue
-        rent = _rent_estimate(row)
-        estimate = _deposit_estimate(row, rent)
+        rent = _rent_estimate(row, occupancy)
+        estimate = _deposit_estimate(row, rent, occupancy)
         paid = abs(tx.get("amount") or 0)
         if not estimate or not paid:
             continue
-        if not DEPOSIT_MIN_FACTOR <= paid / rent <= DEPOSIT_MAX_FACTOR:
+        low, high = (10, 20) if occupancy and occupancy["rent"]["rebalance"] else (DEPOSIT_MIN_FACTOR, DEPOSIT_MAX_FACTOR)
+        if not low <= paid / rent <= high:
             continue
         paid_count += 1
         worst = max(worst, abs(estimate - paid) / paid)
@@ -2047,7 +2070,8 @@ def _takeover_estimate(save: Save, reg: dict, row: dict) -> float | None:
     return round(value, 2) if math.isfinite(value) else None
 
 
-def _premises(save: Save, names: Names, market: dict, estate: dict | None = None) -> dict:
+def _premises(save: Save, names: Names, market: dict, estate: dict | None = None,
+              mod_rules: ModRules | None = None) -> dict:
     """Every building in the city, with what it would cost and what it holds.
 
     One row per registration the static table places. A couple of addresses in
@@ -2061,6 +2085,13 @@ def _premises(save: Save, names: Names, market: dict, estate: dict | None = None
     per_year = estate["perYear"] if estate else _days_per_year(save.deref(save.root.get("gameVariables")))
     rent_paid = _rent_paid(save)
     table = load_buildings(save)
+    occupancy = (mod_rules or ModRules(save)).occupancy
+    ee_leases = {tuple(a) for a in occupancy["rent"]["leaseKeys"]} if occupancy else set()
+    ee_deposits = collections.defaultdict(list)
+    if occupancy:
+        for tx in save.items(save.root.get("Transactions")):
+            if tx.get("transactionType") == DEPOSIT_TRANSACTION:
+                ee_deposits[save.address(tx.get("address"))].append(abs(tx.get("amount") or 0))
     caps = _door_caps(names)
     rivals = _rival_numbers(save)
     bought = {
@@ -2077,6 +2108,11 @@ def _premises(save: Save, names: Names, market: dict, estate: dict | None = None
         quote = ba_facts.lease_quote(row) if "newLease" in row else None
         rent = (quote["rentCents"] / 100 if quote else None) if "newLease" in row else _rent_estimate(row)
         deposit = (quote["depositCents"] / 100 if quote else None) if "newLease" in row else _deposit_estimate(row, rent)
+        if occupancy:
+            # EE's own adapter owns its quotes; a native pre-hook quote is not
+            # an EE quote. Keep the unmodified baseline for live board overrides.
+            rent = _rent_estimate(row, occupancy, addr in bought or reg.get("BuildingOwnedByPlayer", False))
+            deposit = _deposit_estimate(row, rent, occupancy, addr in bought or reg.get("BuildingOwnedByPlayer", False))
         if "newLease" not in row and ba_economy.report(save, "hart") is not None:
             rent_module = ba_economy.module(save, "hart", "rent")
             # A fitted historic quote is not the unpatched native baseline.
@@ -2117,6 +2153,13 @@ def _premises(save: Save, names: Names, market: dict, estate: dict | None = None
                 "cap": _size_cap(row, caps),
                 "rent": rent,
                 "deposit": deposit,
+                **({"ee": {"vanillaRent": _rent_estimate(row) if rent is not None else None,
+                            "multiplier": ba_mods.ee_multiplier(row),
+                            "owned": addr in bought or bool(reg.get("BuildingOwnedByPlayer")),
+                            "checkLease": addr in ee_leases,
+                            "deposits": ee_deposits.get(addr, []) if addr not in bought and not reg.get("BuildingOwnedByPlayer") else [],
+                            "paidRent": reg.get("RentPerDay") if reg.get("RentedByPlayer") else None}}
+                   if occupancy else {}),
                 **({"leaseBasis": quote["basis"] if quote else "unavailable"} if "newLease" in row else {}),
                 **({"signedDeposit": row["signedDepositCents"] / 100} if "signedDepositCents" in row else {}),
                 "takeoverPrice": _takeover_estimate(save, reg, row),
@@ -2129,7 +2172,7 @@ def _premises(save: Save, names: Names, market: dict, estate: dict | None = None
         )
         # How far the formula is from what the player is actually billed today.
         paid = reg.get("RentPerDay") or 0
-        if reg.get("RentedByPlayer") and rent and paid > 0:
+        if reg.get("RentedByPlayer") and rent and paid > 0 and (not occupancy or addr in ee_leases):
             deviations.append(abs(rent - paid) / paid)
     buildings.sort(key=lambda b: b["key"])
 
@@ -2171,6 +2214,7 @@ def _premises(save: Save, names: Names, market: dict, estate: dict | None = None
         "forSale": for_sale,
         "demand": _premises_demand(market),
         "rent": {
+            **({"economyExpansion": occupancy} if occupancy else {}),
             "constant": RENT_TRAFFIC_OFFSET,
             # By the neighbourhood's key, as everything the page reads is.
             "rates": {key: RENT_RATES[label] for key, label in HOOD_LABEL.items() if label in RENT_RATES},
@@ -2181,7 +2225,7 @@ def _premises(save: Save, names: Names, market: dict, estate: dict | None = None
             },
             "deposit": {
                 "factors": dict(DEPOSIT_FACTORS),
-                "check": _deposit_check(save, table),
+                "check": _deposit_check(save, table, occupancy),
             },
         },
         "caps": caps,
@@ -3808,7 +3852,7 @@ def _wholesale_section(build: Build) -> dict:
 
 def _premises_section(build: Build) -> dict:
     """Section premises: buildings for the location finder."""
-    return {"premises": _premises(build.save, build.names, build.shared["market"], build.shared["estate"])}
+    return {"premises": _premises(build.save, build.names, build.shared["market"], build.shared["estate"], build.mod_rules)}
 
 
 def _real_estate_section(build: Build) -> dict:
@@ -21728,6 +21772,7 @@ def _open_store(save: Save, names: Names, regs_list: list, businesses: list, pre
     return {
         **({"compatibility": compatibility} if compatibility else {}),
         **({"modEconomy": mod_rules.planner} if mod_rules.planner else {}),
+        **({"economyExpansion": mod_rules.occupancy} if mod_rules.occupancy else {}),
         "game": {
             "promo": round(_house_rule(gv, "baseCustomerPromotionMultiplier"), 4),
             "prices": round(mpm, 4),
@@ -22001,6 +22046,7 @@ def _open_factory(save: Save, names: Names, regs_list: list, businesses: list, r
     return {
         **({"compatibility": compatibility} if compatibility else {}),
         **({"modEconomy": mod_rules.planner} if mod_rules.planner else {}),
+        **({"economyExpansion": mod_rules.occupancy} if mod_rules.occupancy else {}),
         "game": {
             "prices": round(gv.get("marketPriceMultiplier") or 1.0, 4),
             "export": round(_house_rule(gv, "exportMultiplier"), 4),

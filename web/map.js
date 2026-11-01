@@ -147,7 +147,7 @@ function mapKindWord(t){
   }
 }
 const FINDER_KEY = "ba_finder_v1";
-const premises = () => D?.premises || null;
+const premises = () => eePremises(D?.premises || null);
 /* Names sort in the language the board shows them in (gnCompare()). */
 const mapCompare = (a, b) => typeof gnCompare === 'function' ? gnCompare(a, b) : String(a).localeCompare(String(b));
 const mapCharacter = () => D?.meta?.character || D?.supply?.factories?.character || D?.meta?.save || "";
@@ -233,6 +233,12 @@ const typeLabel = t => mapKindName(t);
    leases the player is billed for today. */
 function rentNote(){
   const rent = premises()?.rent, check = rent?.check, deposit = rent?.deposit?.check;
+  if(rent?.economyExpansion){
+    const measured=check?.leases ? tt('map.ee.check', {one:'EE estimated rent matches {n} current lease within {p:.1f}%.',other:'EE estimated rent matches {n} current leases within {p:.1f}%.'}, {n:check.leases,p:check.worst*100})
+      : tt('map.ee.nocheck', 'No eligible current lease to check EE estimated rent against.');
+    const paid=deposit?.deposits ? tt('map.ee.depositCheck', {one:'EE deposit estimates match {n} payment within {p:.1f}%.',other:'EE deposit estimates match {n} payments within {p:.1f}%.'}, {n:deposit.deposits,p:deposit.worst*100}) : '';
+    return `${eeSourceText(rent.economyExpansion)} ${measured} ${paid}`.trim();
+  }
   const tail = deposit && deposit.deposits
     ? " " + tt("map.rent.deposits", "Deposits matched your {n} within {p:.1f}%.", {n: deposit.deposits, p: deposit.worst * 100}) : "";
   if(!check || !check.leases) return tt("map.rent.nocheck", "Est. rent is fitted to observed leases; the save stores no rent for a vacant building, and you have no current lease to check against.") + tail;
@@ -245,8 +251,11 @@ function rentNote(){
    every time, so the note names the multiple rather than this building's sum;
    a warehouse is its own, steeper, one. */
 function depositNote(b){
+  if(b.ee?.owned) return tt('map.ee.owned', 'Owned building: no Economy Expansion rent, deposit or running costs.');
   if(b.status === "mine") return tt("map.deposit.paid", "Already rented: no additional rental deposit.");
   if(b.deposit == null) return tt("map.deposit.none", "No deposit estimate for this building.");
+  const ee=premises()?.rent?.economyExpansion;
+  if(ee?.rent.rebalance) return tt('map.ee.deposit', 'Economy Expansion deposit: {n} days of estimated rent at {r:$}/day.', {n:ee.depositDays,r:b.rent});
   const factors = premises()?.rent?.deposit?.factors || {};
   const days = b.type === "warehouse" ? factors.warehouse : factors.lease;
   const n = days ? Math.round(days) : 0;

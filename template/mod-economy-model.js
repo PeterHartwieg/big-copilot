@@ -427,6 +427,55 @@ const ModEconomyModel = (() => {
     return {operating,factoryRequirements};
   }
 
-  return {create, deltaCosts, seasonAt, utilityUse, equipmentUse, utilityDayCents, billMoney, internetDayCents, officeItDayCents, equipmentFor};
+  /* EE Workshop 2026-10-14, DLL sha256 4b29fe1d3e293d06.
+     Quote constants/plan prices arrive as explicit Python adapter inputs.
+     ConnectivityUnitsForItem and DataUnitsForItem classify the new outfit;
+     this is a forecast with purchased plans, never a claim about a live office. */
+  function eeCosts({rules, building, typeId = '', lines = [], seats = 0} = {}){
+    if(!rules || !building || building.ee?.owned || building.owner === 'you') return null;
+    const kind = building.type, area = building.m2 || 0, observed = rules.utilities?.[kind];
+    const points = rules.quotes?.[kind] || [];
+    let rate = points[0]?.[1] || 0;
+    for(let i=1;i<points.length;i++){
+      const [x,y]=points[i], [prevX,prevY]=points[i-1];
+      rate = prevY+(y-prevY)*Math.max(0,Math.min(1,(area-prevX)/(x-prevX)));
+      if(area<=x) break;
+    }
+    const away = n => Math.floor(n+.5);
+    const even = n => n%1===.5 ? (Math.floor(n)%2===0 ? Math.floor(n) : Math.ceil(n)) : Math.round(n);
+    const utilities = observed ? area*observed.perM2 : away(away(area*rate)*(rules.utilityFactor ?? 1));
+    let internet=0, cloud=0, software=0, startup=0, internetPlan=null;
+    const office = kind === 'office';
+    if(office){
+      let connectivity=0, data=0;
+      for(const [id,n] of lines){
+        const name=id.toLowerCase(), has=(...tokens)=>tokens.some(token=>name.includes(token));
+        const net=has('server','rack')?4:has('computer','workstation','pc_') || name.endsWith('pc')?1:
+          has('printer','copier','register','checkout','ticketkiosk','kiosk')?.25:0;
+        const storage=has('bigcabinet')?-24:has('smallcabinet')?-15:has('officelockers')?-30:
+          has('securitycamera')?8:has('turnstilepillar')?12:has('turnstilearm')?0:
+          has('cashregister','checkout')?8:has('loudspeaker','cloudspeaker','boothsound') || name.endsWith('itemname_speaker')?1:
+          has('server')?8:has('monitor','graphictablet')?.75:has('computer','workstation','pc_')?2:
+          name.endsWith('itemname_printer') || has('copier','officephone','classicphone','smartphone1','smartphone2','previewterminal')?.5:
+          has('kiosk')?.35:has('scanner')?.2:has('machinechair','workoutmachine')?0:has('machine','appliance')?.75:0;
+        connectivity+=net*n;data+=storage*n;
+      }
+      // The lowest daily-price internet plan, ties by lower installation fee.
+      const plans=Object.entries(rules.internet).map(([plan,[base,cap,extra,install]])=>
+        ({plan,cost:even(base+Math.max(0,connectivity-cap)*extra),install})).sort((a,b)=>a.cost-b.cost || a.install-b.install);
+      internetPlan=plans[0].plan;internet=plans[0].cost;startup+=plans[0].install;
+      const [base,cap,extra,setup]=rules.cloud;
+      cloud=even(base+Math.max(0,data-cap)*extra);startup+=setup;
+      const specialist=rules.software[typeId.replace('ba:businesstype_','')] || [0,0];
+      const workspace=rules.software.workspace;
+      software=seats*(workspace[1]+specialist[1]);startup+=seats*(workspace[0]+specialist[0]);
+    }
+    const daily=utilities+internet+cloud+software;
+    return daily || startup ? {daily,utilities,internet,cloud,software,startup,internetPlan,seats,office,
+      source:observed ? 'charges' : 'quote',sites:observed?.sites || 0,days:observed?.days || 0,
+      utilityFactor:rules.utilityFactor ?? 1} : null;
+  }
+
+  return {create, eeCosts, deltaCosts, seasonAt, utilityUse, equipmentUse, utilityDayCents, billMoney, internetDayCents, officeItDayCents, equipmentFor};
 })();
 if(typeof module !== "undefined" && module.exports) module.exports = ModEconomyModel;

@@ -1,0 +1,143 @@
+'use strict';
+const {test} = require('node:test');
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const fs = require('node:fs');
+const path = require('node:path');
+const {execFileSync} = require('node:child_process');
+const {selectPython} = require('../tools/verify.mjs');
+const {loadBoard} = require('./_board.cjs');
+const H = require('./_page.cjs');
+const Store = require('../template/open-store-model.js');
+const Factory = require('../template/open-factory-model.js');
+const Economy = require('../template/mod-economy-model.js');
+
+// The authored adapter constants, not a second copy of EE's prices in tests.
+const rules = JSON.parse(execFileSync(selectPython(), ['-c',
+  'import json; from tests.test_ee_adapter import fixture; import ba_mods as m, ba_dashboard as d; print(json.dumps(m.ee_inputs(fixture({}), {}, d._rent_estimate)))'],
+  {cwd:path.join(__dirname,'..'),encoding:'utf8'}));
+const shop = {key:'k',type:'retail',hood:'H',cap:20,m2:75,traffic:20,layout:'C1',rent:50,deposit:1000,status:'vacant'};
+function facts(office=false){
+  return {game:{promo:.5,wages:.7,capInitial:true,satisfaction:95,tax:.3,delivery:100,
+    wageBase:{cashier:16,cleaner:12,guard:15,perCashier:30},ramp:[.55,.92],
+    office:{always:3,fullDoor:50,day:[8,22],weekend:[6,0]}},
+    hoods:{H:{idx:1.2,strength:1,demands:0,interior:0}},
+    types:{T:{model:office?'office':'retail',wage:20,products:[['P',1]],amt:1,days:Array(7).fill(1),hours:Array(24).fill(1),
+      layouts:{C1:{furniture:100,fee:50,lines:[['computer',4]],opt:[]}}}},
+    market:{P:{p:10,r:.5,d:1,s:office?1:0,cost:4,hoods:{H:[0,0,null]}}},items:{computer:{p:25,v:['shop']}}};
+}
+const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-8,`${a} != ${b}`);
+
+test('EE utilities interpolate quote bands, scale after rounding, and use observed rates before preferences',()=>{
+  assert.equal(Economy.eeCosts({rules,building:shop}).daily,764);
+  assert.equal(Economy.eeCosts({rules:{...rules,utilityFactor:.25},building:shop}).daily,191);
+  assert.equal(Economy.eeCosts({rules,building:{...shop,m2:225}}).daily,1861);
+  assert.equal(Economy.eeCosts({rules,building:{...shop,type:'warehouse',m2:690}}).daily,69932);
+  const observed={...rules,utilityFactor:0,utilities:{retail:{perM2:2,sites:2,days:7}}};
+  const cost=Economy.eeCosts({rules:observed,building:shop});
+  assert.equal(cost.daily,150);assert.equal(cost.source,'charges');
+  assert.equal(Economy.eeCosts({rules,building:{...shop,ee:{owned:true}}}),null);
+  assert.equal(Economy.eeCosts({rules,building:{...shop,owner:'you'}}),null);
+});
+
+test('retail and office costs reduce profit before tax; opening investment includes all setup fees',()=>{
+  for(const office of [false,true]){
+    const f=facts(office), b={...shop,type:office?'office':'retail'};
+    const original=Store.create({facts:f}), ee=Store.create({facts:f,occupancy:rules});
+    const baseline=original.model('T',b), model=ee.model('T',b);
+    assert.ok(model);assert.ok(model.occupancyCosts);
+    close(baseline.profit-model.profit,model.occupancyCosts.daily);
+    close(baseline.profit*.7-model.profit*.7,model.occupancyCosts.daily*.7);
+    for(const day of [0,1,10]) close(original.dayProfit(baseline,null,day)-ee.dayProfit(model,null,day),model.occupancyCosts.daily);
+    const inv=ee.investment({type:'T'},b), before=original.investment({type:'T'},b);
+    close(inv.self-before.self,inv.occupancyCosts.startup);close(inv.firm-before.firm,inv.occupancyCosts.startup);
+    if(office){
+      assert.equal(model.occupancyCosts.internet,120);
+      assert.equal(model.occupancyCosts.cloud,184); // Math.Round to even, unlike quote rounding.
+      assert.ok(inv.occupancyCosts.startup>=2000+485);
+      assert.equal(model.occupancyCosts.software,model.occupancyCosts.seats*18);
+    }
+  }
+});
+
+test('explicit running inputs and zero/absent inputs keep model parity',()=>{
+  const core=Store.create({facts:facts()}), baseline=core.model('T',shop);
+  assert.deepEqual(core.model('T',shop,{runningCosts:{daily:0,startup:0}}),baseline);
+  const changed=core.model('T',shop,{runningCosts:{daily:75,startup:0}});
+  close(baseline.profit-changed.profit,75);
+  const zero=Store.create({facts:facts(),occupancy:{...rules,utilityFactor:0}});
+  assert.deepEqual(zero.model('T',shop),baseline);
+  assert.deepEqual(zero.investment({type:'T'},shop),core.investment({type:'T'},shop));
+  assert.deepEqual(Store.create({facts:facts(),occupancy:rules}).model('T',{...shop,owner:'you'}),core.model('T',{...shop,owner:'you'}));
+});
+
+test('office outfit demand selects an internet plan and includes required software',()=>{
+  const cost=Economy.eeCosts({rules,building:{...shop,type:'office'},typeId:'ba:businesstype_lawfirm',lines:[['computer',50]],seats:10});
+  assert.equal(cost.internetPlan,'fiber');assert.equal(cost.internet,400);
+  assert.equal(cost.cloud,688);assert.equal(cost.software,1310);
+  assert.equal(cost.startup,20000+485+10*(97+1197));
+  const board=loadBoard();assert.match(board.eeCostsHtml(cost),/CloudHarbor Core/);
+  assert.match(board.eeCostsHtml(cost),/full office capacity/);assert.match(board.eeCostsHtml(cost),/closes an office without internet/);
+});
+
+test('factory running costs include factory and depot utilities; explicit zero preserves all results',()=>{
+  const f={game:{wages:1,driverHours:5.7,hqHours:40},products:{},skills:{'ba:skill_deliverydriver':8,'ba:skill_factoryworker':10},hq:{agents:0,contracts:0,managers:0,managed:0}};
+  const baseline=Factory.create({facts:f}), ee=Factory.create({facts:f,occupancy:rules});
+  const building={...shop,type:'warehouse',m2:690}, depot={...building,key:'depot',m2:1292};
+  const input={counts:{},building}, inv={b:building,depot:{b:depot}};
+  const before=baseline.running(input,inv), result=ee.running(input,inv);
+  const daily=Economy.eeCosts({rules,building}).daily+Economy.eeCosts({rules,building:depot}).daily;
+  close(result.total-before.total,daily*7);
+  assert.deepEqual(baseline.running({...input,runningCosts:{daily:0}},inv),before);
+  close(baseline.running({...input,runningCosts:{daily:20}},inv).total-before.total,140);
+  assert.deepEqual(ee.running({...input,owned:true},inv),baseline.running({...input,owned:true},inv));
+});
+
+function payload(){
+  return {meta:{character:'EE synthetic'},mods:{economyExpansion:{settled:39}},
+    premises:{buildings:[{...shop,ee:{vanillaRent:100,multiplier:40,owned:false,paidRent:1200,checkLease:true,deposits:[18000]}}],
+      rent:{economyExpansion:structuredClone(rules),deposit:{factors:{lease:62.84,warehouse:93.61}}}}};
+}
+test('map notes explain EE rent source, checks, deposit and owned exemption; vanilla payload is untouched',()=>{
+  const board=loadBoard({}, {edit:s=>s.replace('/*__MAP_SCRIPT__*/',()=>fs.readFileSync(path.join(__dirname,'../web/map.js'),'utf8'))});
+  board.payload=payload();vm.runInContext('D=payload',board);
+  let p=vm.runInContext('premises()',board);assert.equal(p.buildings[0].rent,1200);
+  assert.match(board.rentNote(),/per-character preference/);assert.match(board.rentNote(),/1 current lease within 0.0%/);
+  assert.match(board.depositNote(p.buildings[0]),/15 days.*1,200/);
+  assert.match(board.depositNote({...p.buildings[0],ee:{owned:true}}),/Owned building/);
+  board.eeSetPreferences({rent:'5',utility:4});
+  p=vm.runInContext('premises()',board);assert.equal(p.buildings[0].rent,2000);assert.equal(p.buildings[0].deposit,30000);
+  assert.equal(board.payload.premises.buildings[0].rent,50,'raw save payload is immutable');
+  board.payload.premises={...board.payload.premises,buildings:[{...shop,rent:null,deposit:null,ee:{vanillaRent:null}}]};
+  assert.equal(vm.runInContext('premises().buildings[0].rent',board),null,'an unavailable baseline is never restored');
+  board.payload.mods={};assert.strictEqual(vm.runInContext('premises()',board),board.payload.premises);
+});
+
+test('preferences validate option indices and retain session choices when storage is denied',()=>{
+  const board=loadBoard({localStorage:{getItem(){throw Error('denied');},setItem(){throw Error('denied');}}});
+  board.payload=payload();vm.runInContext('D=payload',board);
+  board.eeSetPreferences({rent:'21',utility:1.5});
+  assert.equal(board.eePreferences().rent,'auto');assert.equal(board.eeRules().utilityFactor,1);
+  board.eeSetPreferences({rent:'off',utility:0});
+  assert.equal(board.eeRules().rent.rebalance,false);assert.equal(board.eeRules().utilityFactor,0);
+  const before=board.eeRules();assert.strictEqual(board.eeRules(),before);
+});
+
+const browser=H.suiteBrowser();
+test('preference controls update estimates without a save reload, persist, and stay per character',async t=>{
+  const {page}=await H.openPage(t,await browser(),{html:H.boardHtml()});
+  await page.setViewportSize({width:375,height:820});
+  const raw=payload();
+  await page.evaluate(raw=>{D=raw;pxOpen('prefs');},raw);
+  assert.equal(await page.locator('.px-ee-controls').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
+  await page.locator('[data-ee-pref="rent"]').selectOption('5');
+  assert.equal(await page.evaluate(()=>premises().buildings[0].rent),2000);
+  await page.locator('[data-ee-pref="utility"]').selectOption('2');
+  assert.equal(await page.evaluate(()=>eeRules().utilityFactor),.5);
+  await page.evaluate(()=>{D.meta.character='Other';pxRender('prefs');});
+  assert.equal(await page.locator('[data-ee-pref="rent"]').inputValue(),'auto');
+  await page.reload();
+  await page.evaluate(raw=>{D=raw;pxOpen('prefs');},raw);
+  assert.equal(await page.locator('[data-ee-pref="rent"]').inputValue(),'5');
+  assert.equal(await page.evaluate(()=>premises().buildings[0].deposit),30000);
+});
