@@ -2649,6 +2649,10 @@ EE itself defaults to 1.00x. Preferences can override derivation or select Rebal
 off. They update the finder, sorting, deposits and new-site plans immediately,
 without reloading the save, and never change the game's settings.
 
+An EE setting only receives a lease's vote if it reproduces the observed rent
+within 1% of that charge or $1. A lease that fits neither vanilla nor an EE
+option is ignored, rather than rounding a near-vanilla rent into EE's 0.0x option.
+
 With Rebalance on, the deposit is exactly 15 days of EE estimated rent. With it off,
 EE's `PrepareQuote` leaves the native deposit alone, so the vanilla estimate below
 applies. The EE deposit check admits payments between 10 and 20 days of estimated
@@ -2679,7 +2683,9 @@ factor and Voogle's 0.9 workspace factor (`GetBusinessDataMultiplier` and
 development, 3 for headquarters, 1.25 for graphic design and marketing, 1.15 for
 event planning and travel, and 1 for other offices. Software seats are an estimate of
 assigned employees from 40-hour staffing weeks, including cleaning, rather than
-computer count; a model caller can supply a known employee count. All recurring
+computer count; headquarters instead uses one software seat per planned role,
+independent of the office building's customer capacity. A model caller can supply
+a known employee count. All recurring
 charges are deductible; internet installation and cloud/software setup enter the
 opening investment once. Existing-site Results breakdown, Payback, office findings
 and office staffing defaults are separate work (#416).

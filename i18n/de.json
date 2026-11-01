@@ -1164,6 +1164,7 @@
  "gr.col.saves.tip": "Was eine Linie gegenüber Importen spart: ersetzte Importe abzüglich des Rohstoffverbrauchs ihrer Maschinen, beides zu Importpreisen",
  "gr.col.supplies": "Beliefert",
  "gr.ee.costs": "Economy Expansion: {daily:$}/Tag steuerlich abziehbare laufende Kosten; {setup:$} für Installation und Softwareeinrichtung.",
+ "gr.ee.headquarters": "Angenommen werden ein aktiver Internetvertrag ({plan}), CloudHarbor Core und Voogle Starter für die geplanten Rollen am Hauptsitz (Softwareplätze: {n}, einer je Rolle).",
  "gr.ee.internet.business": "Geschäftlich",
  "gr.ee.internet.fast": "Schnell",
  "gr.ee.internet.fiber": "Glasfaser",

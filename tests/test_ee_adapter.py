@@ -69,6 +69,31 @@ class FactorTests(unittest.TestCase):
         self.assertEqual(d._rent_estimate(table[address(1)], inputs), d._rent_estimate(table[address(1)]))
         self.assertEqual(d._deposit_estimate(row(), 100, inputs), d._deposit_estimate(row(), 100))
 
+    def test_near_vanilla_misfits_cannot_vote_for_zero_or_point_one(self):
+        for kind, hood in (("office", "midtown"), ("office", "murrayhill"), ("retail", "midtown")):
+            with self.subTest(kind=kind, hood=hood):
+                table = {address(1): row(kind, hood, 660), address(2): row()}
+                save = fixture(table, off=[address(1)])
+                save.root["BuildingRegistrations"]["$items"][0]["RentPerDay"] *= 1.05
+                inputs = self.inputs(save, table)
+                self.assertEqual((inputs["rent"]["source"], inputs["rent"]["leases"], inputs["rent"]["factor"]),
+                                 ("preference", 0, .3))
+                self.assertGreater(d._rent_estimate(table[address(1)], inputs), 1)
+                valid = fixture(table, [(address(2), .3)]).root["BuildingRegistrations"]["$items"][0]
+                save.root["BuildingRegistrations"]["$items"].append(valid)
+                rent = self.inputs(save, table)["rent"]
+                self.assertEqual((rent["source"], rent["leases"], rent["support"], rent["factor"]),
+                                 ("leases", 1, 1, .3))
+
+    def test_genuine_low_options_and_small_fitting_error_still_vote(self):
+        table = {address(1): row("retail", "midtown", 660)}
+        for factor in (0, .1, .3):
+            with self.subTest(factor=factor):
+                save = fixture(table, [(address(1), factor)])
+                save.root["BuildingRegistrations"]["$items"][0]["RentPerDay"] *= 1.005
+                rent = self.inputs(save, table)["rent"]
+                self.assertEqual((rent["factor"], rent["source"], rent["leases"]), (factor, "leases", 1))
+
     def test_ignore_renovated_residential_and_owned(self):
         table = {GIFTS: row(), address(2): row("residential"), address(3): row(), address(4): row()}
         save = fixture(table, [(GIFTS, .9), (address(3), .7), (address(4), .5)])

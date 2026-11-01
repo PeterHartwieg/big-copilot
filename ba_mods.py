@@ -139,8 +139,12 @@ def ee_inputs(save, table, vanilla_rent):
             votes[(False, 1.0)] += 1
             lease_keys.append(addr)
         else:
-            factor = math.floor(paid / (base * ee_multiplier(row)) * 10 + .5) / 10
+            scaled = base * ee_multiplier(row)
+            factor = math.floor(paid / scaled * 10 + .5) / 10
             if 0 <= factor <= 2:
+                estimate = math.floor(max(1, scaled * factor) + .5)
+                if abs(paid - estimate) > max(1, paid * .01):
+                    continue  # A rounded option alone is not evidence that EE set this lease.
                 votes[(True, factor)] += 1
                 lease_keys.append(addr)
     winner = min(votes, key=lambda k: (-votes[k], k)) if votes else (True, EE_DEFAULT_RENT)

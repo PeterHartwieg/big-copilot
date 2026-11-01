@@ -71,6 +71,28 @@ test('explicit running inputs and zero/absent inputs keep model parity',()=>{
   assert.deepEqual(Store.create({facts:facts(),occupancy:rules}).model('T',{...shop,owner:'you'}),core.model('T',{...shop,owner:'you'}));
 });
 
+test('HQ software seats follow the five planned roles, independent of building capacity',()=>{
+  const payload=JSON.parse(execFileSync(selectPython(),['-c',
+    'import json; from tests.test_open_store import headquarters_payload; print(json.dumps(headquarters_payload()))'],
+    {cwd:path.join(__dirname,'..'),encoding:'utf8',maxBuffer:64*1024*1024}));
+  const type='ba:businesstype_headquarters', f=payload.openStore;
+  assert.equal(f.types[type].staffSkills.length,5);
+  delete f.game.office; // HQ has no customer-office staffing forecast to consume.
+  const core=Store.create({facts:f,occupancy:rules}), native=Store.create({facts:f});
+  const site=payload.premises.buildings.find(b=>b.key==='ba:street_broadwaystreet#1');
+  let first;
+  for(const cap of [4,10,50]){
+    const b={...site,key:`hq-${cap}`,cap}, inv=core.investment({type},b), before=native.investment({type},b);
+    assert.equal(inv.occupancyCosts.seats,5);assert.equal(inv.occupancyCosts.software,90);
+    assert.equal(inv.occupancyCosts.startup,2970);
+    assert.equal(inv.self-before.self,2970);assert.equal(inv.firm-before.firm,2970);
+    if(first) assert.deepEqual(inv.occupancyCosts,first);else first=inv.occupancyCosts;
+  }
+  const html=loadBoard().eeCostsHtml(first);
+  assert.match(html,/planned headquarters roles \(software seats: 5, one per role\)/);
+  assert.doesNotMatch(html,/40-hour/);
+});
+
 test('office outfit demand selects an internet plan and includes required software',()=>{
   const cost=Economy.eeCosts({rules,building:{...shop,type:'office'},typeId:'ba:businesstype_lawfirm',lines:[['computer',50]],seats:10});
   assert.equal(cost.internetPlan,'fiber');assert.equal(cost.internet,400);
@@ -163,6 +185,34 @@ test('preferences validate option indices and retain session choices when storag
 });
 
 const browser=H.suiteBrowser();
+test('EE preferences redraw the factory strip and body on investment, until and running steps',async t=>{
+  const raw=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/payload_snapshot/data_day47_history.json'),'utf8'));
+  raw.mods={economyExpansion:{settled:raw.meta.day}};
+  raw.premises.rent.economyExpansion=rules;raw.openStore.economyExpansion=rules;raw.openFactory.economyExpansion=rules;
+  const key='ba:street_eighthavenue#8', building=raw.premises.buildings.find(b=>b.key===key);
+  building.owner='city';building.ee={vanillaRent:building.rent,multiplier:39.7,owned:false};
+  const {page}=await H.openPage(t,await browser(),{html:H.boardHtml(),hash:'#expansion/factory'});
+  await H.loadPayload(page,raw);
+  await page.evaluate(key=>{
+    planTarget='new';planType='ba:businesstype_liquorstore';
+    ofPlans=[{id:'ee-factory',type:planType,key,mode:'firm',counts:{'ba:itemname_beer':1}}];ofCur='ee-factory';
+    drawPlan();
+  },key);
+  for(const [step,utility] of [['investment','2'],['until','3'],['running','1']]){
+    const before=await page.evaluate(step=>{
+      ofStep=step;ofDraw();pxOpen('prefs');
+      document.getElementById('ofBody').insertAdjacentHTML('beforeend','<span id="ee-stale">Old estimate</span>');
+      return document.getElementById('ofStrip').textContent;
+    },step);
+    await page.locator('[data-ee-pref="utility"]').selectOption(utility);
+    assert.equal(await page.evaluate(()=>ofStep),step);
+    assert.equal(await page.locator('#ee-stale').count(),0,`${step} body redraws immediately`);
+    const after=await page.locator('#ofStrip').textContent();assert.notEqual(after,before,step);
+    const expected=await page.evaluate(()=>fmt(ofRunning(ofPlan(),ofInvestment(ofPlan())).occupancyCosts.daily*7));
+    assert.ok(after.includes(`EE ${expected}/week`),step);
+  }
+});
+
 test('preference controls update estimates without a save reload, persist, and stay per character',async t=>{
   const {page}=await H.openPage(t,await browser(),{html:H.boardHtml()});
   await page.setViewportSize({width:375,height:820});

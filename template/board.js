@@ -12962,7 +12962,9 @@ function eeCostsHtml(cost){
     : tt('gr.ee.quote', 'Utilities use EE quote rates and Utility Costs {x:.2f}x from your preference.', {x:cost.utilityFactor});
   const plan={business:tt('gr.ee.internet.business', 'Business'),fast:tt('gr.ee.internet.fast', 'Fast'),
     fiber:tt('gr.ee.internet.fiber', 'Fiber')}[cost.internetPlan] || '';
-  const office=cost.office ? tt('gr.ee.office', 'Assumes an active {plan} internet plan, CloudHarbor Core, Voogle Starter and required specialist software for full office capacity, with an estimated employee count of {n} based on 40-hour weeks. EE closes an office without internet and reduces capacity without these services.', {plan,n:cost.seats}) : '';
+  const office=cost.office ? cost.hq
+    ? tt('gr.ee.headquarters', 'Assumes an active {plan} internet plan, CloudHarbor Core and Voogle Starter for the planned headquarters roles (software seats: {n}, one per role).', {plan,n:cost.seats})
+    : tt('gr.ee.office', 'Assumes an active {plan} internet plan, CloudHarbor Core, Voogle Starter and required specialist software for full office capacity, with an estimated employee count of {n} based on 40-hour weeks. EE closes an office without internet and reduces capacity without these services.', {plan,n:cost.seats}) : '';
   return `<p class="os-note">${spEsc(tt('gr.ee.costs', 'Economy Expansion: {daily:$}/day in deductible running costs; {setup:$} in installation and software setup.', {daily:cost.daily,setup:cost.startup || 0}))} ${spEsc(source)} ${spEsc(office)}</p>`;
 }
 function eePreferencesHtml(){
@@ -22439,7 +22441,7 @@ pxSheet.addEventListener('change', e=>{
   // Redraw through the existing page/section adapters. Cached planner inputs
   // include eeRules(), so marketing, finance and finder sorting all refresh.
   if(odReady('openStore')) drawOpenStore();
-  if(odReady('openFactory')) planDraw();
+  if(odReady('openFactory')) ofDraw();
   if(typeof refreshCityMaps==='function') refreshCityMaps();
   pxRender('prefs');wireTips();
 });

@@ -42,14 +42,17 @@ const OpenStoreModel = (() => {
     function occupancyCosts(slug,b,o={}){
       if(!occupancy || o.existing) return null;
       const out=osOutfit({type:slug},b), slots=o.open || allHours(), cap=osCap(b);
+      const roles=osType(slug)?.staffSkills, hq=Array.isArray(roles);
       let staffed=0,open=0;
-      if(b.type==='office') for(let wd=0;wd<7;wd++) for(const [a,z] of slots[wd] || []) for(let hr=a;hr<z;hr++){
+      if(b.type==='office' && !hq) for(let wd=0;wd<7;wd++) for(const [a,z] of slots[wd] || []) for(let hr=a;hr<z;hr++){
         open++;staffed+=o.staffed ? o.staffed[wd]?.[hr] || 0 : osOfficeStaffed(o.computers || cap,cap,wd,hr);
       }
       // Forecast hiring uses 40-hour weeks, plus cleaning; EE licenses assigned
-      // people, not computers. A caller with a known hiring plan supplies seats.
-      const seats=o.assignedEmployees ?? Math.ceil(staffed/40)+Math.ceil(open/40);
-      return economyModel.eeCosts({rules:occupancy,building:b,typeId:slug,lines:out?.lines || [],seats});
+      // people, not computers. HQ instead plans one employee per role, without
+      // customer-capacity staffing. A known hiring plan can supply its count.
+      const seats=o.assignedEmployees ?? (hq ? roles.length : Math.ceil(staffed/40)+Math.ceil(open/40));
+      const costs=economyModel.eeCosts({rules:occupancy,building:b,typeId:slug,lines:out?.lines || [],seats});
+      return costs && hq ? {...costs,hq:true} : costs;
     }
     const companion = facts.modEconomy;
     const economy = companion && economyModel?.create(companion);
