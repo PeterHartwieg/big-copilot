@@ -1,0 +1,422 @@
+Actual curl.exe commands and responses, sanitized for publication. Health/save identity and values omitted.
+HEAD: curl -I emits headers into its output file; that output is not a body measurement. Raw Python probes establish empty HEAD bodies.
+
+curl.exe --noproxy * -i -X GET -H "Host: 127.0.0.1:8322" http://127.0.0.1:8322/health
+exit=0
+HTTP/1.1 200 OK
+Cache-Control: no-store
+Content-Type: application/json; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:20 GMT
+Content-Length: 515
+Keep-Alive: timeout=15,max=100
+
+body_length=515 sha256=ffceb3a8b7e7551295a41f19a6066ca0b2de2ee3a1fab232b252695e4e98d574
+{"modVersion":"0.8.3","schemaVersion":5,"source":"game","build":3682,"runningBuild":3682,"size":1932040,"busy":false} [health values redacted]
+
+curl.exe --noproxy * -i -X GET -H "Host: localhost:8322" http://127.0.0.1:8322/health
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:21 GMT
+Content-Length: 35
+Connection: close
+
+body_length=35 sha256=4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+curl.exe --noproxy * -i -X GET -H "Host: 127.0.0.1:8322" -H "Origin: https://bigcopilot.com" http://127.0.0.1:8322/save
+exit=0
+HTTP/1.1 200 OK
+Access-Control-Allow-Origin: https://bigcopilot.com
+Vary: Origin
+Access-Control-Expose-Headers: ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character, Retry-After
+ETag: "2-7-1793501900"
+X-Game-Link-Stamp: 2-7-1793501900
+X-Game-Link-Day: 2
+X-Game-Link-Character: [redacted]
+Cache-Control: no-store
+Content-Type: application/octet-stream
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:21 GMT
+Content-Length: 1932040
+Keep-Alive: timeout=15,max=100
+
+body_length=1932040 sha256=7be4752aae5201524dba4b8b85c5c7adae0e8d8401b02f503ed2bab9213ed696
+[JSON body omitted; keys=[]]
+
+curl.exe --noproxy * -i -X GET -H "Host: 127.0.0.1:8322" -H "Origin: https://bigcopilot.com" http://127.0.0.1:8322/facts?stamp=2-7-1793501900
+exit=0
+HTTP/1.1 200 OK
+Access-Control-Allow-Origin: https://bigcopilot.com
+Vary: Origin
+Access-Control-Expose-Headers: ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character, Retry-After
+Cache-Control: no-store
+Content-Type: application/json; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:21 GMT
+Content-Length: 558140
+Keep-Alive: timeout=15,max=100
+
+body_length=558140 sha256=d53bd65dce8ebdb085e1ecd799505e94341b21a142898393a96f5722829e3e25
+[JSON body omitted; keys=["agencies", "build", "buildings", "character", "economy", "marketingModel", "marketingTypes", "model", "nativeEconomy", "saveSha256", "schemaVersion", "stamp", "vehiclePrices", "wholesalers"]]
+
+curl.exe --noproxy * -i -X GET -H "Host: evil.example:8322" http://127.0.0.1:8322/health
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:21 GMT
+Content-Length: 35
+Connection: close
+
+body_length=35 sha256=4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+curl.exe --noproxy * -i -X GET -H "Host: evil.example:8322" http://127.0.0.1:8322/save
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:21 GMT
+Content-Length: 35
+Connection: close
+
+body_length=35 sha256=4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+curl.exe --noproxy * -i -X GET -H "Host: evil.example:8322" http://127.0.0.1:8322/facts
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:21 GMT
+Content-Length: 35
+Connection: close
+
+body_length=35 sha256=4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+curl.exe --noproxy * -i -X OPTIONS -H "Host: evil.example:8322" -H "Origin: https://bigcopilot.com" http://127.0.0.1:8322/save
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:21 GMT
+Content-Length: 35
+Connection: close
+
+body_length=35 sha256=4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+curl.exe --noproxy * -i -X POST -H "Host: evil.example:8322" -H "Origin: https://bigcopilot.com" -H "Content-Type: application/json" --data {} http://127.0.0.1:8322/write/uniforms
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:21 GMT
+Content-Length: 35
+Connection: close
+
+body_length=35 sha256=4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+curl.exe --noproxy * -i -I -H "Host: evil.example:8322" -H "Origin: https://bigcopilot.com" http://127.0.0.1:8322/save
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:21 GMT
+Content-Length: 35
+Connection: close
+
+[curl -I header output omitted here; see headers above and raw Python HEAD record]
+
+curl.exe --noproxy * -i -X GET -H "Host: evil.example" http://127.0.0.1:8322/health
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:21 GMT
+Content-Length: 35
+Connection: close
+
+body_length=35 sha256=4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+curl.exe --noproxy * -i -X GET -H "Host: evil.example" http://127.0.0.1:8322/save
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:21 GMT
+Content-Length: 35
+Connection: close
+
+body_length=35 sha256=4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+curl.exe --noproxy * -i -X GET -H "Host: evil.example" http://127.0.0.1:8322/facts
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:21 GMT
+Content-Length: 35
+Connection: close
+
+body_length=35 sha256=4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+curl.exe --noproxy * -i -X OPTIONS -H "Host: evil.example" -H "Origin: https://bigcopilot.com" http://127.0.0.1:8322/save
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:21 GMT
+Content-Length: 35
+Connection: close
+
+body_length=35 sha256=4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+curl.exe --noproxy * -i -X POST -H "Host: evil.example" -H "Origin: https://bigcopilot.com" -H "Content-Type: application/json" --data {} http://127.0.0.1:8322/write/uniforms
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:21 GMT
+Content-Length: 35
+Connection: close
+
+body_length=35 sha256=4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+curl.exe --noproxy * -i -I -H "Host: evil.example" -H "Origin: https://bigcopilot.com" http://127.0.0.1:8322/save
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:22 GMT
+Content-Length: 35
+Connection: close
+
+[curl -I header output omitted here; see headers above and raw Python HEAD record]
+
+curl.exe --noproxy * -i -X GET -H "Host: 127.0.0.1:9999" http://127.0.0.1:8322/health
+exit=0
+HTTP/1.1 403 Forbidden
+Cache-Control: no-store
+Content-Type: application/json; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:22 GMT
+Content-Length: 28
+Keep-Alive: timeout=15,max=100
+
+body_length=28 sha256=90ae630c89392895c56e1ec917d065f1312dbcb6f27b58798304fbd0645df28e
+{"error":"host_not_allowed"}
+
+curl.exe --noproxy * -i -X GET -H "Host: 127.0.0.1:9999" http://127.0.0.1:8322/save
+exit=0
+HTTP/1.1 403 Forbidden
+Cache-Control: no-store
+Content-Type: application/json; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:22 GMT
+Content-Length: 28
+Keep-Alive: timeout=15,max=100
+
+body_length=28 sha256=90ae630c89392895c56e1ec917d065f1312dbcb6f27b58798304fbd0645df28e
+{"error":"host_not_allowed"}
+
+curl.exe --noproxy * -i -X GET -H "Host: 127.0.0.1:9999" http://127.0.0.1:8322/facts
+exit=0
+HTTP/1.1 403 Forbidden
+Cache-Control: no-store
+Content-Type: application/json; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:22 GMT
+Content-Length: 28
+Keep-Alive: timeout=15,max=100
+
+body_length=28 sha256=90ae630c89392895c56e1ec917d065f1312dbcb6f27b58798304fbd0645df28e
+{"error":"host_not_allowed"}
+
+curl.exe --noproxy * -i -X OPTIONS -H "Host: 127.0.0.1:9999" -H "Origin: https://bigcopilot.com" http://127.0.0.1:8322/save
+exit=0
+HTTP/1.1 403 Forbidden
+Cache-Control: no-store
+Content-Type: application/json; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:22 GMT
+Content-Length: 28
+Keep-Alive: timeout=15,max=100
+
+body_length=28 sha256=90ae630c89392895c56e1ec917d065f1312dbcb6f27b58798304fbd0645df28e
+{"error":"host_not_allowed"}
+
+curl.exe --noproxy * -i -X POST -H "Host: 127.0.0.1:9999" -H "Origin: https://bigcopilot.com" -H "Content-Type: application/json" --data {} http://127.0.0.1:8322/write/uniforms
+exit=0
+HTTP/1.1 403 Forbidden
+Cache-Control: no-store
+Content-Type: application/json; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:22 GMT
+Content-Length: 28
+Keep-Alive: timeout=15,max=100
+
+body_length=28 sha256=90ae630c89392895c56e1ec917d065f1312dbcb6f27b58798304fbd0645df28e
+{"error":"host_not_allowed"}
+
+curl.exe --noproxy * -i -I -H "Host: 127.0.0.1:9999" -H "Origin: https://bigcopilot.com" http://127.0.0.1:8322/save
+exit=0
+HTTP/1.1 403 Forbidden
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:22 GMT
+Content-Length: 0
+Keep-Alive: timeout=15,max=100
+
+[curl -I header output omitted here; see headers above and raw Python HEAD record]
+
+curl.exe --noproxy * -i -X GET -H "Host: localhost.evil.example:8322" http://127.0.0.1:8322/health
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:22 GMT
+Content-Length: 35
+Connection: close
+
+body_length=35 sha256=4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+curl.exe --noproxy * -i -X GET -H "Host: localhost.evil.example:8322" http://127.0.0.1:8322/save
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:22 GMT
+Content-Length: 35
+Connection: close
+
+body_length=35 sha256=4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+curl.exe --noproxy * -i -X GET -H "Host: localhost.evil.example:8322" http://127.0.0.1:8322/facts
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:22 GMT
+Content-Length: 35
+Connection: close
+
+body_length=35 sha256=4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+curl.exe --noproxy * -i -X OPTIONS -H "Host: localhost.evil.example:8322" -H "Origin: https://bigcopilot.com" http://127.0.0.1:8322/save
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:22 GMT
+Content-Length: 35
+Connection: close
+
+body_length=35 sha256=4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+curl.exe --noproxy * -i -X POST -H "Host: localhost.evil.example:8322" -H "Origin: https://bigcopilot.com" -H "Content-Type: application/json" --data {} http://127.0.0.1:8322/write/uniforms
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:22 GMT
+Content-Length: 35
+Connection: close
+
+body_length=35 sha256=4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+curl.exe --noproxy * -i -I -H "Host: localhost.evil.example:8322" -H "Origin: https://bigcopilot.com" http://127.0.0.1:8322/save
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:22 GMT
+Content-Length: 35
+Connection: close
+
+[curl -I header output omitted here; see headers above and raw Python HEAD record]
+
+curl.exe --noproxy * -i -X GET -H "Host: [::1]:8322" http://127.0.0.1:8322/health
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:22 GMT
+Content-Length: 56
+Connection: close
+
+body_length=56 sha256=366401317a477a5a3e977aa316e67d8ffea00ecee8007ecd28cb3c458f863473
+<h1>Bad Request (Invalid url: http://[:8322/health)</h1>
+
+curl.exe --noproxy * -i -X GET -H "Host: [::1]:8322" http://127.0.0.1:8322/save
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:23 GMT
+Content-Length: 54
+Connection: close
+
+body_length=54 sha256=08c354339958cb5b731c6e3b5f4e1b03a5c7780f086c555eb34f1277bd36e91e
+<h1>Bad Request (Invalid url: http://[:8322/save)</h1>
+
+curl.exe --noproxy * -i -X GET -H "Host: [::1]:8322" http://127.0.0.1:8322/facts
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:23 GMT
+Content-Length: 55
+Connection: close
+
+body_length=55 sha256=74d9c8b481f971f004c73a51c917250003e3792c5ad7cd58c71c963519135736
+<h1>Bad Request (Invalid url: http://[:8322/facts)</h1>
+
+curl.exe --noproxy * -i -X OPTIONS -H "Host: [::1]:8322" -H "Origin: https://bigcopilot.com" http://127.0.0.1:8322/save
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:23 GMT
+Content-Length: 54
+Connection: close
+
+body_length=54 sha256=08c354339958cb5b731c6e3b5f4e1b03a5c7780f086c555eb34f1277bd36e91e
+<h1>Bad Request (Invalid url: http://[:8322/save)</h1>
+
+curl.exe --noproxy * -i -X POST -H "Host: [::1]:8322" -H "Origin: https://bigcopilot.com" -H "Content-Type: application/json" --data {} http://127.0.0.1:8322/write/uniforms
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:23 GMT
+Content-Length: 64
+Connection: close
+
+body_length=64 sha256=0e75c8b7fed1f12d63bdc15a0c2e3f55de7a35911958015a3057bc36ce9a6396
+<h1>Bad Request (Invalid url: http://[:8322/write/uniforms)</h1>
+
+curl.exe --noproxy * -i -I -H "Host: [::1]:8322" -H "Origin: https://bigcopilot.com" http://127.0.0.1:8322/save
+exit=0
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:58:23 GMT
+Content-Length: 54
+Connection: close
+
+[curl -I header output omitted here; see headers above and raw Python HEAD record]

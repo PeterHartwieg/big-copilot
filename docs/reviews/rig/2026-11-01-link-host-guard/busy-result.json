@@ -1,0 +1,94 @@
+{
+  "concurrent_requests": 64,
+  "allowed_statuses": {
+    "200": 45,
+    "503": 3
+  },
+  "foreign_statuses": {
+    "400": 8,
+    "403": 8
+  },
+  "busy_observed": true,
+  "foreign_results": [
+    {
+      "host": "evil.example:8322",
+      "status": 400,
+      "body": "<h1>Bad Request (Invalid host)</h1>"
+    },
+    {
+      "host": "127.0.0.1:9999",
+      "status": 403,
+      "body": "{\"error\":\"host_not_allowed\"}"
+    },
+    {
+      "host": "evil.example:8322",
+      "status": 400,
+      "body": "<h1>Bad Request (Invalid host)</h1>"
+    },
+    {
+      "host": "127.0.0.1:9999",
+      "status": 403,
+      "body": "{\"error\":\"host_not_allowed\"}"
+    },
+    {
+      "host": "evil.example:8322",
+      "status": 400,
+      "body": "<h1>Bad Request (Invalid host)</h1>"
+    },
+    {
+      "host": "127.0.0.1:9999",
+      "status": 403,
+      "body": "{\"error\":\"host_not_allowed\"}"
+    },
+    {
+      "host": "evil.example:8322",
+      "status": 400,
+      "body": "<h1>Bad Request (Invalid host)</h1>"
+    },
+    {
+      "host": "127.0.0.1:9999",
+      "status": 403,
+      "body": "{\"error\":\"host_not_allowed\"}"
+    },
+    {
+      "host": "evil.example:8322",
+      "status": 400,
+      "body": "<h1>Bad Request (Invalid host)</h1>"
+    },
+    {
+      "host": "127.0.0.1:9999",
+      "status": 403,
+      "body": "{\"error\":\"host_not_allowed\"}"
+    },
+    {
+      "host": "evil.example:8322",
+      "status": 400,
+      "body": "<h1>Bad Request (Invalid host)</h1>"
+    },
+    {
+      "host": "127.0.0.1:9999",
+      "status": 403,
+      "body": "{\"error\":\"host_not_allowed\"}"
+    },
+    {
+      "host": "evil.example:8322",
+      "status": 400,
+      "body": "<h1>Bad Request (Invalid host)</h1>"
+    },
+    {
+      "host": "127.0.0.1:9999",
+      "status": 403,
+      "body": "{\"error\":\"host_not_allowed\"}"
+    },
+    {
+      "host": "evil.example:8322",
+      "status": 400,
+      "body": "<h1>Bad Request (Invalid host)</h1>"
+    },
+    {
+      "host": "127.0.0.1:9999",
+      "status": 403,
+      "body": "{\"error\":\"host_not_allowed\"}"
+    }
+  ]
+}

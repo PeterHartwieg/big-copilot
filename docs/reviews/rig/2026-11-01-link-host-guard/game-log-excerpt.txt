@@ -1,0 +1,3 @@
+Candidate retained log: 1543 lines inspected. No Exception stack or BigCopilotLink request error found.
+[Mod:BigCopilotLink] [BigCopilotLink] serving the game to Big Copilot on http://127.0.0.1:8322/
+[BigCopilotLink] serialized in 1285 ms on a worker thread (floor)

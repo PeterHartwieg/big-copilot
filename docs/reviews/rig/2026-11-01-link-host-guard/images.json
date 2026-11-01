@@ -1,0 +1,22 @@
+[
+  {
+    "file": "control.jpg",
+    "method": "Native bridge game-view PNG, JPEG encoded for repository size; original PNG retained privately.",
+    "source_png_sha256": "0a2ebeee9adc0abf34c9d7d9f1b7207ee5f8037a806c3fe8b5e68b972ed0cf83",
+    "sha256": "139730f6e300efe42db9d872400b98e6fa3acd02808254f6b5205c53f4b5c454",
+    "bytes": 243512
+  },
+  {
+    "file": "candidate.jpg",
+    "method": "Native bridge game-view PNG, JPEG encoded for repository size; original PNG retained privately.",
+    "source_png_sha256": "eadba75a37565493bcdd68a8a796b17fafa19f2c573432c4a55d3762e30f7c76",
+    "sha256": "899da4d896a2f13ea78e9ad4d2c4f15b574a1b262e931ba378f7cadc11ca896e",
+    "bytes": 243419
+  },
+  {
+    "file": "website.png",
+    "method": "Headless Chrome screenshot after denied loopback access",
+    "sha256": "528bc53a50957f83d9925ea3c09d312c63b52d47a561ce83a37f9f823c61d46b",
+    "bytes": 69702
+  }
+]

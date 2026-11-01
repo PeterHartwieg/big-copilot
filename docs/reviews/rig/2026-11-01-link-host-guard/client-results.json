@@ -1,0 +1,18 @@
+{
+  "website": {
+    "status": "NOT-RUN",
+    "reason": "Headless Chrome local-network permission gate denied loopback access. No board loaded; no permission/system setting changed.",
+    "chrome_channel": "chrome",
+    "headless": true
+  },
+  "cli": {
+    "status": "PASS",
+    "command": "python ba_dashboard.py --watch --game --no-open --port 18772 -o <stage>/cli/dashboard.html",
+    "live_page_http_status": 200,
+    "live_page_bytes": 5475862,
+    "rendered_dashboard_bytes": 17894276,
+    "parsed_portable_snapshot": true,
+    "parsed_save_root_key_count": 108,
+    "stop": "CTRL_BREAK sent only to owned watcher after first completed poll; watcher exited and is no longer running."
+  }
+}

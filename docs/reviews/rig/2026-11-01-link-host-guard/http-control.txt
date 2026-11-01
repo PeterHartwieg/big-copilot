@@ -1,0 +1,370 @@
+Sanitized raw HTTP probe transcript. Body digests cover original bytes, before publication redaction.
+
+allowed-ip-health
+GET /health HTTP/1.1
+Host: 127.0.0.1:8322
+Connection: close
+
+HTTP 200 OK
+Cache-Control: no-store
+Content-Type: application/json; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:55:34 GMT
+Content-Length: 477
+Connection: close
+Body length: 477; SHA-256: 8e92e1456fb20caffecb43b7c2bcfa2e6de175ce17fcff8e4bb3bfaa492a1ecf
+{"modVersion":"0.8.2","schemaVersion":5,"source":"game","build":3682,"runningBuild":3682,"size":0,"busy":false}
+JSON keys: ["build", "busy", "cash", "character", "company", "day", "features", "hour", "minute", "modVersion", "ok", "paired", "refreshedAt", "runningBuild", "schemaVersion", "size", "source", "stamp", "writes"]
+Health identity, game-state values and stamp omitted. Original body length/hash retained.
+
+allowed-localhost-health
+GET /health HTTP/1.1
+Host: localhost:8322
+Connection: close
+
+HTTP 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:55:34 GMT
+Content-Length: 35
+Connection: close
+Body length: 35; SHA-256: 4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+allowed-origin-save
+GET /save HTTP/1.1
+Host: 127.0.0.1:8322
+Connection: close
+Origin: https://bigcopilot.com
+
+HTTP 503 Service Unavailable
+Access-Control-Allow-Origin: https://bigcopilot.com
+Vary: Origin
+Access-Control-Expose-Headers: ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character, Retry-After
+Cache-Control: no-store
+Content-Type: application/json; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:55:34 GMT
+Content-Length: 23
+Connection: close
+Body length: 23; SHA-256: 88d373c0a93792d8d1ac6a928248d8734606f33fa4c8c1850be6c6e1480c19af
+{"error":"no_save_yet"}
+JSON keys: ["error"]
+
+allowed-origin-facts
+GET /facts?stamp= HTTP/1.1
+Host: 127.0.0.1:8322
+Connection: close
+Origin: https://bigcopilot.com
+
+HTTP 503 Service Unavailable
+Access-Control-Allow-Origin: https://bigcopilot.com
+Vary: Origin
+Access-Control-Expose-Headers: ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character, Retry-After
+Cache-Control: no-store
+Content-Type: application/json; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:55:34 GMT
+Content-Length: 23
+Connection: close
+Body length: 23; SHA-256: 88d373c0a93792d8d1ac6a928248d8734606f33fa4c8c1850be6c6e1480c19af
+{"error":"no_save_yet"}
+JSON keys: ["error"]
+
+allowed-options
+OPTIONS /save HTTP/1.1
+Host: 127.0.0.1:8322
+Connection: close
+Origin: https://bigcopilot.com
+Access-Control-Request-Method: GET
+Access-Control-Request-Private-Network: true
+
+HTTP 204 No Content
+Access-Control-Allow-Origin: https://bigcopilot.com
+Vary: Origin
+Access-Control-Expose-Headers: ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character, Retry-After
+Access-Control-Allow-Methods: GET, POST, OPTIONS
+Access-Control-Allow-Headers: Authorization, Content-Type, If-None-Match
+Access-Control-Max-Age: 600
+Access-Control-Allow-Private-Network: true
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:55:34 GMT
+Content-Length: 0
+Connection: close
+Body length: 0; SHA-256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+
+foreign-evil.example:8322-GET-/health
+GET /health HTTP/1.1
+Host: evil.example:8322
+Connection: close
+
+HTTP 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:55:34 GMT
+Content-Length: 35
+Connection: close
+Body length: 35; SHA-256: 4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+foreign-evil.example:8322-GET-/save
+GET /save HTTP/1.1
+Host: evil.example:8322
+Connection: close
+
+HTTP 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:55:34 GMT
+Content-Length: 35
+Connection: close
+Body length: 35; SHA-256: 4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+foreign-evil.example:8322-GET-/facts
+GET /facts?stamp= HTTP/1.1
+Host: evil.example:8322
+Connection: close
+
+HTTP 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:55:34 GMT
+Content-Length: 35
+Connection: close
+Body length: 35; SHA-256: 4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+foreign-evil.example:8322-OPTIONS-/save
+OPTIONS /save HTTP/1.1
+Host: evil.example:8322
+Connection: close
+Origin: https://bigcopilot.com
+
+HTTP 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:55:34 GMT
+Content-Length: 35
+Connection: close
+Body length: 35; SHA-256: 4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+foreign-evil.example-GET-/health
+GET /health HTTP/1.1
+Host: evil.example
+Connection: close
+
+HTTP 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:55:34 GMT
+Content-Length: 35
+Connection: close
+Body length: 35; SHA-256: 4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+foreign-evil.example-GET-/save
+GET /save HTTP/1.1
+Host: evil.example
+Connection: close
+
+HTTP 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:55:34 GMT
+Content-Length: 35
+Connection: close
+Body length: 35; SHA-256: 4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+foreign-evil.example-GET-/facts
+GET /facts?stamp= HTTP/1.1
+Host: evil.example
+Connection: close
+
+HTTP 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:55:34 GMT
+Content-Length: 35
+Connection: close
+Body length: 35; SHA-256: 4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+foreign-evil.example-OPTIONS-/save
+OPTIONS /save HTTP/1.1
+Host: evil.example
+Connection: close
+Origin: https://bigcopilot.com
+
+HTTP 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:55:34 GMT
+Content-Length: 35
+Connection: close
+Body length: 35; SHA-256: 4eeeb477580357a5c1a2c06401410bfc294776c0f0dcd8f6ec2654938ceeaebf
+<h1>Bad Request (Invalid host)</h1>
+
+ready-ip-health
+GET /health HTTP/1.1
+Host: 127.0.0.1:8322
+Connection: close
+
+HTTP 200 OK
+Cache-Control: no-store
+Content-Type: application/json; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:56:20 GMT
+Content-Length: 515
+Connection: close
+Body length: 515; SHA-256: 343af0689f38729454ccc6a0d740797574813f9fbf3d8f7a5dfdf36e2241f05f
+{"modVersion":"0.8.2","schemaVersion":5,"source":"game","build":3682,"runningBuild":3682,"size":1932040,"busy":false}
+JSON keys: ["build", "busy", "cash", "character", "company", "day", "features", "hour", "minute", "modVersion", "ok", "paired", "refreshedAt", "runningBuild", "schemaVersion", "size", "source", "stamp", "writes"]
+Health identity, game-state values and stamp omitted. Original body length/hash retained.
+
+ready-allowed-origin-save
+GET /save HTTP/1.1
+Host: 127.0.0.1:8322
+Connection: close
+Origin: https://bigcopilot.com
+
+HTTP 200 OK
+Access-Control-Allow-Origin: https://bigcopilot.com
+Vary: Origin
+Access-Control-Expose-Headers: ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character, Retry-After
+ETag: "2-7-1793501736"
+X-Game-Link-Stamp: 2-7-1793501736
+X-Game-Link-Day: 2
+X-Game-Link-Character: [redacted]
+Cache-Control: no-store
+Content-Type: application/octet-stream
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:56:20 GMT
+Content-Length: 1932040
+Connection: close
+Body length: 1932040; SHA-256: 430eccb535cf40dca22b385696a64e19062356ac5f37bbb3fcfb64087bfbf19a
+[save/facts body omitted]
+No save values or byte preview published. Original length/hash and available key names/types retained.
+
+ready-allowed-origin-facts
+GET /facts?stamp=2-7-1793501736 HTTP/1.1
+Host: 127.0.0.1:8322
+Connection: close
+Origin: https://bigcopilot.com
+
+HTTP 200 OK
+Access-Control-Allow-Origin: https://bigcopilot.com
+Vary: Origin
+Access-Control-Expose-Headers: ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character, Retry-After
+Cache-Control: no-store
+Content-Type: application/json; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 02:56:20 GMT
+Content-Length: 558140
+Connection: close
+Body length: 558140; SHA-256: fb7ef92f9b837851030d43c311ebd03a1cbdb7985e816314cbce9efb8ae38156
+[save/facts body omitted]
+JSON keys: ["agencies", "build", "buildings", "character", "economy", "marketingModel", "marketingTypes", "model", "nativeEconomy", "saveSha256", "schemaVersion", "stamp", "vehiclePrices", "wholesalers"]
+No save values or byte preview published. Original length/hash and available key names/types retained.
+
+final-ip-health
+GET /health HTTP/1.1
+Host: 127.0.0.1:8322
+Connection: close
+
+HTTP 200 OK
+Cache-Control: no-store
+Content-Type: application/json; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 03:01:43 GMT
+Content-Length: 515
+Connection: close
+Body length: 515; SHA-256: 413f52d8977713c60fa61143520c9dbd10185b39d14c555d7993ad0bbe80a1f8
+{"modVersion":"0.8.2","schemaVersion":5,"source":"game","build":3682,"runningBuild":3682,"size":1932043,"busy":false}
+JSON keys: ["build", "busy", "cash", "character", "company", "day", "features", "hour", "minute", "modVersion", "ok", "paired", "refreshedAt", "runningBuild", "schemaVersion", "size", "source", "stamp", "writes"]
+Health identity, game-state values and stamp omitted. Original body length/hash retained.
+
+final-allowed-origin-save
+GET /save HTTP/1.1
+Host: 127.0.0.1:8322
+Connection: close
+Origin: https://bigcopilot.com
+
+HTTP 200 OK
+Access-Control-Allow-Origin: https://bigcopilot.com
+Vary: Origin
+Access-Control-Expose-Headers: ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character, Retry-After
+ETag: "2-7-1793502103"
+X-Game-Link-Stamp: 2-7-1793502103
+X-Game-Link-Day: 2
+X-Game-Link-Character: [redacted]
+Cache-Control: no-store
+Content-Type: application/octet-stream
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 03:01:43 GMT
+Content-Length: 1932043
+Connection: close
+Body length: 1932043; SHA-256: de6904ce82e393d74ae479294bfb98cbf0037a3eaf188541cac7803552791f83
+[save/facts body omitted]
+No save values or byte preview published. Original length/hash and available key names/types retained.
+
+final-allowed-origin-facts
+GET /facts?stamp=2-7-1793502103 HTTP/1.1
+Host: 127.0.0.1:8322
+Connection: close
+Origin: https://bigcopilot.com
+
+HTTP 200 OK
+Access-Control-Allow-Origin: https://bigcopilot.com
+Vary: Origin
+Access-Control-Expose-Headers: ETag, X-Game-Link-Stamp, X-Game-Link-Day, X-Game-Link-Character, Retry-After
+Cache-Control: no-store
+Content-Type: application/json; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 03:01:43 GMT
+Content-Length: 558140
+Connection: close
+Body length: 558140; SHA-256: 46602abdab0bc17419448c5c3aaf13f7695005b034dc76a0b3b395fa1f73d2b8
+[save/facts body omitted]
+JSON keys: ["agencies", "build", "buildings", "character", "economy", "marketingModel", "marketingTypes", "model", "nativeEconomy", "saveSha256", "schemaVersion", "stamp", "vehiclePrices", "wholesalers"]
+No save values or byte preview published. Original length/hash and available key names/types retained.
+
+supplemental-wrong-port-health
+GET /health HTTP/1.1
+Host: 127.0.0.1:9999
+Connection: close
+
+HTTP 200 OK
+Cache-Control: no-store
+Content-Type: application/json; charset=utf-8
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 03:01:43 GMT
+Content-Length: 515
+Connection: close
+Body length: 515; SHA-256: 413f52d8977713c60fa61143520c9dbd10185b39d14c555d7993ad0bbe80a1f8
+{"modVersion":"0.8.2","schemaVersion":5,"source":"game","build":3682,"runningBuild":3682,"size":1932043,"busy":false}
+JSON keys: ["build", "busy", "cash", "character", "company", "day", "features", "hour", "minute", "modVersion", "ok", "paired", "refreshedAt", "runningBuild", "schemaVersion", "size", "source", "stamp", "writes"]
+Health identity, game-state values and stamp omitted. Original body length/hash retained.
+
+supplemental-wrong-port-save
+GET /save HTTP/1.1
+Host: 127.0.0.1:9999
+Connection: close
+
+HTTP 200 OK
+ETag: "2-7-1793502103"
+X-Game-Link-Stamp: 2-7-1793502103
+X-Game-Link-Day: 2
+X-Game-Link-Character: [redacted]
+Cache-Control: no-store
+Content-Type: application/octet-stream
+Server: Mono-HTTPAPI/1.0
+Date: Sun, 01 Nov 2026 03:01:43 GMT
+Content-Length: 1932043
+Connection: close
+Body length: 1932043; SHA-256: de6904ce82e393d74ae479294bfb98cbf0037a3eaf188541cac7803552791f83
+[save/facts body omitted]
+No save values or byte preview published. Original length/hash and available key names/types retained.

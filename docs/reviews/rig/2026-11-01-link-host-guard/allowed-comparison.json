@@ -1,0 +1,18 @@
+{
+  "save_lengths": [
+    1932040,
+    1932040
+  ],
+  "save_sha256s": [
+    "430eccb535cf40dca22b385696a64e19062356ac5f37bbb3fcfb64087bfbf19a",
+    "7be4752aae5201524dba4b8b85c5c7adae0e8d8401b02f503ed2bab9213ed696"
+  ],
+  "save_bytes_identical": false,
+  "facts_keys_match": true,
+  "facts_types_match": true,
+  "cors_control": "https://bigcopilot.com",
+  "cors_candidate": "https://bigcopilot.com",
+  "parsed_save_keys_match": true,
+  "parsed_save_types_match": true,
+  "parsed_root_key_count": 108
+}

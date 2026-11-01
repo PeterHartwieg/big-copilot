@@ -1,0 +1,14 @@
+[
+  {
+    "package": "BigCopilotLink-0.8.3-pr552-76a5ea2d.zip",
+    "sha256": "7db7f4829952c6df211908bdc75ff576626026ffb576a320cf97f5099eac0d90",
+    "expected": "7db7f4829952c6df211908bdc75ff576626026ffb576a320cf97f5099eac0d90",
+    "match": true
+  },
+  {
+    "package": "BigCopilotLink-0.8.2-main-7f437379.zip",
+    "sha256": "0642394bb00e4b9370149bcea440e794ffdf0a3f02c6ffaf461f6d4de295834a",
+    "expected": "0642394bb00e4b9370149bcea440e794ffdf0a3f02c6ffaf461f6d4de295834a",
+    "match": true
+  }
+]

@@ -1,0 +1,57 @@
+{
+  "linkedSaveResponse": false,
+  "requestFailed": true,
+  "events": [
+    {
+      "type": "console",
+      "level": "error",
+      "text": "Access to fetch at 'http://127.0.0.1:8322/health' from origin 'https://bigcopilot.com' has been blocked by CORS policy: Permission was denied for this request to access the `loopback` address space."
+    },
+    {
+      "type": "requestfailed",
+      "url": "http://127.0.0.1:8322/health",
+      "failure": {
+        "errorText": "net::ERR_FAILED"
+      }
+    },
+    {
+      "type": "console",
+      "level": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "type": "console",
+      "level": "error",
+      "text": "Access to fetch at 'http://127.0.0.1:8322/health' from origin 'https://bigcopilot.com' has been blocked by CORS policy: Request had a target IP address space of `local` yet the resource is in address space `loopback`."
+    },
+    {
+      "type": "requestfailed",
+      "url": "http://127.0.0.1:8322/health",
+      "failure": {
+        "errorText": "net::ERR_FAILED"
+      }
+    },
+    {
+      "type": "console",
+      "level": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "type": "console",
+      "level": "error",
+      "text": "Access to fetch at 'http://127.0.0.1:8322/health' from origin 'https://bigcopilot.com' has been blocked by CORS policy: Permission was denied for this request to access the `loopback` address space."
+    },
+    {
+      "type": "requestfailed",
+      "url": "http://127.0.0.1:8322/health",
+      "failure": {
+        "errorText": "net::ERR_FAILED"
+      }
+    },
+    {
+      "type": "console",
+      "level": "error",
+      "text": "Failed to load resource: net::ERR_FAILED"
+    }
+  ]
+}

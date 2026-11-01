@@ -1,0 +1,36 @@
+{
+  "agenttests": {
+    "baseline_files": 1622,
+    "restored_files": 1622,
+    "identical": true,
+    "differences": [],
+    "baseline_manifest_sha256": "44f368a14b093d93d39dbffc76ca0a953278c0519331d3629b633794f54baed1",
+    "restored_manifest_sha256": "44f368a14b093d93d39dbffc76ca0a953278c0519331d3629b633794f54baed1"
+  },
+  "modslocal": {
+    "baseline_files": 287,
+    "restored_files": 287,
+    "identical": true,
+    "differences": [],
+    "baseline_manifest_sha256": "39ed223a208ecc44a573a7afca1091ca8f2da961fcc92c25fc78f4599f20a126",
+    "restored_manifest_sha256": "39ed223a208ecc44a573a7afca1091ca8f2da961fcc92c25fc78f4599f20a126"
+  },
+  "profile": {
+    "baseline_files": 4541,
+    "restored_files": 4541,
+    "identical": true,
+    "differences": [],
+    "baseline_manifest_sha256": "6e42c87fb20fa322671be88981d36840f7b83a93549a2ce2c0bcc284daf9f6c6",
+    "restored_manifest_sha256": "6e42c87fb20fa322671be88981d36840f7b83a93549a2ce2c0bcc284daf9f6c6"
+  },
+  "registry": {
+    "identical": true,
+    "baseline_export_sha256": "66fccbcc5f63bc492e36ba7f342d9d2480adb2b87404a650a8607094d207381d",
+    "restored_export_sha256": "66fccbcc5f63bc492e36ba7f342d9d2480adb2b87404a650a8607094d207381d"
+  },
+  "utc": "2026-11-01T03:02:11.665170+00:00",
+  "local": "2026-11-01T04:02:11.665170+01:00",
+  "restored": true,
+  "unavoidable_runtime_log_exceptions": [],
+  "no_game_running": true
+}
