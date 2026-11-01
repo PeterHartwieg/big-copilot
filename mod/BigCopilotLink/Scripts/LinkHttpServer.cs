@@ -144,8 +144,8 @@ namespace BigCopilotLink
                 HttpListenerContext context;
                 try { context = session.Listener.GetContext(); }
                 catch (Exception) { break; }
-                // Before the preflight shortcut and before admission. A foreign
-                // Host must not reach OPTIONS, a busy answer, or any route.
+                // Defence in depth for Host values the runtime lets through:
+                // check before OPTIONS, admission, a busy answer, or any route.
                 if (RefuseForeignHost(context)) continue;
                 string method;
                 try { method = context.Request.HttpMethod; }
@@ -228,8 +228,8 @@ namespace BigCopilotLink
 
         private void Handle(HttpListenerContext context, CancellationToken cancellation)
         {
-            // Before OPTIONS and the origin allowlist. A DNS-rebinding page sends
-            // no Origin, so that allowlist would otherwise serve it the save.
+            // Defence in depth before OPTIONS and the origin allowlist, including
+            // requests with no Origin. Windows/Mono rejects foreign names earlier.
             if (RefuseForeignHost(context)) return;
 
             var request = context.Request;
@@ -369,11 +369,12 @@ namespace BigCopilotLink
         }
 
         /// <summary>
-        /// True when <paramref name="host"/> is this listener, port required:
+        /// True when <paramref name="host"/> matches the allowlist, port required:
         /// <c>127.0.0.1:&lt;port&gt;</c> or <c>localhost:&lt;port&gt;</c>, any case,
-        /// after trimming. The same rule as the watcher's BoardHandler. A missing
-        /// port, another port, or any other name is refused, so a page on a name
-        /// that merely resolves here cannot read the save.
+        /// after trimming. The same rule as the watcher's BoardHandler. This is
+        /// defence in depth: Windows/Mono HttpListener rejects a foreign host name
+        /// with its own 400 before the mod. It also rejects localhost despite this
+        /// allowlist entry; use 127.0.0.1 with the current listener prefix.
         /// </summary>
         internal static bool IsAllowedHost(string host, int port)
         {
@@ -385,10 +386,11 @@ namespace BigCopilotLink
         }
 
         /// <summary>
-        /// 403 <c>{"error":"host_not_allowed"}</c> (a HEAD has no body) when Host
-        /// is not this listener. Returns true when the response has been sent or
-        /// the context was aborted. No CORS headers: the refusal is the answer,
-        /// not something another origin should be allowed to read.
+        /// 403 <c>{"error":"host_not_allowed"}</c> (a HEAD has no body) for a wrong
+        /// port or any other disallowed Host that reaches the mod, for example on
+        /// another runtime. Windows/Mono rejects foreign names with its own 400
+        /// before this check. Returns true when the response has been sent or the
+        /// context was aborted. No CORS headers accompany this refusal.
         /// </summary>
         private bool RefuseForeignHost(HttpListenerContext context)
         {

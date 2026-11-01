@@ -9,9 +9,10 @@ Schema version **5**. Current clients also accept versions 1, 2, 3 and 4.
 Version 5 (mod 0.8.1) adds independent marketing capability validation, registered
 vehicle prices and conservative HMP/RLO economy observations in paired facts.
 Mod 0.8.2 adds optional `runningBuild` on `/health` without a new schema version.
-Mod 0.8.3 refuses a `Host` other than `127.0.0.1:<port>` or `localhost:<port>`
-before a route is served, without a new schema version. Clients that already
-call `http://127.0.0.1:<port>` are unchanged.
+Mod 0.8.3 adds a host allowlist as defence in depth, without a new schema version.
+On Windows/Mono, foreign host names already get the runtime's 400 before the mod;
+the mod's 403 covers a wrong port and other disallowed Host values that reach it.
+Clients that already call `http://127.0.0.1:<port>` are unchanged.
 Version 4 (mod 0.8.0) adds reviewed Street Food route writes (`streetFoodRoute`, capability `streetFood.routes`).
 Version 3 adds wholesale orders (`wholesale`, mod 0.7.0) and guarded same-day undo.
 Version 2 adds the paired building-facts snapshot and marketing prediction guard below.
@@ -320,17 +321,18 @@ facts participate in the existing before/after consistency fingerprint.
 is **8322**; the mod's options panel offers 8322 to 8325. 8321 belongs to Peter's MCP
 bridge and 8765 to the Companion mod, so neither is used.
 
-From mod 0.8.3 the listener also compares the `Host` header, and so does the mock.
-It answers only `127.0.0.1:<port>` or `localhost:<port>`: either spelling, any
+From mod 0.8.3 a defence-in-depth check compares the `Host` header, as does the mock.
+The allowlist contains `127.0.0.1:<port>` and `localhost:<port>`: either spelling, any
 case, surrounding whitespace ignored, and the port required and equal to the
-port this listener bound. Anything else is `403 {"error":"host_not_allowed"}`
-with no `Access-Control-*` headers, before CORS, before `OPTIONS`, and before
-`/health`, `/save`, `/facts` or any write. A `HEAD` is `403` with no body.
-Binding to `127.0.0.1` is not the whole guard. A DNS-rebinding page is
-same-origin to its own name, sends no `Origin`, and would be served the save
-if the runtime accepted that `Host`. The site and the watcher already call
-`http://127.0.0.1:<port>`, which matches. `localhost` and `[::1]` in a client
-URL are spelt `127.0.0.1` before the call, because `[::1]` is not on this list.
+port this listener bound. On Windows/Mono, `HttpListener` rejects foreign host
+names with its own 400 before the mod sees them. A wrong port or any other
+disallowed Host that reaches the mod (for example on another runtime) gets
+`403 {"error":"host_not_allowed"}` with no `Access-Control-*` headers, before
+CORS, `OPTIONS` or any route. A `HEAD` is 403 with no body.
+Windows/Mono also rejects `localhost:<port>` with 400 on main (0.8.2) and 0.8.3
+alike: a known, pre-existing limitation outside this change's scope. Use
+`http://127.0.0.1:<port>`, as the site and watcher already do. They normalize
+`localhost` and `[::1]` in a client URL to `127.0.0.1` before the call.
 
 The listener runs only while a city is loaded (`[ModEntryOnCityLoad]`): it starts in
 `OnLoadAsync` and stops in `OnUnloadAsync`. A client that gets a connection error

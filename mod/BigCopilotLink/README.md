@@ -34,9 +34,10 @@ Version 0.8.2 keeps schema 5 and adds `runningBuild` on `/health`: the running
 game's build, separate from the save's stamp. An older dashboard ignores the
 field. A newer dashboard shows the running build as unknown when a mod before
 0.8.2 omits it.
-Version 0.8.3 keeps schema 5 and refuses a request whose `Host` is not
-`127.0.0.1:<port>` or `localhost:<port>`. The site, the watcher and curl to
-those names are unchanged. An older dashboard needs no update.
+Version 0.8.3 keeps schema 5 and adds a host allowlist as defence in depth.
+On Windows/Mono, foreign host names already get the runtime's 400 before the
+mod; 0.8.3 adds a 403 for a wrong port and other disallowed Host values that
+reach it. Use `127.0.0.1:<port>`; an older dashboard needs no update.
 HMP/RLO capability observations identify forecasts that need unsupported rules;
 they do not claim to calculate those mods' complete running costs. Unknown marketing
 catalogues leave read-only building facts available and refuse campaign writes.
@@ -56,13 +57,15 @@ they do not validate the new collector inside the game.
 
 - **Loopback only.** The listener binds `http://127.0.0.1:<port>/` and nothing else.
   Nothing outside your machine can reach it.
-- **A host allowlist (0.8.3).** The listener answers only when `Host` is
+- **A host allowlist (0.8.3).** The mod's defence-in-depth check allows
   `127.0.0.1:<port>` or `localhost:<port>` (any case, and only this listener's
-  port). Any other Host, including a name that merely resolves to this machine,
-  is `403 {"error":"host_not_allowed"}` before a preflight or any route. A
-  `HEAD` gets `403` with no body. The local watcher's own server uses the same
-  rule. Loopback binding alone is not the guard: a DNS-rebinding page sends no
-  `Origin`.
+  port). On Windows/Mono, `HttpListener` rejects foreign host names with its own
+  400 before the mod. A wrong port or any other disallowed Host that reaches
+  the mod (for example on another runtime) gets `403 {"error":"host_not_allowed"}`
+  before a preflight or any route, with no CORS headers; `HEAD` has no body.
+  Windows/Mono also rejects `localhost:<port>` with 400 on main (0.8.2) and
+  0.8.3 alike: a known, pre-existing limitation outside this change's scope.
+  Use `127.0.0.1:<port>`. The local watcher's own server uses the same allowlist.
 - **An origin allowlist.** Browser requests are answered only for
   `https://bigcopilot.com`, `https://www.bigcopilot.com`, and any `http://127.0.0.1`
   or `http://localhost` page (the local watcher, a local `build_web.py` preview).

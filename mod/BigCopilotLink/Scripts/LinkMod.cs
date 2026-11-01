@@ -29,8 +29,8 @@ namespace BigCopilotLink
         /// not speak the new contract. runningBuild on /health is optional, so
         /// schema 5 stays: an older page ignores the field, and a newer page
         /// treats a mod that omits it as an unknown running build. The 0.8.3
-        /// host allowlist refuses a foreign Host; it adds no field, so schema 5
-        /// stays for that too.
+        /// defence-in-depth host allowlist adds no field, so schema 5 stays for
+        /// that too (see LinkHttpServer for runtime host rejection).
         /// </summary>
         public const int SchemaVersion = 5;
 

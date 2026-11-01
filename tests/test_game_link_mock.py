@@ -295,9 +295,12 @@ class MockContract(unittest.TestCase):
             self.assertEqual(call(self.url + "/health", headers=headers)[0], 200, headers)
             self.assertEqual(call(self.url + "/save", headers=headers)[0], 200, headers)
 
-    def test_only_a_loopback_host_is_served(self):
-        """A page on a name rebound to 127.0.0.1 sends its own Host and no Origin.
-        Same rule as the watcher and LinkHttpServer.IsAllowedHost (mod 0.8.3)."""
+    def test_mock_host_allowlist_refuses_disallowed_values_including_wrong_port(self):
+        """Exercise the mock's equivalent of LinkHttpServer.IsAllowedHost.
+
+        Windows/Mono HttpListener returns its own 400 for foreign names before
+        the mod; these mock responses do not model that runtime validation.
+        """
         port = self.server.server.server_address[1]
         before = self.link.stamp
         self.link.last_refresh = 0  # a refresh would run
@@ -317,19 +320,22 @@ class MockContract(unittest.TestCase):
                 self.assertNotIn(b"not really a save", body, (route, host))
         self.assertEqual(self.link.stamp, before, "a foreign Host did not refresh")
         self.assertEqual(self.link.applied, [], "a foreign Host did not write")
-        status, _, body = call(self.url + "/save", "HEAD", headers={"Host": f"attacker.example:{port}"})
-        self.assertEqual((status, body), (403, b""))
-        status, headers, body = call(self.url + "/save", "OPTIONS", headers={
-            "Host": f"attacker.example:{port}", "Origin": "https://bigcopilot.com",
-            "Access-Control-Request-Method": "GET"})
-        self.assertEqual((status, json.loads(body)), (403, {"error": "host_not_allowed"}))
-        self.assertNotIn("Access-Control-Allow-Origin", headers)
-        self.assertNotIn("Access-Control-Allow-Methods", headers)
+        for host in (f"127.0.0.1:{port + 1}", f"attacker.example:{port}"):
+            status, headers, body = call(self.url + "/save", "HEAD", headers={"Host": host})
+            self.assertEqual((status, body), (403, b""), host)
+            self.assertNotIn("Access-Control-Allow-Origin", headers, host)
+            status, headers, body = call(self.url + "/save", "OPTIONS", headers={
+                "Host": host, "Origin": "https://bigcopilot.com",
+                "Access-Control-Request-Method": "GET"})
+            self.assertEqual((status, json.loads(body)), (403, {"error": "host_not_allowed"}), host)
+            self.assertNotIn("Access-Control-Allow-Origin", headers, host)
+            self.assertNotIn("Access-Control-Allow-Methods", headers, host)
         # The site's origin still needs an allowed Host. A bad origin on an
         # allowed Host is still the origin refusal, not this one.
         status, headers, body = call(self.url + "/save", headers={
             "Host": f"127.0.0.1:{port}", "Origin": "https://evil.example"})
         self.assertEqual((status, json.loads(body)), (403, {"error": "origin_not_allowed"}))
+        # The mock accepts localhost; Windows/Mono rejects it before the mod.
         for host in (f"127.0.0.1:{port}", f"localhost:{port}", f"LocalHost:{port}", f"  localhost:{port}"):
             status, headers, _ = call(self.url + "/health", headers={"Host": host, "Origin": "https://bigcopilot.com"})
             self.assertEqual(status, 200, host)
@@ -341,9 +347,11 @@ class MockContract(unittest.TestCase):
         self.assertEqual(status, 204, "an allowed Host still preflights")
         self.assertEqual(headers.get("Access-Control-Allow-Origin"), "https://bigcopilot.com")
         self.assertEqual(headers.get("Access-Control-Allow-Private-Network"), "true")
-        # No Origin, as curl and the CLI watcher, on either loopback name.
+        # No Origin, as curl and the CLI watcher; both names work in the mock.
         self.assertEqual(call(self.url + "/health", headers={"Host": f"127.0.0.1:{port}"})[0], 200)
         self.assertEqual(call(self.url + "/save", headers={"Host": f"localhost:{port}"})[0], 200)
+        self.assertTrue(game_link_mock.allowed_host(f"127.0.0.1:{port}", port))
+        self.assertFalse(game_link_mock.allowed_host(f"127.0.0.1:{port + 1}", port))
         self.assertTrue(game_link_mock.allowed_host(f" LocalHost:{port} ", port))
         self.assertFalse(game_link_mock.allowed_host(None, port))
         self.assertFalse(game_link_mock.allowed_host("localhost", port))

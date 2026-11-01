@@ -77,7 +77,7 @@ public static class BclQueueTests
                 // Empty SDK scene; never invoke serialize, gameplay writes or
                 // pairing/persistence. All queue payloads and HTTP bytes are synthetic.
                 dispatcher = MainThreadDispatcher.Install();
-                HostAllowlist();
+                HostAllowlistPredicate();
                 DispatcherLimits();
                 CancellationAndLifecycle();
                 WriteWithdrawal();
@@ -116,9 +116,9 @@ public static class BclQueueTests
         finally { SessionState.SetString(PreviousScenes, ""); EditorApplication.Exit(code); }
     }
 
-    // IsAllowedHost is the DNS-rebinding guard. The listener calls it before
-    // OPTIONS, admission and every route; this assembly cannot open the game,
-    // so the call site is what the in-game rig still has to exercise.
+    // Predicate coverage only, independent of HttpListener's host validation.
+    // Windows/Mono returns its own 400 for foreign names before the mod; the
+    // mod's defence-in-depth 403 covers wrong ports and other values reaching it.
     private static bool AllowedHost(string host, int port)
     {
         var method = typeof(LinkHttpServer).GetMethod("IsAllowedHost", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
@@ -126,11 +126,11 @@ public static class BclQueueTests
         return (bool)method.Invoke(null, new object[] { host, port });
     }
 
-    private static void HostAllowlist()
+    private static void HostAllowlistPredicate()
     {
         const int port = 8322;
         Check(AllowedHost("127.0.0.1:8322", port), "numeric loopback with this port");
-        Check(AllowedHost("localhost:8322", port), "localhost with this port");
+        Check(AllowedHost("localhost:8322", port), "localhost is in the predicate allowlist, regardless of runtime rejection");
         Check(AllowedHost("LocalHost:8322", port), "localhost is case-insensitive");
         Check(AllowedHost(" 127.0.0.1:8322 ", port), "surrounding whitespace is ignored");
         Check(AllowedHost("127.0.0.1:8325", 8325), "the listener port is the one that matches");
