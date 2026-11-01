@@ -193,6 +193,9 @@ test('unsettled demand keeps hour and ingredient estimates without checklist or 
         // canonical nor stale facts may manufacture an actionable checklist.
         const rawChanges = buildOrderChecklist({imports: [{s: site.s, rows: [raw]}], loose: [raw],
           sites: [{s: site.s, rows: [raw]}], checks: [raw], businesses: D.businesses});
+        const settledRaw = {...raw, fact: {...uncertain, demandApproximate: false}};
+        const settledChanges = buildOrderChecklist({imports: [{s: site.s, rows: [settledRaw]}],
+          businesses: D.businesses});
         const staffing = drawFactoryStaffing();
         const flour = site.needs.find(n => n.slug === 'flour');
         Object.assign(flour, {from: null, directImport: false, factoryImportSite: null});
@@ -205,7 +208,7 @@ test('unsettled demand keeps hour and ingredient estimates without checklist or 
         const mixed = supplyChecklistRows();
         return {fact: sbLineFact(bread), input: input.fact, changes: ctx.rows.filter(r =>
           r.site === site.s && ['bread', 'flour'].includes(r.slug)), rawChanges,
-          mixedChanges: mixed.rows.filter(r => r.slug === 'flour'),
+          mixedChanges: mixed.rows.filter(r => r.slug === 'flour'), settledChanges,
           staffing, banner: document.querySelector('#secProduction .sb-ramp').textContent,
           tip: viewTips['supply/production']};
       });
@@ -215,6 +218,7 @@ test('unsettled demand keeps hour and ingredient estimates without checklist or 
       assert.equal(got.input.lower, null);
       assert.deepEqual(got.changes, []);
       assert.deepEqual(got.rawChanges, []);
+      assert.deepEqual(got.settledChanges.map(r => r.slug), ['flour']);
       assert.deepEqual(got.mixedChanges, []);
       assert.match(got.staffing, enRe('sb.line.demandUnsettled'));
       assert.notEqual(got.banner.trim(), got.tip.trim());
