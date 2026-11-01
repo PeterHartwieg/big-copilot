@@ -8,6 +8,7 @@ page asks (browser_section()). Synthetic saves only: never a real save.
 """
 from __future__ import annotations
 
+from datetime import datetime
 import json
 import os
 import re
@@ -274,9 +275,14 @@ class Sections(unittest.TestCase):
                 fresh = ba_dashboard.section(self.build(), name)
                 self.assertEqual(json.dumps(retried), json.dumps(fresh))
 
-    def test_cross_family_orders_keep_every_section_and_core_identical(self):
+    @unittest.mock.patch("ba_dashboard.dt.datetime", wraps=datetime)
+    def test_cross_family_orders_keep_every_section_and_core_identical(self, clock):
+        # Separate builds may cross a minute boundary; sections must still
+        # leave each build's original metadata untouched.
+        clock.now.side_effect = [datetime(2026, 11, 1, 10, minute) for minute in range(23, 27)]
         ordered = self.build()
         ba_dashboard.materialize_all(ordered)
+        expected_core = json.dumps(normalise(json.loads(json.dumps(ordered.core))))
         names = list(ba_dashboard.SECTIONS)
         orders = [names[::-1],
                   ["openStore", "staffing", "hiring", "goals", "products",
@@ -292,7 +298,7 @@ class Sections(unittest.TestCase):
                 for name in order:
                     ba_dashboard.section(build, name)
                     self.assertEqual(json.dumps(build.core), core)
-                self.assertEqual(json.dumps(build.core), json.dumps(ordered.core))
+                self.assertEqual(json.dumps(normalise(json.loads(core))), expected_core)
                 for name in names:
                     self.assertEqual(json.dumps(build.sections[name]),
                                      json.dumps(ordered.sections[name]), name)
