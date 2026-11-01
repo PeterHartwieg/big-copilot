@@ -11,6 +11,10 @@ const vm = require('node:vm');
 // imports card's wording goes through), as the page runs them.
 const {loadBoard, SOURCE: source} = require('./_board.cjs');
 const context = loadBoard();
+test('buildOrderChecklist accepts its inputs as one object', () => {
+  const rows = context.buildOrderChecklist({imports: [], loose: [], sites: [], shops: [], checks: [], businesses: []});
+  assert.deepEqual(JSON.parse(JSON.stringify(rows)), []);
+});
 const businesses = [
   {key:'depot#1', name:'Depot', address:'1 Depot Street'},
   {key:'factory#2', name:'Factory', address:'2 Factory Street'},
@@ -22,10 +26,10 @@ require('./_payload_contract.cjs').assertPayloadShape({businesses}, 'order_check
 const keyed = r => r.slug ? r : {...r, slug: keyOf(r.item)};
 const build = (overrides = {}) => {
   const args = {imports:[], loose:[], sites:[], shops:[], checks:[], businesses, ...overrides};
-  return JSON.parse(JSON.stringify(context.buildOrderChecklist(
-    args.imports.map(d => ({...d, rows: d.rows.map(keyed)})), args.loose.map(keyed),
-    args.sites.map(s => ({...s, rows: s.rows.map(keyed)})), args.shops.map(keyed), args.checks.map(keyed),
-    args.businesses)));
+  return JSON.parse(JSON.stringify(context.buildOrderChecklist({
+    ...args, imports: args.imports.map(d => ({...d, rows: d.rows.map(keyed)})),
+    loose: args.loose.map(keyed), sites: args.sites.map(s => ({...s, rows: s.rows.map(keyed)})),
+    shops: args.shops.map(keyed), checks: args.checks.map(keyed)})));
 };
 // A fact as Python sends it, with only the fields a test cares about.
 const fact = (st, extra = {}) => ({st, why: null, lvl: st === 'covered' ? 'ok' : 'warn', setTo: null,
@@ -54,7 +58,7 @@ test('a wholesale contract short of the week that also runs dry gives two change
     role: 'shelf', cad: 'weekly', use: 1232, need: 1417, have: 1200, setTo: 1420, catchUp: 164, day: 'Monday', wholesale: true})};
   const depot = {s: 0, item: 'Syrup', slug: 'syrup', margin: 0.15, fact: fact('short', {why: 'order', lvl: 'critical',
     role: 'depot', cad: 'weekly', use: 1680, need: 1680, have: 1000, setTo: 1680, day: 'Monday', wholesale: true})};
-  const rows = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [], [shelf, depot])));
+  const rows = JSON.parse(JSON.stringify(context.buildOrderChecklist({businesses, wholesale:[shelf, depot]})));
   assert.deepEqual(rows.map(r => [r.kind, r.item, r.current, r.proposed]), [
     ['wholesale', 'Soda', 1200, 1420],
     ['once', 'Soda', null, 164],
@@ -68,9 +72,9 @@ test('a wholesale contract short of the week that also runs dry gives two change
 test('a depot only a route feeds gets its daily top-up, from the site whose plan sets it', () => {
   const depot = (st, have, item) => ({s: 0, item, slug: item, margin: 0.15,
     fact: fact(st, {role: 'depot', cad: 'daily', use: 100, need: 115, have, setTo: 120, from: 1})});
-  const rows = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses,
+  const rows = JSON.parse(JSON.stringify(context.buildOrderChecklist({businesses, depots:
     [depot('short', 80, 'Paper Bag'), depot('tight', 104, 'Soda'), {...depot('covered', 200, 'Cups'),
-      fact: fact('covered', {role: 'depot', cad: 'daily', have: 200, setTo: null})}])));
+      fact: fact('covered', {role: 'depot', cad: 'daily', have: 200, setTo: null})}]})));
   assert.deepEqual(rows.map(r => [r.kind, r.item, r.current, r.proposed, !!r.tight, r.source]), [
     ['depot', 'Paper Bag', 80, 120, false, 1],
     ['depot', 'Soda', 104, 120, true, 1]]);
@@ -621,7 +625,7 @@ test('a factory line short of its hours is one "Factory run hours" row; more hou
      sizedFor: 'cap'},
     {s: 1, item: 'Bread', slug: 'ba:itemname_bread', fact: {st: 'covered', why: null, lvl: 'ok', lower: 10}, hoursNow: 24, need: 10, machines: 2},
   ];
-  const rows = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [], [], lines)));
+  const rows = JSON.parse(JSON.stringify(context.buildOrderChecklist({businesses, lines})));
   assert.deepEqual(rows.map(r => [r.kind, r.item, r.current, r.proposed, r.mode]),
     [['hours', 'Cake', 12, 24, 'hours']]);
   assert.match(rows[0].reason, new RegExp("^" + enRe("sb.ck.staff.each", {item: "Cake", n: 24, m: 2, now: 12}).source + " " + enRe("sb.ck.hours.full").source));
@@ -662,18 +666,18 @@ test('a full-rate factory input and a depot feeding factory lines name no margin
   assert.match(input.reason, new RegExp(enRe("sb.ck.input.cap", {margin: ""}).source + "$"));
   const depot = {s: 0, item: 'Water', slug: 'water', margin: 0.15,
     fact: fact('short', {role: 'depot', cad: 'daily', use: 240, need: 240, have: 100, setTo: 240, from: 1})};
-  const [row] = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [depot])));
+  const [row] = JSON.parse(JSON.stringify(context.buildOrderChecklist({businesses, depots:[depot]})));
   assert.match(row.reason, new RegExp(enRe("sb.ck.depot.busiest", {n: 240, margin: ""}).source + "$"));
   // 240 a day to factory lines and 100 to shops at full production: 355, the
   // margin on the shops' share alone. Under shop demand it is on all of it.
   const mixed = sizedFor => ({...depot, sizedFor, fact: {...depot.fact, use: 340, need: sizedFor === 'dem' ? 391 : 355, setTo: 360}});
-  const [cap] = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [mixed('cap')])));
+  const [cap] = JSON.parse(JSON.stringify(context.buildOrderChecklist({businesses, depots:[mixed('cap')]})));
   assert.match(cap.reason, enRe("sb.ck.depot.busiest", {n: 340, margin: en("sb.ck.margin.shops.pct", {pct: 15})}));
-  const [dem] = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [mixed('dem')])));
+  const [dem] = JSON.parse(JSON.stringify(context.buildOrderChecklist({businesses, depots:[mixed('dem')]})));
   assert.match(dem.reason, enRe("sb.ck.depot.busiest", {n: 340, margin: en("sb.ck.margin.pct", {pct: 15})}));
   // A wholesale contract into a depot feeding lines and shops at full production.
   const ws = {s: 0, item: 'Syrup', slug: 'syrup', margin: 0.15, sizedFor: 'cap', fact: fact('short', {why: 'order', lvl: 'critical',
     role: 'depot', cad: 'weekly', use: 2380, need: 2485, have: 2000, setTo: 2490, wholesale: true, parts: {lines: 1680, sites: 700, route: 0}})};
-  const [w] = JSON.parse(JSON.stringify(context.buildOrderChecklist([], [], [], [], [], businesses, [], [ws])));
+  const [w] = JSON.parse(JSON.stringify(context.buildOrderChecklist({businesses, wholesale:[ws]})));
   assert.match(w.reason, enRe("sb.ck.ws.uses.all", {n: 2380, margin: en("sb.ck.margin.shops.pct", {pct: 15}), need: 2485}));
 });

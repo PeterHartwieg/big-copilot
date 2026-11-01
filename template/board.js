@@ -8398,7 +8398,7 @@ function sbMarginOn(r){
    "dem" (what the shops at the end of the chain use) or anything else, 24/7.
    A row with no figure to type (a review) carries `lead`: its first sentence
    as Today's Plan imports card says it mid-sentence. */
-function buildOrderChecklist(importRows, looseRows, sites, shops, imports, businesses, depots = [], wholesale = [], lines = [], deps = []){
+function buildOrderChecklist({imports: importRows = [], loose: looseRows = [], sites = [], shops = [], checks = [], businesses = [], depots = [], wholesale = [], lines = [], deps = []} = {}){
   const rows = [];
   const site = s => businesses[s];
   const address = s => site(s) ? `${site(s).name} · ${site(s).address}` : tt("sb.ck.depot.choose", "Choose a depot");
@@ -8477,7 +8477,7 @@ function buildOrderChecklist(importRows, looseRows, sites, shops, imports, busin
     sbCkJoin([tt("sb.ck.loose", "Choose a supplying depot before setting an order."),
       tt("sb.ck.loose.use", {one: "The factory lines use {n:,} unit/week.", other: "The factory lines use {n:,} units/week."}, {n: Math.round(r.week)})]))
     .lead = tt("sb.ck.lead.loose", "choose a supplying depot before setting an order"));
-  imports.forEach(r => {
+  checks.forEach(r => {
     const f = r.fact || {};
     if(f.demandApproximate || f.import?.demandApproximate) return;
     /* A factory input topped up each morning keeps its daily word; its own
@@ -9643,9 +9643,10 @@ function supplyChecklistRows(){
   /* The factory hours each proposed import figure assumes (sbDeps()). */
   importRows.forEach(x => x.rows.forEach(r => { r.deps = r.changed && Number.isFinite(r.value) ? sbDeps(f, r) : []; }));
   const deps = importRows.flatMap(x => x.rows.flatMap(r => r.deps.map(dep => ({...dep, for: r}))));
-  const rows = buildOrderChecklist(importRows, looseRows, allSites,
-    (D.supply.shops || []).filter(r => !restricted.has(r.s)).map(r => ({...r, fact: szFact(r.s, r.slug), margin})),
-    supplyImports().map(r => ({...r, fact: szFact(r.s, r.slug)})), D.businesses, depotTopups, wholesaleRows, lines, deps);
+  const rows = buildOrderChecklist({imports: importRows, loose: looseRows, sites: allSites,
+    shops: (D.supply.shops || []).filter(r => !restricted.has(r.s)).map(r => ({...r, fact: szFact(r.s, r.slug), margin})),
+    checks: supplyImports().map(r => ({...r, fact: szFact(r.s, r.slug)})), businesses: D.businesses,
+    depots: depotTopups, wholesale: wholesaleRows, lines, deps});
   return {f, importRows, looseRows, allSites, lines, rows, margin};
 }
 /* A fact under either basis, whatever is on screen. */
