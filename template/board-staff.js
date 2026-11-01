@@ -1019,7 +1019,7 @@ function hrRequest(m, o = {}){
     if(open.length) gaps.set(S.key, open);
   });
   const shown = m.sites.filter(S => touched.has(S.key) || gaps.has(S.key) || skipped.has(S.key));
-  return {body: {sites, hires, moves}, names, touched, rest, unreadableSites, zero, gaps, shown, skipped, mode, one, out, inScope, quick: !!Q, only: !!only,
+  return {body: {sites, hires, moves}, names, touched, rest, unreadableSites, zero, gaps, shown, skipped, mode, one, batch, out, inScope, quick: !!Q, only: !!only,
           weeks: sites.filter(s => s.days).length + rest.length};
 }
 /* --- drawing -------------------------------------------------------------- */
@@ -2090,6 +2090,25 @@ const hrSkippedSay = x => {
     default: return tt("co.hire.skip.gone", "{name} skipped: no longer among the employees on this board.", {name});
   }
 };
+/* The exact outgoing week, including the separate writes an older mod needs.
+   Both the expanded people and the fewer-hours summary read this table. */
+function hrSentPeople(req, S){
+  const days = req.body.sites.find(s => gwKeyOf(s.address) === S.key && s.days)?.days
+    || (req.rest || []).find(r => r.S.key === S.key)?.body.days;
+  if(!days) return null;
+  const people = new Map(), row = S.row || {};
+  days.forEach(({d, shifts}) => (shifts || []).forEach(s => {
+    if(!people.has(s.employeeId)) people.set(s.employeeId, {id: s.employeeId, slots: [], hours: 0, now: 0});
+    const p = people.get(s.employeeId);
+    p.slots.push({d, f: s.f, t: s.t, station: s.itemInstanceId});
+    p.hours += s.t - s.f;
+  }));
+  ((row.current || {}).list || []).forEach(s => {
+    const p = people.get(((row.people || [])[s.p] || {}).id);
+    if(p) p.now += s.t - s.f;
+  });
+  return [...people.values()];
+}
 /* Who goes where, one site a row, opened for its people. `phase`: ready,
    wait (applying) or done; `status`, once done, the outcome of each week an
    older mod writes after the hire, one by one: "wait", "done" or {say}. */
@@ -2130,9 +2149,22 @@ function hrReviewSites(req, phase, gone, status){
       <span class="m">${lv}</span><span class="m">${wage}</span>${hrWeekStrip(slots, cls === "gap")}<span class="m">${hours}</span></div>`;
     const struck = (c, g) => g ? `<span class="hr-struck">${spEsc(c.name)}</span>` : spEsc(c.name);
     const expired = tt("co.hire.p.expired", "application expired");
+    /* Hires and moves have their own rows below. Existing staff also belong
+       in an all-sites review, even when a site only changes its week. */
+    const incoming = new Set([...at.hires.map(h => h.c.id), ...moves.map(x => x.id)]);
+    const existing = open && weekly && req.batch ? (hrSentPeople(req, S) || []).filter(p => !incoming.has(p.id)) : [];
     const drawer = open ? `<div class="hr-dpeople"><div class="hr-dp hd"><span>${tt("co.hire.p.person", "Person")}</span><span>${tt("co.hire.p.role", "Role")}</span><span class="m">${
         tt("co.hire.p.skill", "Skill")}</span><span class="m">${tt("co.hire.p.wage", "$/h")}</span><span class="hr-wkd">${
         HR_DAYS.map(d => `<span>${ttDay(d)[0]}</span>`).join("")}</span><span class="m">${tt("co.hire.p.week", "Week")}</span></div>${
+      existing.map(p => {
+        const who = hrPerson(p.id, S.row), stations = (S.row || {}).stations || [];
+        const skills = [...new Set(p.slots.map(s => stations.find(st => st.id === s.station)?.skill).filter(Boolean))];
+        const levels = skills.map(skill => (who.skills || []).find(s => s.skill === skill)?.level
+          ?? (who.skill === skill ? who.level : undefined));
+        return person(spEsc(gwWho(p.id, S.row).name || tt("co.hire.someone", "someone")), {t: tt("co.hire.p.current", "already at this site")},
+          skills.map(hrRole).join(", ") || "–", levels.map(lv => lv == null ? "–" : `${Math.round(lv)}%`).join(", ") || "–",
+          hrWage(who.wageUnavailable ? null : who.wage), p.slots, `${p.hours} h`);
+      }).join("")}${
       hires.map(h => { const g = gone.has(h.c.id);
         return person(struck(h.c, g), {t: g ? expired : (h.misfit || []).length ? tt("co.hire.p.newbreak", "new hire · hours break a demand") : tt("co.hire.p.new", "new hire")},
           hrRole(h.skill), `${Math.round(hrLevel(h.c, h.skill))}%`, hrWage(h.c.wageUnavailable ? null : h.c.wage), weekly ? h.w.slots : [], weekly ? `${h.w.hours || 0} h` : "–", g ? "gap" : ""); }).join("")}${
@@ -2581,22 +2613,16 @@ function hrReview(o = {}, hooks = {}){
 function hrFewer(m, req, rewritten){
   const keys = new Set([...(rewritten || []).map(s => s && s.address && gwKeyOf(s.address)).filter(Boolean),
     ...((req && req.rest) || []).map(r => r.S.key)]);
-  /* The week each site is sent, against the game's: hours per person. */
-  const sent = new Map([...req.body.sites.filter(x => x.days).map(x => [gwKeyOf(x.address), x.days]),
-    ...(req.rest || []).map(r => [r.S.key, r.body.days])]);
   const away = new Set(req.body.moves.map(x => x.employeeId));
-  const sum = (map, id, h) => map.set(id, (map.get(id) || 0) + h);
   return m.sites.filter(S => keys.has(S.key) && !(S.site.kind === "office" && !spOfficeReplaces(S.row) && !((req.touched.get(S.key) || {}).inbound)))
     .flatMap(S => {
       const row = S.row || {};
+      const sent = hrSentPeople(req, S);
       /* A row that does not carry the game's week: the plan's own figures. */
-      if(!row.current || !sent.has(S.key)) return (S.plan.fewer || []).map(r => ({S, r}));
-      const now = new Map(), then = new Map();
-      (row.current.list || []).forEach(s => { const id = ((row.people || [])[s.p] || {}).id; if(spHasId(id)) sum(now, id, s.t - s.f); });
-      sent.get(S.key).forEach(({shifts}) => (shifts || []).forEach(x => sum(then, x.employeeId, x.t - x.f)));
+      if(!row.current || !sent) return (S.plan.fewer || []).map(r => ({S, r}));
       /* Nobody moved away, and nobody left with none (named on their own). */
-      return [...now].filter(([id, h]) => !away.has(id) && (then.get(id) || 0) > 0 && then.get(id) < h)
-        .map(([id, h]) => ({S, r: {id, name: gwWho(id, row).name, now: h, hours: then.get(id)}}));
+      return sent.filter(p => spHasId(p.id) && !away.has(p.id) && p.hours > 0 && p.hours < p.now)
+        .map(p => ({S, r: {id: p.id, name: gwWho(p.id, row).name, now: p.now, hours: p.hours}}));
     });
 }
 /* A site row in the review opens for its people. */
