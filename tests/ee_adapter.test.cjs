@@ -178,6 +178,32 @@ test('both installation modes describe EE deposits as 15 days and preserve vanil
   }
 });
 
+test('factory location and both investment modes describe EE deposits and preserve vanilla wording',()=>{
+  const board=loadBoard({}, {edit:s=>s.replace('/*__MAP_SCRIPT__*/',()=>fs.readFileSync(path.join(__dirname,'../web/map.js'),'utf8'))});
+  board.payload={...payload(),openFactory:{game:{},kits:{},shelf:{cc:60}}};
+  board.payload.premises.buildings[0].type='warehouse';
+  vm.runInContext('D=payload;planTarget="new"',board);
+  for(const ee of [true,false]){
+    board.payload.mods=ee?{economyExpansion:{settled:39}}:{};
+    const b=vm.runInContext('premises().buildings[0]',board);
+    const inv=board.ofCore().investment({building:b,counts:{}});
+    const where=board.ofWhereHtml();
+    assert.match(where,ee ? /<b>15 days<\/b>/ : /<b>~90 days<\/b>/);
+    for(const render of [board.ofFirmHtml,board.ofSelfHtml]){
+      const html=render(inv);
+      if(ee){
+        assert.equal(inv.deposit,15*b.rent);
+        assert.ok(html.includes(board.depositNote(b)));
+        assert.match(html,/Economy Expansion deposit: 15 days/);
+        assert.doesNotMatch(html,/90 days/);
+      }else assert.match(html,/bout 90 days of rent/);
+    }
+  }
+  board.payload.mods={economyExpansion:{settled:39}};
+  board.eeSetPreferences({rent:'off',utility:4});
+  assert.match(board.ofWhereHtml(),/<b>~90 days<\/b>/,'Rebalance off retains the vanilla deposit label');
+});
+
 test('map notes explain EE rent source, checks, deposit and owned exemption; vanilla payload is untouched',()=>{
   const board=loadBoard({}, {edit:s=>s.replace('/*__MAP_SCRIPT__*/',()=>fs.readFileSync(path.join(__dirname,'../web/map.js'),'utf8'))});
   board.payload=payload();vm.runInContext('D=payload',board);

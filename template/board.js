@@ -15240,9 +15240,10 @@ function ofShowFinder(){
   } else ofFinder.planFor(preset);
 }
 function ofWhereHtml(){
+  const ee = eeRules();
   const fact = (lab, b, s) => `<div><span class="os-lab">${lab}</span><b>${b}</b><small>${s}</small></div>`;
   return `<div class="ff-facts">${fact(tt("gr.of.where.building", "Building"), tt("gr.of.where.warehouse", "Warehouse"), tt("gr.of.where.warehouse.sub", "every factory rents one"))}${
-    fact(tt("gr.of.where.deposit", "Deposit"), tt("gr.of.where.days", "~90 days"), tt("gr.of.where.days.newLease", "for a new lease; none if already rented"))}${
+    fact(tt("gr.of.where.deposit", "Deposit"), ee?.rent.rebalance ? tt("gr.os.days", {one: "{n} day", other: "{n} days"}, {n: ee.depositDays}) : tt("gr.of.where.days", "~90 days"), tt("gr.of.where.days.newLease", "for a new lease; none if already rented"))}${
     fact(tt("gr.of.where.vehicles", "Vehicles"), tt("gr.of.where.slots", "H 1 · I–Q 2"), tt("gr.of.where.slots.sub", "one parking slot per truck"))}${
     fact(tt("gr.of.where.not", "Not counted"), tt("gr.of.where.distance", "distance"), tt("gr.of.where.distance.sub", "deliveries cost nothing by distance"))}</div>`;
 }
@@ -15296,7 +15297,7 @@ function ofSelfHtml(inv){
     <table><tbody><tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: 1, item: spEsc(truck.name || "")})}</td><td class="w"><span class="os-tag req">${
       tt("gr.of.why.truck", "One vehicle to deliver")}</span> <span class="os-tag cap">${tt("gr.of.why.driver", "Driver at 95% skill")}</span></td><td>${fmt(inv.truck)}</td></tr></tbody></table></div>` : "";
   const dep = inv.deposit || inv.deposit===null ? `<div class="os-store"><div class="os-sh"><span class="k p">${osIcon("key")}</span><span><b>${tt("gr.os.inv.deposit", "Deposit")}</b><small>${
-    mcLeaseNote(inv.b,tt("gr.of.self.deposit", "about 90 days of rent ({rent}/day) with the building's own fittings · refunded when the lease ends", {rent: mcEstimateMoney(inv.b.rent)}))}</small></span><span class="t">${mcLeaseMoney(inv.b,inv.deposit)}</span></div></div>` : "";
+    eeRules() ? depositNote(inv.b) : mcLeaseNote(inv.b,tt("gr.of.self.deposit", "about 90 days of rent ({rent}/day) with the building's own fittings · refunded when the lease ends", {rent: mcEstimateMoney(inv.b.rent)}))}</small></span><span class="t">${mcLeaseMoney(inv.b,inv.deposit)}</span></div></div>` : "";
   const depot = inv.depot ? `<div class="os-store"><div class="os-sh"><span class="k p">${spIcon("crate")}</span><span><b>${tt("gr.of.depot.title", "A depot")}</b><small>${
       ofDepotNote(inv.depot.b)}</small></span><span class="t">${mcEstimateMoney(inv.depot.total)}</span></div>
     <table><tbody><tr><td class="l">${tt("gr.os.inv.deposit", "Deposit")}</td><td class="w"></td><td>${mcLeaseMoney(inv.depot.b,inv.depot.deposit)}</td></tr>
@@ -15331,7 +15332,7 @@ function ofFirmHtml(inv){
     `<tr><td class="l">${spEsc(truck.name || "")}<span class="sub">${spEsc(truck.dealer || "")} · ${spEsc(ofAddress(truck.at))}</span></td><td class="w"><span class="os-tag req">${
       tt("gr.of.why.truck", "One vehicle to deliver")}</span></td><td>1</td><td>${fmt(inv.truck)}</td><td>${fmt(inv.truck)}</td></tr>`);
   if(inv.deposit || inv.deposit===null) rows.push(grp(tt("gr.os.inv.deposit", "Deposit"), tt("gr.os.inv.deposit.note", "refunded when the lease ends"), inv.deposit),
-    `<tr><td class="l">${inv.b.leaseBasis ? tt("gr.os.inv.deposit", "Deposit") : tt("gr.of.firm.deposit", "About 90 days of rent")}<span class="sub">${mcLeaseNote(inv.b,tt("gr.of.firm.deposit.sub", "{rent}/day, with the building's own fittings", {rent: mcEstimateMoney(inv.b.rent)}))}</span></td><td class="w"></td><td></td><td></td><td>${mcLeaseMoney(inv.b,inv.deposit)}</td></tr>`);
+    `<tr><td class="l">${inv.b.leaseBasis || eeRules() ? tt("gr.os.inv.deposit", "Deposit") : tt("gr.of.firm.deposit", "About 90 days of rent")}<span class="sub">${eeRules() ? depositNote(inv.b) : mcLeaseNote(inv.b,tt("gr.of.firm.deposit.sub", "{rent}/day, with the building's own fittings", {rent: mcEstimateMoney(inv.b.rent)}))}</span></td><td class="w"></td><td></td><td></td><td>${mcLeaseMoney(inv.b,inv.deposit)}</td></tr>`);
   if(inv.depot) rows.push(grp(tt("gr.of.depot.title", "A depot"), ofDepotNote(inv.depot.b), inv.depot.total));
   const callout = !owned && Number.isFinite(inv.firm) && Number.isFinite(inv.self) && inv.fee > inv.furniture ? `<div class="ff-callout">${spIcon("alert")}<span>${tt("gr.of.firm.callout", "<b>The fee alone is {fee}</b>, more than the machines: a factory floor is {m2} m². Self-installation saves {w} here.",
       {fee: fmt(inv.fee), m2: num(inv.b.m2 || 0), w: fmt(inv.firm - inv.self)})}</span></div>`
