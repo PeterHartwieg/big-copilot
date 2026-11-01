@@ -2909,7 +2909,7 @@ function mdFlag(m){
   const parts = [], tips = [];
   if(m.economyExpansion){
     parts.push(tt("nav.mast.mods.ee", "ECONOMY EXPANSION"));
-    tips.push(tt("nav.mast.mods.ee.tip", "Economy Expansion is running (it last settled on day {d}). Rent, deposits and running costs for buildings you have not rented are still the game's own here.",
+    tips.push(tt("nav.mast.mods.ee.tip", "Economy Expansion is running (it last settled on day {d}). Estimated rent, deposits and new-site planner running costs follow EE. Results breakdown, Payback and office findings do not yet account for EE.",
       {d: m.economyExpansion.settled}));
   }
   const se = m.seasons;
@@ -12893,11 +12893,100 @@ let osOptOn = null;
 const osOptional = () => osOptOn === null ? (osOptOn = remembered(OS_OPT_KEY) === "1") : osOptOn;
 function osSetOptional(on){ osOptOn = !!on; remember(OS_OPT_KEY, on ? "1" : "0"); }
 let osCoreCache = null;
+/* EE preferences are per character, with a session copy when storage is denied.
+   Inputs and derived premises are detached; changing a preference never edits D.
+   Option indices/steps/default: EE Workshop 2026-10-14, DLL sha256
+   4b29fe1d3e293d06, SetRuntimeBalanceOptions/DefaultUtilityCostIndex. */
+const EE_PREF_KEY = 'ba_ee_costs_v1';
+const EE_PREF_RECORD = {
+  rent: KEEP.oneOf(['auto','off',...Array.from({length:21},(_,i)=>String(i))], 'auto'),
+  utility: KEEP.oneOf(Array.from({length:21},(_,i)=>i), 4),
+};
+const eePreferenceCache = new Map();
+let eeRulesCache = null, eePremisesCache = null;
+const eePreferenceStore = () => `${EE_PREF_KEY}:${D?.meta?.character || 'default'}`;
+function eePreferences(){
+  const key=eePreferenceStore();
+  if(!eePreferenceCache.has(key)) eePreferenceCache.set(key,rememberedRecord(key,EE_PREF_RECORD));
+  return eePreferenceCache.get(key);
+}
+function eeSetPreferences(value){
+  const next=keptRecord(value,EE_PREF_RECORD), key=eePreferenceStore();
+  eePreferenceCache.set(key,next);rememberJson(key,next);
+  eeRulesCache=null;eePremisesCache=null;
+}
+function eeRules(){
+  if(!D?.mods?.economyExpansion) return null;
+  const raw=D.premises?.rent?.economyExpansion || D.openStore?.economyExpansion || D.openFactory?.economyExpansion;
+  if(!raw) return null;
+  const pref=eePreferences();
+  if(eeRulesCache?.raw===raw && eeRulesCache.pref===pref) return eeRulesCache.value;
+  const rent=pref.rent==='auto' ? raw.rent : {...raw.rent,source:'preference',
+    rebalance:pref.rent!=='off',factor:pref.rent==='off'?1:Number(pref.rent)/10};
+  const value={...raw,rent,utilityFactor:pref.utility*.25};
+  eeRulesCache={raw,pref,value};return value;
+}
+function eePremises(raw){
+  const rules=eeRules();
+  if(!raw || !rules) return raw;
+  if(eePremisesCache?.raw===raw && eePremisesCache.rules===rules) return eePremisesCache.value;
+  const buildings=raw.buildings.map(b=>{
+    if(!b.ee) return b;
+    const base=b.ee.vanillaRent;
+    const rent=b.ee.owned?0:base==null?null:rules.rent.rebalance?Math.floor(Math.max(1,base*b.ee.multiplier*rules.rent.factor)+.5):base;
+    const factor=raw.rent.deposit.factors[b.type==='warehouse'?'warehouse':'lease'];
+    const deposit=b.ee.owned?0:rent==null?null:rules.rent.rebalance?rent*rules.depositDays:Math.round(rent*factor/10)*10;
+    return {...b,rent,deposit};
+  });
+  const deviations=buildings.filter(b=>!b.ee?.owned && b.ee?.checkLease && b.ee.paidRent>0 && b.rent!=null)
+    .map(b=>Math.abs(b.rent-b.ee.paidRent)/b.ee.paidRent);
+  const deposits=buildings.flatMap(b=>(b.ee?.deposits || []).filter(p=>b.rent>0 &&
+    (rules.rent.rebalance ? p/b.rent>=10 && p/b.rent<=20 : p/b.rent>=30 && p/b.rent<=300))
+    .map(p=>Math.abs(b.deposit-p)/p));
+  const value={...raw,buildings,rent:{...raw.rent,economyExpansion:rules,
+    check:{leases:deviations.length,worst:deviations.length?Math.max(...deviations):0},
+    deposit:{...raw.rent.deposit,check:{deposits:deposits.length,worst:deposits.length?Math.max(...deposits):0}}}};
+  eePremisesCache={raw,rules,value};return value;
+}
+function eeSourceText(rules=eeRules()){
+  if(!rules) return '';
+  const r=rules.rent;
+  const source=r.source==='leases' ? tt('nav.ee.derived', {one:'Derived from {n} lease (matching the selected setting: {s}).',other:'Derived from {n} leases (matching the selected setting: {s}).'}, {n:r.leases,s:r.support})
+    : tt('nav.ee.preference', 'From your per-character preference.');
+  return (r.rebalance ? tt('nav.ee.rent', 'Economy Expansion Rent Costs: {x:.2f}x.', {x:r.factor})
+    : tt('nav.ee.off', 'Economy Expansion Rent Rebalance is off; rent and deposits use vanilla estimates.'))+' '+source;
+}
+function eeCostsHtml(cost){
+  if(!cost) return '';
+  const source=cost.source==='charges' ? tt('gr.ee.observed', 'Utilities use your EE charges (sites: {n}; charged days: {d}).', {n:cost.sites,d:cost.days})
+    : tt('gr.ee.quote', 'Utilities use EE quote rates and Utility Costs {x:.2f}x from your preference.', {x:cost.utilityFactor});
+  const plan={business:tt('gr.ee.internet.business', 'Business'),fast:tt('gr.ee.internet.fast', 'Fast'),
+    fiber:tt('gr.ee.internet.fiber', 'Fiber')}[cost.internetPlan] || '';
+  const office=cost.office ? cost.hq
+    ? tt('gr.ee.headquarters', 'Assumes an active {plan} internet plan, CloudHarbor Core and Voogle Starter for the planned headquarters roles (software seats: {n}, one per role).', {plan,n:cost.seats})
+    : tt('gr.ee.office', 'Assumes an active {plan} internet plan, CloudHarbor Core, Voogle Starter and required specialist software for full office capacity, with an estimated employee count of {n} based on 40-hour weeks. EE closes an office without internet and reduces capacity without these services.', {plan,n:cost.seats}) : '';
+  return `<p class="os-note">${spEsc(tt('gr.ee.costs', 'Economy Expansion: {daily:$}/day in deductible running costs; {setup:$} in installation and software setup.', {daily:cost.daily,setup:cost.startup || 0}))} ${spEsc(source)} ${spEsc(office)}</p>`;
+}
+function eePreferencesHtml(){
+  if(!D?.mods?.economyExpansion) return '';
+  if(!eeRules() && !odReady('premises')) odThen('premises',()=>{
+    if(pxWhich==='prefs' && !pxSheet.hidden) pxRender('prefs');
+  },'ee-preferences');
+  const pref=eePreferences();
+  const option=(value,label,on)=>`<option value="${attr(String(value))}"${on?' selected':''}>${spEsc(label)}</option>`;
+  const rent=option('auto',tt('nav.ee.auto','Automatic from leases (fallback 0.30x)'),pref.rent==='auto')+
+    option('off',tt('nav.ee.offOption','Rent Rebalance off'),pref.rent==='off')+
+    Array.from({length:21},(_,i)=>option(String(i),tt('nav.ee.factor','{x:.2f}x',{x:i/10}),pref.rent===String(i))).join('');
+  const utility=Array.from({length:21},(_,i)=>option(i,tt('nav.ee.factor','{x:.2f}x',{x:i*.25}),pref.utility===i)).join('');
+  return pxRow('ee',tt('nav.ee.title','Economy Expansion'),tt('nav.ee.lead','Kept per character; estimates update immediately. These preferences do not change EE in the game.'),
+    `<p class="px-note">${eeRules()?spEsc(eeSourceText()):odWaitHtml('premises',true)}</p><div class="px-acts px-ee-controls"><label>${tt('nav.ee.rentLabel','Rent Costs')} <select data-ee-pref="rent">${rent}</select></label>
+    <label>${tt('nav.ee.utilityLabel','Utility Costs')} <select data-ee-pref="utility">${utility}</select></label></div>`);
+}
 function osCore(){
   const facts=osFacts(), businesses=D?.businesses, day=D?.meta?.day, optional=osOptional();
-  const key=[D,facts,businesses,day,optional];
+  const occupancy=eeRules(), key=[D,facts,businesses,day,optional,occupancy];
   if(!osCoreCache || key.some((v,i)=>v!==osCoreCache.key[i]))
-    osCoreCache={key,model:OpenStoreModel.create({facts,company:{businesses:businesses || [],day},optional})};
+    osCoreCache={key,model:OpenStoreModel.create({facts,company:{businesses:businesses || [],day},optional,occupancy})};
   return osCoreCache.model;
 }
 const osType = (...args) => osCore().type(...args);
@@ -13214,7 +13303,7 @@ function osInvestHtml(plan){
   const skills = (osType(plan.type) || {}).staffSkills || [];
   const note = osIsHq(plan) ? `<p class="os-note">${tt("gr.os.hq.outfit", "{n} workstations by default, one per headquarters role: {roles}.",
     {n: skills.length, roles: grList(skills.map(k => spEsc(gameName(k))))})}</p>` : "";
-  return osToolbar(plan, inv, out) + note + mcCostsHtml(inv.modCosts, inv.modRequirements, inv.incomplete) + (osMode(plan) === "self" ? osSelfHtml(b, out, inv) : osFirmHtml(b, out, inv))
+  return osToolbar(plan, inv, out) + note + eeCostsHtml(inv.occupancyCosts) + mcCostsHtml(inv.modCosts, inv.modRequirements, inv.incomplete) + (osMode(plan) === "self" ? osSelfHtml(b, out, inv) : osFirmHtml(b, out, inv))
     + (osIsHq(plan) ? osHqRunningHtml(b) : "");
 }
 /* HQ roles and hours are the player's choices, so only the rent is priced. */
@@ -13268,7 +13357,7 @@ function osFirmHtml(b, out, inv){
     });
   });
   rows.push(grp(tt("gr.os.inv.deposit", "Deposit"), b.status === "mine" ? depositNote(b) : tt("gr.os.inv.deposit.note", "refunded when the lease ends"), inv.deposit));
-  if(b.status !== "mine") rows.push(`<tr><td class="l">${tt("gr.os.inv.deposit.est", "Estimated deposit")}<span class="sub">${mcLeaseNote(b,tt("gr.os.inv.deposit.estSub", "about 60 days of rent, with the building's own fittings"))}</span></td><td class="w"></td><td></td><td></td><td>${mcLeaseMoney(b,inv.deposit)}</td></tr>`);
+  if(b.status !== "mine") rows.push(`<tr><td class="l">${tt("gr.os.inv.deposit.est", "Estimated deposit")}<span class="sub">${eeRules() ? depositNote(b) : mcLeaseNote(b,tt("gr.os.inv.deposit.estSub", "about 60 days of rent, with the building's own fittings"))}</span></td><td class="w"></td><td></td><td></td><td>${mcLeaseMoney(b,inv.deposit)}</td></tr>`);
   return `<table class="os-inv"><thead><tr><th class="l">${tt("gr.os.inv.col.item", "Item")}</th><th class="l">${tt("gr.os.inv.col.why", "Why")}</th>
     <th>${tt("gr.os.inv.col.qty", "Qty")}</th><th>${tt("gr.os.inv.col.each", "Each")}</th><th>${tt("gr.os.inv.col.total", "Total")}</th></tr></thead>
     <tbody>${rows.join("")}</tbody><tfoot><tr><td class="l">${tt("gr.os.inv.total", "Investment")}</td><td></td><td></td><td></td><td>${mcEstimateMoney(inv.firm)}</td></tr></tfoot></table>`;
@@ -13295,7 +13384,7 @@ function osSelfHtml(b, out, inv){
     <table><tbody>${decor.floors ? `<tr><td class="l">${tt("gr.os.self.floors", "{n} floor tiles at {p}", {n: num(decor.floors), p: fmt(decor.floorPrice)})}</td><td class="w">${interior}</td><td>${fmt(decor.floors * decor.floorPrice)}</td></tr>` : ""}${
       decor.walls ? `<tr><td class="l">${tt("gr.os.self.wallslots", "{n} wall slots at {p}", {n: num(decor.walls), p: fmt(decor.wallPrice)})}</td><td class="w">${interior}</td><td>${fmt(decor.walls * decor.wallPrice)}</td></tr>` : ""}</tbody></table></div>` : "";
   const dep = `<div class="os-store"><div class="os-sh"><span class="k p">${osIcon("key")}</span><span><b>${tt("gr.os.inv.deposit", "Deposit")}</b><small>${
-    b.status === "mine" ? depositNote(b) : mcLeaseNote(b,tt("gr.os.self.deposit.est", "estimated: about 60 days of rent, with the building's own fittings · refunded when the lease ends"))}</small></span><span class="t">${mcLeaseMoney(b,inv.deposit)}</span></div></div>`;
+    b.status === "mine" || eeRules() ? depositNote(b) : mcLeaseNote(b,tt("gr.os.self.deposit.est", "estimated: about 60 days of rent, with the building's own fittings · refunded when the lease ends"))}</small></span><span class="t">${mcLeaseMoney(b,inv.deposit)}</span></div></div>`;
   const legend = stores.map((s, i) => `<div><i>${osLetter(i)}</i><span>${spEsc((vendors[s.key] || {}).n || s.key)}</span><b>${mcPriceMoney(F,s.lines.map(k=>out.lines[k]),storeTotal(s))}</b></div>`).join("")
     + `<div><i class="n">${tt("gr.os.map.new", "NEW")}</i><span>${spEsc(b.address)}</span><b></b></div>`;
   const note = unsold.length ? `<p class="quiet os-gap">${tt("gr.os.self.unsold", "No store the game's help names sells these: {items}.", {items: unsold.map(l => osItemName(l[0])).join(", ")})}</p>` : "";
@@ -13356,6 +13445,7 @@ function osBreakHtml(plan){
     row(tt("gr.os.be.wages", "Wages"), fmt(-m.wages)),
     row(tt("gr.os.be.rent", "Rent"), fmt(-m.rent)),
     row(tt("gr.os.be.marketing", "Marketing"), fmt(-m.marketing)),
+    m.occupancyCosts ? row(tt("gr.ee.row", "Economy Expansion running costs"), fmt(-m.occupancyCosts.daily)) : "",
     m.modCosts && Number.isFinite(m.modCosts.dailyCents) ? row(tt("gr.mod.running", "Mod operating costs"), fmt(-m.modCosts.dailyCents / 100)) : "",
   ].join("");
   const lines = [
@@ -13378,7 +13468,7 @@ function osBreakHtml(plan){
         always: osOfficeStaffed(osCap(b), osCap(b), 1, 3)})
     : tt("gr.os.be.assume2", "Open 24/7, the type's whole range at the highest price every customer in {hood} accepts, satisfaction {sat}, the best marketing: {mix}. Sold {units} units to {n} customers a day. The first five days earn less while satisfaction and new staff settle, and the days to break even count that.",
       {hood: hoodName(b.hood), sat: osSatisfaction(plan.type), mix, units: num(Math.round(m.lines.reduce((s, l) => s + l.units, 0))), n: num(Math.round(m.customers))});
-  return `${mcCostsHtml(m.modCosts)}${b.status === "mine" ? `<p class="os-note">${tt("gr.os.be.depositBasis", "This forecast covers the setup still to pay for. After opening, the comparison includes the earlier rental deposit in both planned and actual investment.")}</p>` : ""}<div class="os-be">
+  return `${eeCostsHtml(m.occupancyCosts)}${mcCostsHtml(m.modCosts)}${b.status === "mine" ? `<p class="os-note">${tt("gr.os.be.depositBasis", "This forecast covers the setup still to pay for. After opening, the comparison includes the earlier rental deposit in both planned and actual investment.")}</p>` : ""}<div class="os-be">
   <div class="os-card"><div class="os-big">${big(mode)}${big(other, true)}</div>${osChart(est, mode)}</div>
   <div class="os-card"><h3>${tt("gr.os.be.profit", "Expected profit a day")}</h3>
     <div class="os-sites">${detail}<div class="os-site avg"><span><b>${tt("gr.os.be.estimate", "The game's rules")}</b><small>${
@@ -14883,9 +14973,9 @@ const ofSized = (l, mode) => l.rate && (mode === "peak" ? l.peakDay : l.avgDay) 
 let ofCoreCache = null;
 function ofCore(){
   const facts=ofFacts(), aliases=D.supply?.factories?.aliases, sources=D.plan?.sources;
-  const key=[D,facts,RECIPE_BY,aliases,sources,HOURS,D.meta?.day];
+  const occupancy=eeRules(), key=[D,facts,RECIPE_BY,aliases,sources,HOURS,D.meta?.day,occupancy];
   if(!ofCoreCache || key.some((v,i)=>v!==ofCoreCache.key[i]))
-    ofCoreCache={key,model:OpenFactoryModel.create({facts,recipes:RECIPE_BY,aliases:aliases || {},sources:sources || {},hours:HOURS})};
+    ofCoreCache={key,model:OpenFactoryModel.create({facts,recipes:RECIPE_BY,aliases:aliases || {},sources:sources || {},hours:HOURS,occupancy})};
   return ofCoreCache.model;
 }
 const ofProd = slug => ofCore().product(slug);
@@ -15033,11 +15123,11 @@ function ofStripHtml(plan){
       : mode === "self" ? tt("gr.of.strip.self", "Self-installation · one-off, upfront") : tt("gr.of.strip.firm", "Installation firm · one-off, upfront")}</small>`
     : `<b class="dim">–</b><small>${tt("gr.os.strip.afterWhere", "after the location")}</small>`;
   const run = ofRunning(plan, inv);
-  const parts = !run ? "" : run.rent ? tt("gr.of.strip.run.rent", "raw {raw} · wages {wages} · rent {rent}", {raw: fmt(run.raw), wages: fmt(run.wages), rent: fmt(run.rent)})
-    : tt("gr.of.strip.run", "raw {raw} · wages {wages}", {raw: fmt(run.raw), wages: fmt(run.wages)});
+  const parts = (!run ? "" : run.rent ? tt("gr.of.strip.run.rent", "raw {raw} · wages {wages} · rent {rent}", {raw: fmt(run.raw), wages: fmt(run.wages), rent: fmt(run.rent)})
+    : tt("gr.of.strip.run", "raw {raw} · wages {wages}", {raw: fmt(run.raw), wages: fmt(run.wages)})) + (run?.occupancyCosts ? " · " + tt("gr.ee.week", "EE {w}/week", {w:fmt(run.occupancyCosts.daily*7)}) : "");
   const running = !run || run.total == null ? `<b class="dim">${tt("gr.os.none.short", "No estimate")}</b>${planCompatibilityHtml(ofFacts(), "factoryRunning")}` : `<b class="m">${tt("gr.of.strip.week", "{w}/week", {w: fmt(run.total)})}</b><small>${parts}</small><small>${tt("gr.of.strip.notInv", "not in the investment")}</small>`;
   return `<div class="os-pb ff-pb">${cell(tt("gr.of.strip.make", "Make"), make)}${cell(tt("gr.os.strip.whereLab", "Where"), where)}${
-    cell(tt("gr.os.strip.invest", "Investment"), invest + planCompatibilityHtml(ofFacts(), "factoryOpening"))}${cell(owned ? tt("gr.of.strip.runAdded", "Running costs added") : tt("gr.of.strip.runLab", "Running costs"), running + mcCostsHtml(run?.modCosts, [], run?.incomplete, true), "ff-run")}</div>`;
+    cell(tt("gr.os.strip.invest", "Investment"), invest + planCompatibilityHtml(ofFacts(), "factoryOpening"))}${cell(owned ? tt("gr.of.strip.runAdded", "Running costs added") : tt("gr.of.strip.runLab", "Running costs"), running + (run?.occupancyCosts?.entries || []).map(eeCostsHtml).join("") + mcCostsHtml(run?.modCosts, [], run?.incomplete, true), "ff-run")}</div>`;
 }
 
 /* Step 1, above the lines: what the shops buy that a factory can make, each
@@ -15152,9 +15242,10 @@ function ofShowFinder(){
   } else ofFinder.planFor(preset);
 }
 function ofWhereHtml(){
+  const ee = eeRules();
   const fact = (lab, b, s) => `<div><span class="os-lab">${lab}</span><b>${b}</b><small>${s}</small></div>`;
   return `<div class="ff-facts">${fact(tt("gr.of.where.building", "Building"), tt("gr.of.where.warehouse", "Warehouse"), tt("gr.of.where.warehouse.sub", "every factory rents one"))}${
-    fact(tt("gr.of.where.deposit", "Deposit"), tt("gr.of.where.days", "~90 days"), tt("gr.of.where.days.newLease", "for a new lease; none if already rented"))}${
+    fact(tt("gr.of.where.deposit", "Deposit"), ee?.rent.rebalance ? tt("gr.os.days", {one: "{n} day", other: "{n} days"}, {n: ee.depositDays}) : tt("gr.of.where.days", "~90 days"), tt("gr.of.where.days.newLease", "for a new lease; none if already rented"))}${
     fact(tt("gr.of.where.vehicles", "Vehicles"), tt("gr.of.where.slots", "H 1 · I–Q 2"), tt("gr.of.where.slots.sub", "one parking slot per truck"))}${
     fact(tt("gr.of.where.not", "Not counted"), tt("gr.of.where.distance", "distance"), tt("gr.of.where.distance.sub", "deliveries cost nothing by distance"))}</div>`;
 }
@@ -15208,7 +15299,7 @@ function ofSelfHtml(inv){
     <table><tbody><tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: 1, item: spEsc(truck.name || "")})}</td><td class="w"><span class="os-tag req">${
       tt("gr.of.why.truck", "One vehicle to deliver")}</span> <span class="os-tag cap">${tt("gr.of.why.driver", "Driver at 95% skill")}</span></td><td>${fmt(inv.truck)}</td></tr></tbody></table></div>` : "";
   const dep = inv.deposit || inv.deposit===null ? `<div class="os-store"><div class="os-sh"><span class="k p">${osIcon("key")}</span><span><b>${tt("gr.os.inv.deposit", "Deposit")}</b><small>${
-    mcLeaseNote(inv.b,tt("gr.of.self.deposit", "about 90 days of rent ({rent}/day) with the building's own fittings · refunded when the lease ends", {rent: mcEstimateMoney(inv.b.rent)}))}</small></span><span class="t">${mcLeaseMoney(inv.b,inv.deposit)}</span></div></div>` : "";
+    eeRules() ? depositNote(inv.b) : mcLeaseNote(inv.b,tt("gr.of.self.deposit", "about 90 days of rent ({rent}/day) with the building's own fittings · refunded when the lease ends", {rent: mcEstimateMoney(inv.b.rent)}))}</small></span><span class="t">${mcLeaseMoney(inv.b,inv.deposit)}</span></div></div>` : "";
   const depot = inv.depot ? `<div class="os-store"><div class="os-sh"><span class="k p">${spIcon("crate")}</span><span><b>${tt("gr.of.depot.title", "A depot")}</b><small>${
       ofDepotNote(inv.depot.b)}</small></span><span class="t">${mcEstimateMoney(inv.depot.total)}</span></div>
     <table><tbody><tr><td class="l">${tt("gr.os.inv.deposit", "Deposit")}</td><td class="w"></td><td>${mcLeaseMoney(inv.depot.b,inv.depot.deposit)}</td></tr>
@@ -15243,7 +15334,7 @@ function ofFirmHtml(inv){
     `<tr><td class="l">${spEsc(truck.name || "")}<span class="sub">${spEsc(truck.dealer || "")} · ${spEsc(ofAddress(truck.at))}</span></td><td class="w"><span class="os-tag req">${
       tt("gr.of.why.truck", "One vehicle to deliver")}</span></td><td>1</td><td>${fmt(inv.truck)}</td><td>${fmt(inv.truck)}</td></tr>`);
   if(inv.deposit || inv.deposit===null) rows.push(grp(tt("gr.os.inv.deposit", "Deposit"), tt("gr.os.inv.deposit.note", "refunded when the lease ends"), inv.deposit),
-    `<tr><td class="l">${inv.b.leaseBasis ? tt("gr.os.inv.deposit", "Deposit") : tt("gr.of.firm.deposit", "About 90 days of rent")}<span class="sub">${mcLeaseNote(inv.b,tt("gr.of.firm.deposit.sub", "{rent}/day, with the building's own fittings", {rent: mcEstimateMoney(inv.b.rent)}))}</span></td><td class="w"></td><td></td><td></td><td>${mcLeaseMoney(inv.b,inv.deposit)}</td></tr>`);
+    `<tr><td class="l">${inv.b.leaseBasis || eeRules() ? tt("gr.os.inv.deposit", "Deposit") : tt("gr.of.firm.deposit", "About 90 days of rent")}<span class="sub">${eeRules() ? depositNote(inv.b) : mcLeaseNote(inv.b,tt("gr.of.firm.deposit.sub", "{rent}/day, with the building's own fittings", {rent: mcEstimateMoney(inv.b.rent)}))}</span></td><td class="w"></td><td></td><td></td><td>${mcLeaseMoney(inv.b,inv.deposit)}</td></tr>`);
   if(inv.depot) rows.push(grp(tt("gr.of.depot.title", "A depot"), ofDepotNote(inv.depot.b), inv.depot.total));
   const callout = !owned && Number.isFinite(inv.firm) && Number.isFinite(inv.self) && inv.fee > inv.furniture ? `<div class="ff-callout">${spIcon("alert")}<span>${tt("gr.of.firm.callout", "<b>The fee alone is {fee}</b>, more than the machines: a factory floor is {m2} m². Self-installation saves {w} here.",
       {fee: fmt(inv.fee), m2: num(inv.b.m2 || 0), w: fmt(inv.firm - inv.self)})}</span></div>`
@@ -16858,8 +16949,8 @@ function modCatalogue(){
      reads: [tt("nav.mods.retail.reads", "A renovated building's capacity and floor area come from the mod's records.")],
      limits: [tt("nav.mods.retail.limits", "When its records cannot be read, estimates that need a building's capacity or floor area are left out.")]},
     {id: "economyExpansion", ws: "3811945186",
-     reads: [tt("nav.mods.ee.reads", "Rent prices for buildings you own follow the multiplier the save records.")],
-     limits: [tt("nav.mods.ee.limits", "Rent, deposits and running costs of buildings you have not rented are still the game's own figures.")]},
+     reads: [tt("nav.mods.ee.reads", "Owned-building rental income follows the multiplier the save records; estimated leases, deposits and new-site planner running costs follow EE.")],
+     limits: [tt("nav.mods.ee.limits", "Results breakdown, Payback and office findings do not yet account for EE; new-site figures are estimates from EE code, not yet checked against a modded save.")]},
   ].map(m => {
     /* The Workshop's title and author, and the summary shortened from its description. */
     const w = MOD_WORKSHOP.find(x => x.id === m.ws) || {};
@@ -22219,7 +22310,7 @@ function pxPrefsHtml(){
       rlOn ? tt("nav.px.rv.on", "Shown") : tt("nav.px.rv.off", "Hidden")}</span></div>`);
   const cli = pxRow("cli", tt("nav.px.cli.title", "Local board"), "",
     `<pre class="px-code">python ba_dashboard.py --watch     ${tt("nav.px.cli.watch", "# follow the save folder")}\npython ba_dashboard.py --game      ${tt("nav.px.cli.game", "# read the running game")}\npython ba_dashboard.py --backfill  ${tt("nav.px.cli.backfill", "# rebuild history from old saves")}</pre>`);
-  return gametext + history + checks + context + rivalry + cli;
+  return gametext + history + checks + context + eePreferencesHtml() + rivalry + cli;
 }
 function pxHelpHtml(){
   const foot = q(".wrap > .sitefoot") || q(".sitefoot");
@@ -22344,6 +22435,18 @@ pxSheet.addEventListener("click", e => {
     const help = $("help");
     if(help){ help.open = true; const s = help.querySelector("summary"); if(s) s.focus({preventScroll: true}); }
   }
+});
+pxSheet.addEventListener('change', e=>{
+  const key=e.target.dataset?.eePref;
+  if(!['rent','utility'].includes(key)) return;
+  const value=key==='utility'?Number(e.target.value):e.target.value;
+  eeSetPreferences({...eePreferences(),[key]:value});
+  // Redraw through the existing page/section adapters. Cached planner inputs
+  // include eeRules(), so marketing, finance and finder sorting all refresh.
+  if(odReady('openStore')) drawOpenStore();
+  if(odReady('openFactory')) ofDraw();
+  if(typeof refreshCityMaps==='function') refreshCityMaps();
+  pxRender('prefs');wireTips();
 });
 /* Escape closes the sheet, unless a popover the sheet opened is up: that one
    closes first (each listens itself). Listened to in the capture phase, so

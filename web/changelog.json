@@ -1,5 +1,11 @@
 [
   {
+    "pr": 558,
+    "date": "2026-11-01",
+    "title": "Plan new locations with Economy Expansion",
+    "summary": "Detected Economy Expansion saves now adjust estimated rent, deposits and new-site running costs in the location finder, Open a store and Plan a factory. Per-character rent and utility preferences update estimates immediately. Office plans include internet and software for full capacity. Figures follow EE code and await checks against a modded save."
+  },
+  {
     "pr": 552,
     "date": "2026-11-01",
     "title": "Big Copilot Link 0.8.3: host allowlist",

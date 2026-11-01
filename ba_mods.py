@@ -31,6 +31,7 @@ import ba_rlo
 import ba_hart
 import ba_economy
 import ba_companion
+from collections import Counter, defaultdict
 
 ECONOMY_KEY = "OcupancyCosts.State"
 SEASONS_KEY = "AlcwareSeasons.calendar.v1"
@@ -46,6 +47,139 @@ SETTLEMENT_SLACK = 2
 # save's rent statements and falls back on this one only without a statement
 # (EconomyExpansion.dll read 12 Oct 2026).
 ECONOMY_RENT_FACTOR = 5
+
+# EE Workshop 2026-10-14, DLL sha256 4b29fe1d3e293d06. OcupancyCostsMod:
+# *Multiplier, DistrictMultipliers, SecurityDepositDays, SetRuntimeBalanceOptions,
+# EstimateVariableCostsForQuote/LerpRate, CalculateInternetContractCostForDemand,
+# GetInternetInstallationFee, CalculateDataCenterCostForDemand and
+# BuildSoftwareProviderDefinitions. Re-read these when EE updates.
+EE_TYPES = {"retail": 59.85, "office": 22.4, "warehouse": 39.7,
+            "residential": 25.3, "cinema": 14.5, "theater": 15.5}
+EE_DISTRICTS = {
+    "garmentdistrict": {"residential": .555556, "retail": .588235, "office": 1.428571},
+    "murrayhill": {"residential": .833333, "retail": .5, "office": 2},
+    "lowermanhattan": {"retail": .833333, "office": 2},
+    "midtown": {"residential": .769231, "retail": .285714},
+    "hellskitchen": {"residential": .392157, "retail": .769231},
+    "industrycity": {"residential": .382353, "retail": .666667},
+    "industrialdistrict": {"residential": .382353, "retail": .666667},
+}
+EE_DEPOSIT_DAYS = 15
+EE_DEFAULT_RENT = .3  # Copilot fallback requested by Peter; EE's DefaultRentCostIndex is 10 (1x).
+EE_DEFAULT_UTILITY = 1  # DefaultUtilityCostIndex = 4, times .25.
+EE_QUOTES = {"retail": [[75, 10.18], [225, 8.27], [285, 7.63], [1000, 6.14]],
+             "office": [[75, 20.37], [225, 14.41], [285, 12.03], [660, 14.92]],
+             "warehouse": [[690, 101.35], [1292, 116.82], [2184, 133.47], [2610, 142.91]],
+             "cinema": [[1, 9.68]], "theater": [[1, 5.57]]}
+# Base/day, included connectivity demand, overage/unit/day, installation.
+EE_INTERNET = {"business": [120, 8, 12, 2000], "fast": [220, 20, 7, 5000],
+               "fiber": [380, 45, 4, 20000]}
+# Core only: restores baseline capacity without Vault/Apex's office bonuses.
+EE_CLOUD = [183.5, 40, 8.4, 485]
+# GetBusinessDataMultiplier's office identity tokens and office fallback;
+# GetWorkspaceDataMultiplier for the Voogle plan the forecast purchases.
+# Same EE Workshop 2026-10-14, DLL sha256 4b29fe1d3e293d06 as above.
+EE_CLOUD_DEMAND = {"business": {"lawfirm": 5, "webdevelopment": 2, "headquarter": 3,
+                                "graphicdesigner": 1.25, "marketingagency": 1.25,
+                                "eventplanning": 1.15, "travel": 1.15},
+                   "office": 1, "voogle": .9}
+# Cheapest workspace and required specialist tier, setup/assigned employee, daily/employee.
+EE_SOFTWARE = {"workspace": [97, 18], "lawfirm": [1197, 113],
+               "webdevelopmentagency": [719, 63], "graphicdesigner": [379, 23],
+               "eventplanningagency": [379, 23], "marketingagency": [379, 23]}
+
+
+def ee_multiplier(row):
+    return EE_TYPES.get(row.get("t"), 25.3) * EE_DISTRICTS.get(row.get("h"), {}).get(row.get("t"), 1)
+
+
+def ee_rent(vanilla, row, inputs, owned=False):
+    if owned:
+        return 0
+    if vanilla is None:
+        return None
+    if not inputs["rent"]["rebalance"]:
+        return vanilla
+    # RoundMoney clamps even Rent Costs 0x to $1, then rounds away from zero.
+    return math.floor(max(1, vanilla * ee_multiplier(row) * inputs["rent"]["factor"]) + .5)
+
+
+def ee_inputs(save, table, vanilla_rent):
+    """EE planning inputs only for a currently detected EE save.
+
+    Modal (rebalance, factor) wins; ties prefer rebalance off, then the lower
+    factor. Counts include only eligible leases, and support names the winner.
+    Utility observations pool the last seven completed charged days per type,
+    weighted by area/site-day, so neither large sites nor many saved days win
+    by accident. These are estimates, not recovered PlayerPrefs.
+    """
+    if "economyExpansion" not in detect(save):
+        return None
+    owned = {save.address(x.get("address")) for x in save.items(save.root.get("realEstate"))}
+    data = mod_data(save)
+    try:
+        renovated = {r[:2] for r in ba_facts._alcware(data[RETAIL_KEY])} if RETAIL_KEY in data else set()
+    except (ValueError, struct.error, UnicodeError):
+        renovated = set(table)  # Unreadable renovation records cannot supply a baseline.
+    regs = {(r.get("StreetName"), r.get("StreetNumber")): r
+            for r in save.items(save.root.get("BuildingRegistrations"))}
+    votes = Counter()
+    lease_keys = []
+    eligible = {}
+    for addr, reg in regs.items():
+        row = table.get(addr)
+        if (not row or row.get("t") == "residential" or addr in owned
+                or reg.get("BuildingOwnedByPlayer") or not reg.get("RentedByPlayer")):
+            continue
+        eligible[addr] = row
+        base, paid = vanilla_rent(row), reg.get("RentPerDay")
+        if addr in renovated or row.get("factsSource") == "alcware" or not base or paid is None or paid < 0:
+            continue
+        if abs(paid - base) <= max(1, base * .01):
+            votes[(False, 1.0)] += 1
+            lease_keys.append(addr)
+        else:
+            scaled = base * ee_multiplier(row)
+            factor = math.floor(paid / scaled * 10 + .5) / 10
+            if 0 <= factor <= 2:
+                estimate = math.floor(max(1, scaled * factor) + .5)
+                if abs(paid - estimate) > max(1, paid * .01):
+                    continue  # A rounded option alone is not evidence that EE set this lease.
+                votes[(True, factor)] += 1
+                lease_keys.append(addr)
+    winner = min(votes, key=lambda k: (-votes[k], k)) if votes else (True, EE_DEFAULT_RENT)
+    rent = {"rebalance": winner[0], "factor": winner[1], "source": "leases" if votes else "preference",
+            "leases": sum(votes.values()), "support": votes[winner] if votes else 0,
+            "leaseKeys": sorted(lease_keys)}
+    charges = defaultdict(float)
+    for tx in save.items(save.root.get("Transactions")):
+        details = {p.get("$k"): save.deref(p.get("$v"))
+                   for p in save.items(tx.get("transactionData")) if isinstance(p, dict)}
+        component = details.get("occupancyComponent")
+        if component not in ("electricity", "water", "waste"):
+            continue
+        addr = save.address(tx.get("address"))
+        stamp = save.deref(tx.get("timestamp")) or {}
+        day = stamp.get("Day")
+        if addr not in eligible or not isinstance(day, int) or day >= save.root.get("Day", 0):
+            continue
+        amount = tx.get("amount")
+        if isinstance(amount, (int, float)) and math.isfinite(amount) and amount <= 0:
+            charges[addr, day] += abs(amount)
+    observations = {}
+    for kind in sorted(EE_QUOTES):
+        days = sorted({day for (addr, day) in charges if eligible[addr]["t"] == kind})[-7:]
+        rows = [(addr, day, amount) for (addr, day), amount in charges.items()
+                if eligible[addr]["t"] == kind and day in days and eligible[addr].get("m")]
+        area = sum(eligible[addr]["m"] for addr, _, _ in rows)
+        if area:
+            observations[kind] = {"perM2": sum(amount for _, _, amount in rows) / area,
+                                  "source": "charges", "sites": len({addr for addr, _, _ in rows}),
+                                  "days": len(days)}
+    return {"source": "EE Workshop 2026-10-14, DLL sha256 4b29fe1d3e293d06", "rent": rent,
+            "utilityFactor": EE_DEFAULT_UTILITY, "utilitySource": "preference", "utilities": observations,
+            "quotes": EE_QUOTES, "depositDays": EE_DEPOSIT_DAYS, "internet": EE_INTERNET,
+            "cloud": EE_CLOUD, "cloudDemand": EE_CLOUD_DEMAND, "software": EE_SOFTWARE}
 
 # --- Alcware Seasons -------------------------------------------------------
 # Copied from Alcware Seasons 0.4.1 (Workshop item 3803289067, its own notes

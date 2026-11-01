@@ -2631,6 +2631,73 @@ currently billed for that is not residential is measured against the formula, an
 `rent.check` reports how many leases that was and the worst relative deviation among
 them. On HART. YT at day 20 that is eight leases, worst deviation 0.0027.
 
+When `ba_mods.detect()` reports Economy Expansion, estimated leases instead use
+`round(vanilla estimate × EE type multiplier × EE district factor × Rent Costs)`.
+EE's `RoundMoney` rounds halves away from zero and clamps to at least $1, even at
+Rent Costs 0x. Owned buildings have zero EE rent, deposit and running costs.
+Residential buildings still have no estimate: there is no fitted vanilla home formula.
+
+The adapter derives Rent Costs from non-residential player leases, excluding owned
+buildings and every Retail Expansion renovation (including renovations covered by
+runtime building facts). Each lease votes for its ratio rounded to 0.1; a rent within
+1% (or $1 for integer rounding) of vanilla votes for Rent Rebalance off. The most
+common setting wins; ties prefer Rebalance off, then the lower factor. The board
+shows the number of eligible leases and how many support the selected setting.
+Unreadable renovation records exclude all leases from derivation. Without a usable
+lease, the per-character preference supplies 0.30x. This is Copilot's fallback;
+EE itself defaults to 1.00x. Preferences can override derivation or select Rebalance
+off. They update the finder, sorting, deposits and new-site plans immediately,
+without reloading the save, and never change the game's settings.
+
+An EE setting only receives a lease's vote if it reproduces the observed rent
+within 1% of that charge or $1. A lease that fits neither vanilla nor an EE
+option is ignored, rather than rounding a near-vanilla rent into EE's 0.0x option.
+
+With Rebalance on, the deposit is exactly 15 days of EE estimated rent. With it off,
+EE's `PrepareQuote` leaves the native deposit alone, so the vanilla estimate below
+applies. The EE deposit check admits payments between 10 and 20 days of estimated
+rent, excluding purchases and unrelated small deposits; the vanilla check keeps
+its original band. Rent checks exclude the same ineligible leases as derivation.
+
+New-store and new-factory plans also deduct estimated EE electricity, water and
+waste before the after-tax line. For each building type, the adapter pools charges
+from the last seven completed **charged** days, dividing the total by the sum of
+area per charged site-day. It excludes owned buildings, internet and software
+charges, and the incomplete current day. This is an observed estimate at the
+player's existing equipment and hours; it does not recover Utility Costs from
+PlayerPrefs. Otherwise the planner uses EE's interpolated rent-dialog quote rates
+per m² and the Utility Costs preference (default 1.00x, EE's own default). The board
+identifies the source; the preference only scales quote rates, not observed charges.
+A new factory includes its proposed depot's utilities as well as the factory's.
+
+New-office forecasts assume purchased, active internet, CloudHarbor Core, Voogle
+Starter workspace and the cheapest required specialist software (Lexi Counsel,
+ByteForge Spark or Sanvas Basic). These restore baseline capacity, without service
+bonuses. EE closes offices without internet, subtracts 50 percentage points of
+capacity without CloudHarbor, 15 without workspace and 10 without required
+specialist software. The internet plan with the lowest daily bill for the outfit's
+connectivity demand wins (ties by installation fee); CloudHarbor uses its outfit's
+data demand, after cabinets' storage reductions, multiplied by EE's office-business
+factor and Voogle's 0.9 workspace factor (`GetBusinessDataMultiplier` and
+`GetWorkspaceDataMultiplier`). The business factors are 5 for law firms, 2 for web
+development, 3 for headquarters, 1.25 for graphic design and marketing, 1.15 for
+event planning and travel, and 1 for other offices. Software seats are an estimate of
+assigned employees from 40-hour staffing weeks, including cleaning, rather than
+computer count; headquarters instead uses one software seat per planned role,
+independent of the office building's customer capacity. A model caller can supply
+a known employee count. All recurring
+charges are deductible; internet installation and cloud/software setup enter the
+opening investment once. Existing-site Results breakdown, Payback, office findings
+and office staffing defaults are separate work (#416).
+
+**Constants source:** EE Workshop 2026-10-14, `EconomyExpansion.dll`, SHA-256
+`4b29fe1d3e293d06943ec7e41c1f28d0802dea400acfc19b95b08d16165e5f76`.
+`ba_mods.py` labels the copied multipliers, district table, quote bands, option
+defaults, deposit days and service prices with this version. The item-demand
+classification in `template/mod-economy-model.js` follows `ConnectivityUnitsForItem`
+and `DataUnitsForItem`. Re-read them when EE updates. These figures come from EE's
+code and **have not yet been checked against a modded save**.
+
 ### Deposit
 
 Signing a lease costs a deposit upfront, and early on that, not the daily rent, is what

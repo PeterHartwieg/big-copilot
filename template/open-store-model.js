@@ -24,17 +24,36 @@ const OpenStoreModel = (() => {
    *   ({key,typeSlug,rent} rows) and day (current game day for demand waves).
    * @param {boolean} [inputs.optional] Whether outfits include their optional
    *   items (a layout's `opt` lines and `optFurniture`).
+   * @param {Object} [inputs.occupancy] EE adapter rules/rates with the viewer's
+   *   preferences already applied. No save detection or preference reads here.
    * @returns {Object} Calculations accepting a type slug, building
    *   ({key,hood,layout,size,cap,m2,traffic,rent,deposit}), plan ({type}),
    *   or options ({reach,cost,promoTotal,open,sat,existing,initial,staffed,
-   *   computers,rent,hype}) as applicable. Profit models return daily revenue,
+   *   computers,rent,hype,runningCosts,assignedEmployees}) as applicable.
+   *   runningCosts is {daily,startup,...}; all recurring costs are deductible.
+   *   Profit models return daily revenue,
    *   cogs, wages, rent, marketing, profit, customers and ordered product lines;
    *   unavailable models/investments and unattainable payback days return null.
    *   `existing`/`provides` may be an item predicate; day callbacks use day 0
    *   for opening. Loan results retain integer interest/repayment rounding.
    */
-  function create({facts = {}, company = {}, optional = false} = {}){
+  function create({facts = {}, company = {}, optional = false, occupancy = null} = {}){
     const osFacts = () => facts;
+    function occupancyCosts(slug,b,o={}){
+      if(!occupancy || o.existing) return null;
+      const out=osOutfit({type:slug},b), slots=o.open || allHours(), cap=osCap(b);
+      const roles=osType(slug)?.staffSkills, hq=Array.isArray(roles);
+      let staffed=0,open=0;
+      if(b.type==='office' && !hq) for(let wd=0;wd<7;wd++) for(const [a,z] of slots[wd] || []) for(let hr=a;hr<z;hr++){
+        open++;staffed+=o.staffed ? o.staffed[wd]?.[hr] || 0 : osOfficeStaffed(o.computers || cap,cap,wd,hr);
+      }
+      // Forecast hiring uses 40-hour weeks, plus cleaning; EE licenses assigned
+      // people, not computers. HQ instead plans one employee per role, without
+      // customer-capacity staffing. A known hiring plan can supply its count.
+      const seats=o.assignedEmployees ?? (hq ? roles.length : Math.ceil(staffed/40)+Math.ceil(open/40));
+      const costs=economyModel.eeCosts({rules:occupancy,building:b,typeId:slug,lines:out?.lines || [],seats});
+      return costs && hq ? {...costs,hq:true} : costs;
+    }
     const companion = facts.modEconomy;
     const economy = companion && economyModel?.create(companion);
     const demand = companion && demandModel?.create(companion);
@@ -97,6 +116,8 @@ const OpenStoreModel = (() => {
           ? cityCost(native.marketing):native.marketing};
     }
     function finishModel(slug,t,b,o,result,modCosts,modDemandResult){
+      const occupancyCost=o.runningCosts ?? occupancyCosts(slug,b,o);
+      if(occupancyCost?.daily){result.occupancyCosts=occupancyCost;result.profit-=occupancyCost.daily;}
       if(!companion) return result;
       if(pricesModule.status==='ready' && pricesModule.data.carriedDebtInSiteForecast===true)
         return fail(slug,b,['company-carried-debt-unavailable']);
@@ -106,7 +127,7 @@ const OpenStoreModel = (() => {
         result[field]=result.byDay.reduce((sum,day)=>sum+day[field],0)/7;
       result.modCosts=modCosts;
       result.modDemand=modDemandResult;
-      result.profit=result.revenue-result.cogs-result.wages-result.rent-result.marketing-modCosts.dailyCents/100;
+      result.profit=result.revenue-result.cogs-result.wages-result.rent-result.marketing-modCosts.dailyCents/100-(occupancyCost?.daily || 0);
       result.assumptions=[...new Set([...(modCosts.assumptions||[]),...(modDemandResult?.assumptions||[]),
         "standalone-native-daily-category-estimate","company-aggregate-allocation-and-carried-debt-excluded",
         "no-unforeseen-absence-or-closure","full-day-office-carry-reset"])];
@@ -184,6 +205,8 @@ const OpenStoreModel = (() => {
       const result = {furniture: out.furniture, fee: out.fee, deposit, stores, delivery, decor: decor ? decor.cost : 0,
         firm: out.furniture + out.fee + deposit, self: out.furniture + delivery + (decor ? decor.cost : 0) + deposit,
         items: out.lines.reduce((n, l) => n + l[1], 0)};
+      const occupancyCost=occupancyCosts(plan.type,b);
+      if(occupancyCost){result.occupancyCosts=occupancyCost;result.firm+=occupancyCost.startup;result.self+=occupancyCost.startup;}
       const incomplete=[];
       if(decor?.modStandardUnmet) incomplete.push("interior-standard-unattainable");
       if(decor?.modStandardUnknown) incomplete.push("interior-standard-unavailable");
@@ -599,9 +622,9 @@ const OpenStoreModel = (() => {
       if(cost === null) return null;
       if(x.nativeByDay){
         const native=x.nativeByDay[(companion.day+k)%7],day=settleDay(native,r);
-        return day.revenue-day.cogs-day.wages-day.rent-day.marketing-cost/100;
+        return day.revenue-day.cogs-day.wages-day.rent-day.marketing-cost/100-(x.occupancyCosts?.daily || 0);
       }
-      return r * (x.revenue - x.cogs) - (x.wages + x.rent + x.marketing) - cost/100;
+      return r * (x.revenue - x.cogs) - (x.wages + x.rent + x.marketing) - cost/100-(x.occupancyCosts?.daily || 0);
     }
     /* The day the running profit first covers `inv`, day by day: 1 is the
        opening day. `factor` scales every day, for the range. Null when the
