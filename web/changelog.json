@@ -1,5 +1,11 @@
 [
   {
+    "pr": 552,
+    "date": "2026-11-01",
+    "title": "Big Copilot Link 0.8.3: host allowlist",
+    "summary": "Adds a host allowlist as defence in depth. On Windows/Mono, foreign host names already receive the runtime's 400 before the mod; 0.8.3 adds a 403 for a wrong port and other disallowed Host values that reach it. Use 127.0.0.1: localhost remains rejected by the runtime as in 0.8.2."
+  },
+  {
     "pr": 543,
     "date": "2026-10-28",
     "title": "Staff offices for every open hour",
