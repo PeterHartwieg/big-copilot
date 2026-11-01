@@ -95,6 +95,14 @@ class FactorTests(unittest.TestCase):
 
 
 class QuotesTests(unittest.TestCase):
+    def test_cloud_demand_factors_are_versioned_adapter_inputs(self):
+        inputs = m.ee_inputs(fixture({}), {}, d._rent_estimate)
+        self.assertIn("2026-10-14", inputs["source"])
+        self.assertEqual(inputs["cloudDemand"], {"business": {
+            "lawfirm": 5, "webdevelopment": 2, "headquarter": 3,
+            "graphicdesigner": 1.25, "marketingagency": 1.25,
+            "eventplanning": 1.15, "travel": 1.15}, "office": 1, "voogle": .9})
+
     def test_rent_and_deposit_types_districts_owned(self):
         inputs = m.ee_inputs(fixture({}), {}, d._rent_estimate)
         for kind in ("retail", "office", "warehouse", "cinema", "theater"):

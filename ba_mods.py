@@ -76,6 +76,13 @@ EE_INTERNET = {"business": [120, 8, 12, 2000], "fast": [220, 20, 7, 5000],
                "fiber": [380, 45, 4, 20000]}
 # Core only: restores baseline capacity without Vault/Apex's office bonuses.
 EE_CLOUD = [183.5, 40, 8.4, 485]
+# GetBusinessDataMultiplier's office identity tokens and office fallback;
+# GetWorkspaceDataMultiplier for the Voogle plan the forecast purchases.
+# Same EE Workshop 2026-10-14, DLL sha256 4b29fe1d3e293d06 as above.
+EE_CLOUD_DEMAND = {"business": {"lawfirm": 5, "webdevelopment": 2, "headquarter": 3,
+                                "graphicdesigner": 1.25, "marketingagency": 1.25,
+                                "eventplanning": 1.15, "travel": 1.15},
+                   "office": 1, "voogle": .9}
 # Cheapest workspace and required specialist tier, setup/assigned employee, daily/employee.
 EE_SOFTWARE = {"workspace": [97, 18], "lawfirm": [1197, 113],
                "webdevelopmentagency": [719, 63], "graphicdesigner": [379, 23],
@@ -168,7 +175,7 @@ def ee_inputs(save, table, vanilla_rent):
     return {"source": "EE Workshop 2026-10-14, DLL sha256 4b29fe1d3e293d06", "rent": rent,
             "utilityFactor": EE_DEFAULT_UTILITY, "utilitySource": "preference", "utilities": observations,
             "quotes": EE_QUOTES, "depositDays": EE_DEPOSIT_DAYS, "internet": EE_INTERNET,
-            "cloud": EE_CLOUD, "software": EE_SOFTWARE}
+            "cloud": EE_CLOUD, "cloudDemand": EE_CLOUD_DEMAND, "software": EE_SOFTWARE}
 
 # --- Alcware Seasons -------------------------------------------------------
 # Copied from Alcware Seasons 0.4.1 (Workshop item 3803289067, its own notes

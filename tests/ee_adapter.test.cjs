@@ -74,10 +74,49 @@ test('explicit running inputs and zero/absent inputs keep model parity',()=>{
 test('office outfit demand selects an internet plan and includes required software',()=>{
   const cost=Economy.eeCosts({rules,building:{...shop,type:'office'},typeId:'ba:businesstype_lawfirm',lines:[['computer',50]],seats:10});
   assert.equal(cost.internetPlan,'fiber');assert.equal(cost.internet,400);
-  assert.equal(cost.cloud,688);assert.equal(cost.software,1310);
+  assert.equal(cost.cloudDemand,450);assert.equal(cost.cloud,3628);assert.equal(cost.software,1310);
   assert.equal(cost.startup,20000+485+10*(97+1197));
   const board=loadBoard();assert.match(board.eeCostsHtml(cost),/CloudHarbor Core/);
   assert.match(board.eeCostsHtml(cost),/full office capacity/);assert.match(board.eeCostsHtml(cost),/closes an office without internet/);
+});
+
+test('CloudHarbor demand applies EE business and planned Voogle factors before billing',()=>{
+  const cases=[['lawfirm',450,3628],['webdevelopmentagency',180,1360],['headquarters',270,2116],
+    ['graphicdesigner',112.5,792],['marketingagency',112.5,792],['eventplanningagency',103.5,717],
+    ['travelagency',103.5,717],['otheroffice',90,604]];
+  for(const [type,demand,bill] of cases){
+    const cost=Economy.eeCosts({rules,building:{...shop,type:'office'},typeId:`ba:businesstype_${type}`,
+      lines:[['computer',50]],seats:10});
+    close(cost.cloudDemand,demand);assert.equal(cost.cloud,bill,type);
+  }
+  const cabinet=Economy.eeCosts({rules,building:{...shop,type:'office'},typeId:'ba:businesstype_lawfirm',
+    lines:[['computer',50],['bigcabinet',1]],seats:10});
+  assert.equal(cabinet.cloudDemand,342);assert.equal(cabinet.cloud,2720);
+  const empty=Economy.eeCosts({rules,building:{...shop,type:'office'},typeId:'ba:businesstype_lawfirm',
+    lines:[['computer',50],['bigcabinet',5]],seats:10});
+  assert.equal(empty.cloudDemand,0);assert.equal(empty.cloud,184);
+});
+
+test('office assumptions show translated internet plan names',()=>{
+  const board=loadBoard(), cost={office:true,seats:1,daily:1,startup:0,source:'quote',utilityFactor:1};
+  for(const [id,name] of [['business','Business'],['fast','Fast'],['fiber','Fiber']])
+    assert.match(board.eeCostsHtml({...cost,internetPlan:id}),new RegExp(`active ${name} internet plan`));
+  board.__table=JSON.parse(fs.readFileSync(path.join(__dirname,'../i18n/de.json'),'utf8'));
+  vm.runInContext('ttSetTable("de",__table)',board);
+  for(const [id,name] of [['business','Geschäftlich'],['fast','Schnell'],['fiber','Glasfaser']])
+    assert.ok(board.eeCostsHtml({...cost,internetPlan:id}).includes(`(${name})`));
+});
+
+test('factory running strip separates EE costs with a middle dot',()=>{
+  const board=loadBoard();
+  vm.runInContext('D={meta:{character:"EE synthetic"},openFactory:{}};planTarget="new"',board);
+  Object.assign(board,{ofLines:()=>[],ofInvestment:()=>null});
+  for(const rent of [0,30]){
+    board.ofRunning=()=>({raw:10,wages:20,rent,total:100,occupancyCosts:{daily:10}});
+    const html=board.ofStripHtml(null);
+    assert.match(html,rent ? /wages \$20 · rent \$30 · EE \$70\/week/ : /wages \$20 · EE \$70\/week/);
+    assert.ok(!html.includes(' ? '));
+  }
 });
 
 test('factory running costs include factory and depot utilities; explicit zero preserves all results',()=>{

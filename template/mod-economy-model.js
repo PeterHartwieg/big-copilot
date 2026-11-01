@@ -444,7 +444,7 @@ const ModEconomyModel = (() => {
     const away = n => Math.floor(n+.5);
     const even = n => n%1===.5 ? (Math.floor(n)%2===0 ? Math.floor(n) : Math.ceil(n)) : Math.round(n);
     const utilities = observed ? area*observed.perM2 : away(away(area*rate)*(rules.utilityFactor ?? 1));
-    let internet=0, cloud=0, software=0, startup=0, internetPlan=null;
+    let internet=0, cloud=0, cloudDemand=0, software=0, startup=0, internetPlan=null;
     const office = kind === 'office';
     if(office){
       let connectivity=0, data=0;
@@ -465,13 +465,16 @@ const ModEconomyModel = (() => {
         ({plan,cost:even(base+Math.max(0,connectivity-cap)*extra),install})).sort((a,b)=>a.cost-b.cost || a.install-b.install);
       internetPlan=plans[0].plan;internet=plans[0].cost;startup+=plans[0].install;
       const [base,cap,extra,setup]=rules.cloud;
-      cloud=even(base+Math.max(0,data-cap)*extra);startup+=setup;
+      const demand=rules.cloudDemand;
+      const business=Object.entries(demand.business).find(([token])=>typeId.toLowerCase().includes(token))?.[1] ?? demand.office;
+      cloudDemand=Math.max(0,data*business*demand.voogle);
+      cloud=even(base+Math.max(0,cloudDemand-cap)*extra);startup+=setup;
       const specialist=rules.software[typeId.replace('ba:businesstype_','')] || [0,0];
       const workspace=rules.software.workspace;
       software=seats*(workspace[1]+specialist[1]);startup+=seats*(workspace[0]+specialist[0]);
     }
     const daily=utilities+internet+cloud+software;
-    return daily || startup ? {daily,utilities,internet,cloud,software,startup,internetPlan,seats,office,
+    return daily || startup ? {daily,utilities,internet,cloud,cloudDemand,software,startup,internetPlan,seats,office,
       source:observed ? 'charges' : 'quote',sites:observed?.sites || 0,days:observed?.days || 0,
       utilityFactor:rules.utilityFactor ?? 1} : null;
   }

@@ -2673,7 +2673,11 @@ bonuses. EE closes offices without internet, subtracts 50 percentage points of
 capacity without CloudHarbor, 15 without workspace and 10 without required
 specialist software. The internet plan with the lowest daily bill for the outfit's
 connectivity demand wins (ties by installation fee); CloudHarbor uses its outfit's
-data demand, after cabinets' storage reductions. Software seats are an estimate of
+data demand, after cabinets' storage reductions, multiplied by EE's office-business
+factor and Voogle's 0.9 workspace factor (`GetBusinessDataMultiplier` and
+`GetWorkspaceDataMultiplier`). The business factors are 5 for law firms, 2 for web
+development, 3 for headquarters, 1.25 for graphic design and marketing, 1.15 for
+event planning and travel, and 1 for other offices. Software seats are an estimate of
 assigned employees from 40-hour staffing weeks, including cleaning, rather than
 computer count; a model caller can supply a known employee count. All recurring
 charges are deductible; internet installation and cloud/software setup enter the

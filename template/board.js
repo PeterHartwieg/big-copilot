@@ -12960,7 +12960,9 @@ function eeCostsHtml(cost){
   if(!cost) return '';
   const source=cost.source==='charges' ? tt('gr.ee.observed', 'Utilities use your EE charges (sites: {n}; charged days: {d}).', {n:cost.sites,d:cost.days})
     : tt('gr.ee.quote', 'Utilities use EE quote rates and Utility Costs {x:.2f}x from your preference.', {x:cost.utilityFactor});
-  const office=cost.office ? tt('gr.ee.office', 'Assumes an active {plan} internet plan, CloudHarbor Core, Voogle Starter and required specialist software for full office capacity, with an estimated employee count of {n} based on 40-hour weeks. EE closes an office without internet and reduces capacity without these services.', {plan:cost.internetPlan,n:cost.seats}) : '';
+  const plan={business:tt('gr.ee.internet.business', 'Business'),fast:tt('gr.ee.internet.fast', 'Fast'),
+    fiber:tt('gr.ee.internet.fiber', 'Fiber')}[cost.internetPlan] || '';
+  const office=cost.office ? tt('gr.ee.office', 'Assumes an active {plan} internet plan, CloudHarbor Core, Voogle Starter and required specialist software for full office capacity, with an estimated employee count of {n} based on 40-hour weeks. EE closes an office without internet and reduces capacity without these services.', {plan,n:cost.seats}) : '';
   return `<p class="os-note">${spEsc(tt('gr.ee.costs', 'Economy Expansion: {daily:$}/day in deductible running costs; {setup:$} in installation and software setup.', {daily:cost.daily,setup:cost.startup || 0}))} ${spEsc(source)} ${spEsc(office)}</p>`;
 }
 function eePreferencesHtml(){
@@ -15118,7 +15120,7 @@ function ofStripHtml(plan){
     : `<b class="dim">–</b><small>${tt("gr.os.strip.afterWhere", "after the location")}</small>`;
   const run = ofRunning(plan, inv);
   const parts = (!run ? "" : run.rent ? tt("gr.of.strip.run.rent", "raw {raw} · wages {wages} · rent {rent}", {raw: fmt(run.raw), wages: fmt(run.wages), rent: fmt(run.rent)})
-    : tt("gr.of.strip.run", "raw {raw} · wages {wages}", {raw: fmt(run.raw), wages: fmt(run.wages)})) + (run?.occupancyCosts ? " ? " + tt("gr.ee.week", "EE {w}/week", {w:fmt(run.occupancyCosts.daily*7)}) : "");
+    : tt("gr.of.strip.run", "raw {raw} · wages {wages}", {raw: fmt(run.raw), wages: fmt(run.wages)})) + (run?.occupancyCosts ? " · " + tt("gr.ee.week", "EE {w}/week", {w:fmt(run.occupancyCosts.daily*7)}) : "");
   const running = !run || run.total == null ? `<b class="dim">${tt("gr.os.none.short", "No estimate")}</b>${planCompatibilityHtml(ofFacts(), "factoryRunning")}` : `<b class="m">${tt("gr.of.strip.week", "{w}/week", {w: fmt(run.total)})}</b><small>${parts}</small><small>${tt("gr.of.strip.notInv", "not in the investment")}</small>`;
   return `<div class="os-pb ff-pb">${cell(tt("gr.of.strip.make", "Make"), make)}${cell(tt("gr.os.strip.whereLab", "Where"), where)}${
     cell(tt("gr.os.strip.invest", "Investment"), invest + planCompatibilityHtml(ofFacts(), "factoryOpening"))}${cell(owned ? tt("gr.of.strip.runAdded", "Running costs added") : tt("gr.of.strip.runLab", "Running costs"), running + (run?.occupancyCosts?.entries || []).map(eeCostsHtml).join("") + mcCostsHtml(run?.modCosts, [], run?.incomplete, true), "ff-run")}</div>`;
