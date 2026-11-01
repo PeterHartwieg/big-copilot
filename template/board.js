@@ -13357,7 +13357,7 @@ function osFirmHtml(b, out, inv){
     });
   });
   rows.push(grp(tt("gr.os.inv.deposit", "Deposit"), b.status === "mine" ? depositNote(b) : tt("gr.os.inv.deposit.note", "refunded when the lease ends"), inv.deposit));
-  if(b.status !== "mine") rows.push(`<tr><td class="l">${tt("gr.os.inv.deposit.est", "Estimated deposit")}<span class="sub">${mcLeaseNote(b,tt("gr.os.inv.deposit.estSub", "about 60 days of rent, with the building's own fittings"))}</span></td><td class="w"></td><td></td><td></td><td>${mcLeaseMoney(b,inv.deposit)}</td></tr>`);
+  if(b.status !== "mine") rows.push(`<tr><td class="l">${tt("gr.os.inv.deposit.est", "Estimated deposit")}<span class="sub">${eeRules() ? depositNote(b) : mcLeaseNote(b,tt("gr.os.inv.deposit.estSub", "about 60 days of rent, with the building's own fittings"))}</span></td><td class="w"></td><td></td><td></td><td>${mcLeaseMoney(b,inv.deposit)}</td></tr>`);
   return `<table class="os-inv"><thead><tr><th class="l">${tt("gr.os.inv.col.item", "Item")}</th><th class="l">${tt("gr.os.inv.col.why", "Why")}</th>
     <th>${tt("gr.os.inv.col.qty", "Qty")}</th><th>${tt("gr.os.inv.col.each", "Each")}</th><th>${tt("gr.os.inv.col.total", "Total")}</th></tr></thead>
     <tbody>${rows.join("")}</tbody><tfoot><tr><td class="l">${tt("gr.os.inv.total", "Investment")}</td><td></td><td></td><td></td><td>${mcEstimateMoney(inv.firm)}</td></tr></tfoot></table>`;
@@ -13382,7 +13382,7 @@ function osSelfHtml(b, out, inv){
     <table><tbody>${decor.floors ? `<tr><td class="l">${tt("gr.os.self.floors", "{n} floor tiles at {p}", {n: num(decor.floors), p: fmt(decor.floorPrice)})}</td><td class="w">${interior}</td><td>${fmt(decor.floors * decor.floorPrice)}</td></tr>` : ""}${
       decor.walls ? `<tr><td class="l">${tt("gr.os.self.wallslots", "{n} wall slots at {p}", {n: num(decor.walls), p: fmt(decor.wallPrice)})}</td><td class="w">${interior}</td><td>${fmt(decor.walls * decor.wallPrice)}</td></tr>` : ""}</tbody></table></div>` : "";
   const dep = `<div class="os-store"><div class="os-sh"><span class="k p">${osIcon("key")}</span><span><b>${tt("gr.os.inv.deposit", "Deposit")}</b><small>${
-    b.status === "mine" ? depositNote(b) : mcLeaseNote(b,tt("gr.os.self.deposit.est", "estimated: about 60 days of rent, with the building's own fittings · refunded when the lease ends"))}</small></span><span class="t">${mcLeaseMoney(b,inv.deposit)}</span></div></div>`;
+    b.status === "mine" || eeRules() ? depositNote(b) : mcLeaseNote(b,tt("gr.os.self.deposit.est", "estimated: about 60 days of rent, with the building's own fittings · refunded when the lease ends"))}</small></span><span class="t">${mcLeaseMoney(b,inv.deposit)}</span></div></div>`;
   const legend = stores.map((s, i) => `<div><i>${osLetter(i)}</i><span>${spEsc((vendors[s.key] || {}).n || s.key)}</span><b>${mcPriceMoney(F,s.lines.map(k=>out.lines[k]),storeTotal(s))}</b></div>`).join("")
     + `<div><i class="n">${tt("gr.os.map.new", "NEW")}</i><span>${spEsc(b.address)}</span><b></b></div>`;
   const note = unsold.length ? `<p class="quiet os-gap">${tt("gr.os.self.unsold", "No store the game's help names sells these: {items}.", {items: unsold.map(l => osItemName(l[0])).join(", ")})}</p>` : "";

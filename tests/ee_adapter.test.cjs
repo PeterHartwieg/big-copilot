@@ -159,6 +159,25 @@ function payload(){
     premises:{buildings:[{...shop,ee:{vanillaRent:100,multiplier:40,owned:false,paidRent:1200,checkLease:true,deposits:[18000]}}],
       rent:{economyExpansion:structuredClone(rules),deposit:{factors:{lease:62.84,warehouse:93.61}}}}};
 }
+test('both installation modes describe EE deposits as 15 days and preserve vanilla wording',()=>{
+  const board=loadBoard({}, {edit:s=>s.replace('/*__MAP_SCRIPT__*/',()=>fs.readFileSync(path.join(__dirname,'../web/map.js'),'utf8'))});
+  board.payload={...payload(),openStore:facts()};vm.runInContext('D=payload',board);
+  for(const ee of [true,false]){
+    board.payload.mods=ee?{economyExpansion:{settled:39}}:{};
+    const b=vm.runInContext('premises().buildings[0]',board), core=board.osCore();
+    const out=core.outfit({type:'T'},b), inv=core.investment({type:'T'},b);
+    for(const render of [board.osFirmHtml,board.osSelfHtml]){
+      const html=render(b,out,inv);
+      if(ee){
+        assert.equal(inv.deposit,15*b.rent);
+        assert.ok(html.includes(board.depositNote(b)));
+        assert.match(html,/Economy Expansion deposit: 15 days/);
+        assert.doesNotMatch(html,/60 days/);
+      }else assert.match(html,/about 60 days of rent, with the building's own fittings/);
+    }
+  }
+});
+
 test('map notes explain EE rent source, checks, deposit and owned exemption; vanilla payload is untouched',()=>{
   const board=loadBoard({}, {edit:s=>s.replace('/*__MAP_SCRIPT__*/',()=>fs.readFileSync(path.join(__dirname,'../web/map.js'),'utf8'))});
   board.payload=payload();vm.runInContext('D=payload',board);
