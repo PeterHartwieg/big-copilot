@@ -13281,7 +13281,9 @@ function osSelfHtml(b, out, inv){
   const cards = stores.map((s, i) => {
     const v = vendors[s.key] || {};
     const rows = osShoppingLines(s.lines.map(k => out.lines[k])).map(l => { const [item, qty] = l;
-      return `<tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: qty, item: osItemName(item)})}</td><td class="w">${osShoppingTags(l)}</td><td>${mcItemMoney(F,item,qty)}</td></tr>`; }).join("");
+      return `<tr><td class="l">${tt("gr.os.self.line", "{n} × {item}", {n: qty, item: osItemName(item)})}${qty > 1
+        ? `<span class="sub">${tt("gr.os.inv.col.each", "Each")} ${mcItemMoney(F,item)}</span>` : ""}</td><td class="w">${osShoppingTags(l)}</td><td>${mcItemMoney(F,item,qty)}${qty > 1
+        ? `<span class="sub">${tt("gr.os.inv.col.total", "Total")}</span>` : ""}</td></tr>`; }).join("");
     return `<div class="os-store"><div class="os-sh"><span class="k">${osLetter(i)}</span><span><b>${spEsc(v.n || s.key)}</b><small>${spEsc(v.a || "")}${
       v.h ? ` · ${spEsc(hoodName(v.h))}` : ""}</small></span><span class="t">${mcPriceMoney(F,s.lines.map(k=>out.lines[k]),storeTotal(s))}</span></div>
       <table><tbody>${rows}<tr class="del"><td class="l">${tt("gr.os.self.delivery", "Delivery")}</td><td class="w"></td><td>${fmt(fee)}</td></tr></tbody></table></div>`;
