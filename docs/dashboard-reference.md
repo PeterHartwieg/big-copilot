@@ -77,7 +77,8 @@ the map.
 
 - **Overview**: four tiles, the *Needs attention* list and *All tools*, the tasks by name. Profit yesterday
   with its seven-day average and trend, revenue with customers served, cash on hand
-  with where the profit went, and the daily fixed-cost base (rent plus payroll). Net
+  with where the profit went, and the daily fixed-cost base (rent plus payroll, plus the last recorded day's recurring
+  Economy Expansion bills when EE is detected). Net
   worth takes the fourth tile whenever the game reports it again. The Profit tile opens
   Businesses › Results at the daily result. Bank debt appears in the cash tile's note when
   there is some, and on its sub line after the period ("this week · $1.89M owed on loans")
@@ -147,6 +148,18 @@ the map.
     an hour-by-hour grid comparing historical customers with capacity from the
     current schedule. A picker in its header moves between sites, support sites in
     their own group, and *close* puts it away.
+  With detected Economy Expansion, Results adds an **Economy Expansion** column:
+  recurring electricity, water, waste, internet, CloudHarbor, software and maintenance
+  charges, itemised in its tooltip from the site's transactions for the statement day.
+  Licensing is shown separately too. **EE installation** appears on a day with an internet
+  installation charge, so the costs reconcile with the saved profit without mixing setup
+  into the recurring line. Software and CloudHarbor setup are cash-only purchases in this
+  EE version and do not reduce that statement profit. The Overview fixed-cost tile adds
+  recurring EE bills on the last recorded day to current rent and payroll; it is an
+  observed bill, not a forecast of today's EE services. Only transactions still in the
+  save can be itemised. These EE rules come from EE code and have not been checked
+  against a modded save yet.
+
 - **Supply**: the logistics round, six views by task: **Changes**, **Plans & contracts**, **Imports**,
   **Deliveries**, **Production** and **Goods flow**. Shops, warehouses and factories are each
   view's *Scope* (the whole company, every site of a kind, or one site). Each view opens on
@@ -326,6 +339,25 @@ The Wiki's catalogue is refreshed from the installed game when the site is built
 It is a versioned snapshot of the game's help, which can lag runtime behaviour.
 A visitor's game update does not automatically change the hosted catalogue.
 See [Wiki data pipeline](wiki-data-pipeline.md) for extraction and provenance.
+
+### Economy Expansion offices
+
+For detected EE saves, an office marked `ConnectivityForcedClosed` gets an internet
+finding: choose an internet plan to reopen. A player-closed office keeps the existing
+closed-site wording. Internet, workspace and specialist software staff demands compare
+against the site's **active** saved plans; pending plans do not satisfy them. Tier 1, 2
+and 3 are respectively nice to have, important and critical. A software demand does not
+apply to an office type without required specialist software.
+
+The office default staffing plan uses EE's effective layout capacity: without
+CloudHarbor it loses 50%, without workspace another 15%, and without required specialist
+software another 10%, with a 25% floor and EE's rounding. Fully equipped offices can
+receive the dedicated/resilient CloudHarbor bonus. An office closed for lack of internet
+has zero default service hours. The optional Every open hour plan remains the player's
+explicit choice to staff every installed computer. These rules come from EE Workshop
+2026-10-14 (DLL SHA-256 `4b29fe1d3e293d06943ec7e41c1f28d0802dea400acfc19b95b08d16165e5f76`)
+and have not been checked against a modded save yet. EconoView reconciliation over a few
+trading days, and offices with and without internet, remain untested owner checks.
 
 ## What counts as a finding
 
@@ -1599,6 +1631,17 @@ each shop and character.
 **Payback** (Businesses › Results, and a line on a shop's page) sets what a site cost to set
 up against the profit it has made since. The rules are the game's own, read from its code
 on 28 September 2026 and checked against six real installation bills to the coin.
+
+With detected Economy Expansion, observed internet installation, software setup and
+CloudHarbor setup transactions also count as investment in both installation modes.
+Internet installation deducted by EE is added back to that day's statement profit when
+counted as investment, preserving the break-even day. The DLL deducts it only on days
+with recurring EE charges; a cash-only installation has no deduction to reverse. In the 14 October 2026 EE DLL, software and
+CloudHarbor setup are cash-only purchases, so there is no profit deduction to reverse:
+counting those purchases can move break-even later. Observed fees are remembered by
+site and day as the transaction log rolls off; setup fees already lost before the first
+reading cannot be recovered from the active plans. Recurring EE bills remain expenses.
+These branches follow EE code and have not been checked against a modded save yet.
 
 **The investment** is the furniture, the interior, the deposit and the site's own vehicles:
 

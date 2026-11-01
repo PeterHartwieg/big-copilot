@@ -1393,11 +1393,49 @@ const wowCell = b => {
    each draw, in the UI language; the hook names a column other code looks for
    (the search's "Why did profit move?" sorts by "wow"), whatever its header
    says. */
+/* EE columns are inserted before Profit, keeping the three trailing columns
+   and the footer alignment shared with the vanilla statement. */
+const eeResultsOn = () => !!D?.mods?.economyExpansion;
+const eeInstallationOn = () => eeResultsOn() && (D.businesses || []).some(b=>b.economyExpansion?.installation);
+function eeComponentName(id){
+  const labels = {
+    electricity: () => tt("co.ee.power", "Electricity"), water: () => tt("co.ee.water", "Water"),
+    waste: () => tt("co.ee.waste", "Waste"), utilities: () => tt("co.ee.utilities", "Utilities"),
+    internet: () => tt("co.ee.internet", "Internet"), datacenter: () => tt("co.ee.cloud", "CloudHarbor"),
+    software: () => tt("co.ee.software", "Software"), maintenance: () => tt("co.ee.maintenance", "Maintenance"),
+  };
+  return labels[id]?.() || id;
+}
+function eeResultTip(b){
+  const parts = Object.entries(b.economyExpansion?.components || {}).map(([id,w])=>
+    tt("co.ee.component", "{what}: {w:$}", {what:eeComponentName(id),w})).join(", ");
+  return tt("co.ee.result.tip", "Recurring Economy Expansion bills recorded for this day: {items}. Setup fees count as Payback investment.", {items:parts || "?"});
+}
+function eePnlColumns(columns){
+  if(!eeResultsOn()) return columns;
+  const extra = [[tt("sp.cost.licensing", "Licensing"), b=>fmt(-(b.licensing || 0)), "", b=>b.licensing || 0],
+    [tt("nav.ee.title", "Economy Expansion"),
+    b=>`<span data-tip="${attr(eeResultTip(b))}" tabindex="0">${fmt(-(b.economyExpansion?.cost || 0))}</span>`,
+    "", b=>b.economyExpansion?.cost || 0]];
+  if(eeInstallationOn()) extra.push([tt("co.ee.installation", "EE installation"),
+    b=>`<span data-tip="${attr(tt("co.ee.installation.tip", "Internet installation reduces recorded profit on this day; Payback counts it as investment instead."))}">${fmt(-(b.economyExpansion?.installation || 0))}</span>`,
+    "", b=>b.economyExpansion?.installation || 0]);
+  columns.splice(columns.length-3,0,...extra);
+  return columns;
+}
+function eePnlValues(cells,b){
+  if(!eeResultsOn()) return cells;
+  const extra = [fmt(-(b.licensing || 0)), fmt(-(b.economyExpansion?.cost || 0))];
+  if(eeInstallationOn()) extra.push(fmt(-(b.economyExpansion?.installation || 0)));
+  cells.splice(cells.length-3,0,...extra);
+  return cells;
+}
+
 const VIEWS = {
   pnl: {
     get label(){ return tt("co.pnl.label", "Profit & loss"); },
     get note(){ return tt("co.pnl.note", "Yesterday's income statement, by chain"); },
-    get cols(){ return [
+    get cols(){ return eePnlColumns([
       [tt("co.col.business", "Business"), b=>kidCell(b), "l", null],
       [tt("co.col.revenue", "Revenue"), b=>fmt(b.revenue), "", b=>b.revenue],
       [tt("co.col.wow", "Wk / wk"), b=>wowCell(b), "", b=>(TREND[b.key]||{}).change ?? -999, "wow"],
@@ -1411,20 +1449,20 @@ const VIEWS = {
       /* When the investment is earned back (paybackCell()); a cost centre's
          counts in its chain's row, not its own. */
       [tt("co.col.payback", "Payback"), b=>paybackCell(paybackSite(b.key)), "", b=>paybackRank(paybackSite(b.key))],
-    ]; },
+    ]); },
     /* The point of the chain row: revenue, every cost, and the margin the whole
        operation actually runs at. */
-    chain: c => [null, fmt(c.revenue),
+    chain: c => eePnlValues([null, fmt(c.revenue),
                  wow(c.change, c.last7, c.prev7, tt("co.wow.chain.new", "A site here has under two weeks of trading")),
                  fmt(-c.cogs), fmt(-c.wages), fmt(-c.rent),
                  fmt(-c.marketing), c.theft?fmt(-c.theft):"—",
                  `<b class="${sign(c.profit)}">${fmt(c.profit)}</b>`,
                  c.margin===null?"—":tt("co.pnl.margin.v", "{x:.1f}%", {x: c.margin}),
-                 paybackCell(paybackChain(c), true)],
-    chainKey: (c, i) => i === 2 ? c.change ?? -999 : i === 10 ? paybackRank(paybackChain(c)) : VIEWS.pnl.cols[i][3](c),
-    total: bs => ["", fmt(sum(bs,"revenue")), "", fmt(-sum(bs,"cogs")), fmt(-sum(bs,"wages")),
+                 paybackCell(paybackChain(c), true)], c),
+    chainKey: (c, i) => i === 2 ? c.change ?? -999 : i === VIEWS.pnl.cols.length - 1 ? paybackRank(paybackChain(c)) : VIEWS.pnl.cols[i][3](c),
+    total: bs => eePnlValues(["", fmt(sum(bs,"revenue")), "", fmt(-sum(bs,"cogs")), fmt(-sum(bs,"wages")),
                   fmt(-sum(bs,"rent")), fmt(-sum(bs,"marketing")), fmt(-sum(bs,"theft")),
-                  `<span class="${sign(sum(bs,"profit"))}">${fmt(sum(bs,"profit"))}</span>`, "", ""],
+                  `<span class="${sign(sum(bs,"profit"))}">${fmt(sum(bs,"profit"))}</span>`, "", ""], {licensing:sum(bs,"licensing"),economyExpansion: {cost:bs.reduce((n,b)=>n+(b.economyExpansion?.cost || 0),0), installation:bs.reduce((n,b)=>n+(b.economyExpansion?.installation || 0),0)}}),
   },
   ops: {
     get label(){ return tt("co.ops.label", "Operations"); },
@@ -2909,7 +2947,7 @@ function mdFlag(m){
   const parts = [], tips = [];
   if(m.economyExpansion){
     parts.push(tt("nav.mast.mods.ee", "ECONOMY EXPANSION"));
-    tips.push(tt("nav.mast.mods.ee.tip", "Economy Expansion is running (it last settled on day {d}). Estimated rent, deposits and new-site planner running costs follow EE. Results breakdown, Payback and office findings do not yet account for EE.",
+    tips.push(tt("nav.mast.mods.ee.tip", "Economy Expansion is running (it last settled on day {d}). Rent estimates, deposits, planner running costs, Results bills, Payback setup investment and office findings follow EE.",
       {d: m.economyExpansion.settled}));
   }
   const se = m.seasons;
@@ -3027,7 +3065,7 @@ function drawKpis(){
      pace metric once the game reports it again — until then, the cost base.
      Site and staff counts sit in the masthead; debt only appears when there is any. */
   const fixedKnown = !D.staff.wageUnavailable && Number.isFinite(D.staff.dailyCost);
-  const fixed = fixedKnown ? k.rentBill + D.staff.dailyCost : null;
+  const fixed = fixedKnown ? k.rentBill + D.staff.dailyCost + (eeResultsOn() ? k.economyExpansionBill || 0 : 0) : null;
   /* A clause of its own after the chip's note, set off by a middle dot. */
   const owed = k.debt > 0
     ? ` · ${tt("today.kpi.owed", {one: "{debt:$} owed on {n} loan", other: "{debt:$} owed on {n} loans"},
@@ -3082,11 +3120,11 @@ function drawKpis(){
     k.netWorth === null
       ? {id: "fixed", l: tt("today.kpi.fixed", "Fixed cost / day"), v: fixedKnown ? fmt(fixed) : "—",
          chip: chipHtml("dim", tt("today.kpi.fixed.chip", "rent {w:$c}", {w: k.rentBill}),
-           fixedKnown ? tt("today.kpi.fixed.tip", "{rent:$} rent, {payroll:$} payroll", {rent: k.rentBill, payroll: D.staff.dailyCost}) : tt("co.mod.wageUnknown", "Current hourly wages could not be verified.")),
-         sub: fixedKnown ? tt("today.kpi.fixed.sub", "payroll {w:$c}", {w: D.staff.dailyCost}) : tt("co.mod.wageUnknown", "Current hourly wages could not be verified."),
+           fixedKnown ? eeResultsOn() ? tt("today.kpi.fixed.ee.tip", "{rent:$} rent, {payroll:$} payroll, {ee:$} Economy Expansion recurring bills on the last recorded day", {rent:k.rentBill,payroll:D.staff.dailyCost,ee:k.economyExpansionBill || 0}) : tt("today.kpi.fixed.tip", "{rent:$} rent, {payroll:$} payroll", {rent: k.rentBill, payroll: D.staff.dailyCost}) : tt("co.mod.wageUnknown", "Current hourly wages could not be verified.")),
+         sub: fixedKnown ? eeResultsOn() ? tt("today.kpi.fixed.ee.sub", "payroll {w:$c} · Economy Expansion {ee:$c}", {w:D.staff.dailyCost,ee:k.economyExpansionBill || 0}) : tt("today.kpi.fixed.sub", "payroll {w:$c}", {w: D.staff.dailyCost}) : tt("co.mod.wageUnknown", "Current hourly wages could not be verified."),
          /* What the days actually paid in rent and wages; the number above is
             today's contracted rate, which is why the last point can sit below it. */
-         spark: hist(d => (d.rent || 0) + (d.wages || 0))}
+         spark: hist(d => (d.rent || 0) + (d.wages || 0) + (eeResultsOn() ? d.economyExpansionBill || 0 : 0))}
       /* Build 3672 stopped reporting net worth. Rather than quietly showing a
          stale number as if it were today's, the tile says which day it is from. */
       : {id: "worth", l: tt("today.kpi.worth", "Net worth"), v: fmt(k.netWorth),
@@ -4610,7 +4648,8 @@ function paybackTip(row, chain){
     : tt("co.payback.rate", "Recent profit {w:$} a day.", {w: row.rate});
   const o = paybackOf(row);
   const kept = o && o.kept ? tt("co.payback.kept", "The break-even day is remembered from an earlier save.") : "";
-  return [row.basis === "statement-profit" ? tt("co.payback.statement", "Payback uses recorded statement profit; costs outside those statements are shown separately.") : "", cost, vehicles, profit, rate, kept].filter(Boolean).join(" ");
+  const ee = c.economyExpansion ? tt("co.payback.ee", "Economy Expansion setup investment: {w:$}; internet installation is added back to statement profit, while software and CloudHarbor setup are cash-only purchases.", {w:c.economyExpansion}) : "";
+  return [row.basis === "statement-profit" ? tt("co.payback.statement", "Payback uses recorded statement profit; costs outside those statements are shown separately.") : "", cost, vehicles, ee, profit, rate, kept].filter(Boolean).join(" ");
 }
 /* A table cell: the short form, the whole sentence and its basis on hover. */
 function paybackCell(row, chain){
@@ -6008,15 +6047,19 @@ const spSpark = (series, key, money, tone) => {
 };
 /* How dark each cost sits in the bar: the big ones darkest, so the shape of a
    day's spending reads without a legend. */
-const SP_COST_SHADE = {goods: 62, wages: 46, rent: 32, marketing: 24, theft: 18, licensing: 14};
+const SP_COST_SHADE = {economyExpansion: 28, eeInstallation: 20, goods: 62, wages: 46, rent: 32, marketing: 24, theft: 18, licensing: 14};
 /* Each cost's word, capitalised for the bar and lower case inside the tip. */
 const SP_COST_WORD = {
+  get economyExpansion(){ return tt("nav.ee.title", "Economy Expansion"); },
+  get eeInstallation(){ return tt("co.ee.installation", "EE installation"); },
   get goods(){ return tt("sp.cost.goods", "Goods"); }, get wages(){ return tt("sp.cost.wages", "Wages"); },
   get rent(){ return tt("sp.cost.rent", "Rent"); }, get marketing(){ return tt("sp.cost.marketing", "Marketing"); },
   get theft(){ return tt("sp.cost.theft", "Theft"); }, get licensing(){ return tt("sp.cost.licensing", "Licensing"); },
   get profit(){ return tt("sp.cost.profit", "Profit"); }, get loss(){ return tt("sp.cost.loss", "Loss"); },
 };
 const SP_COST_LOWER = {
+  get economyExpansion(){ return tt("nav.ee.title", "Economy Expansion"); },
+  get eeInstallation(){ return tt("co.ee.installation", "EE installation"); },
   get goods(){ return tt("sp.cost.lc.goods", "goods"); }, get wages(){ return tt("sp.cost.lc.wages", "wages"); },
   get rent(){ return tt("sp.cost.lc.rent", "rent"); }, get marketing(){ return tt("sp.cost.lc.marketing", "marketing"); },
   get theft(){ return tt("sp.cost.lc.theft", "theft"); }, get licensing(){ return tt("sp.cost.lc.licensing", "licensing"); },
@@ -7782,6 +7825,7 @@ function drawSite(){
   const costs = [
     ["goods", b.cogs], ["wages", b.wages], ["rent", b.rent],
     ["marketing", b.marketing], ["theft", b.theft], ["licensing", b.licensing],
+    ...(eeResultsOn() ? [["economyExpansion", b.economyExpansion?.cost], ["eeInstallation", b.economyExpansion?.installation]] : []),
   ].filter(([, v]) => v);
   const costTip = costs.length
     ? tt("sp.cost.tip", "Yesterday's costs: {items}.", {items: costs.map(([id, v]) =>
@@ -7992,7 +8036,9 @@ function drawSite(){
          written the list. An older silent shop has no list and no lamps. */
       b.notTrading === undefined || finds.some(a => a.group === "notrading") ? "" : `<span class="sp-pre">${spPreflight(b).map(p =>
         `<span class="${p.state}" data-check="${p.slug}" data-tip="${attr(
-          p.state === "no" && SP_CHECK_NO[p.slug]
+          p.state === "no" && p.slug === "closed" && b.economyExpansion?.connectivityForcedClosed
+          && tt("sp.check.ee.internet", "Closed by Economy Expansion: choose an internet plan to reopen")
+          || p.state === "no" && SP_CHECK_NO[p.slug]
           || spCheckTip(p.state, SP_CHECK_WORD[p.slug]))}">${spIcon(SP_CHECK_ICON[p.slug])}</span>`).join("")}</span>`}
       ${spRankHtml(rank)}`;
   /* The hour chips: one per ceiling the busy hours ran into — the site can be
@@ -16949,8 +16995,8 @@ function modCatalogue(){
      reads: [tt("nav.mods.retail.reads", "A renovated building's capacity and floor area come from the mod's records.")],
      limits: [tt("nav.mods.retail.limits", "When its records cannot be read, estimates that need a building's capacity or floor area are left out.")]},
     {id: "economyExpansion", ws: "3811945186",
-     reads: [tt("nav.mods.ee.reads", "Owned-building rental income follows the multiplier the save records; estimated leases, deposits and new-site planner running costs follow EE.")],
-     limits: [tt("nav.mods.ee.limits", "Results breakdown, Payback and office findings do not yet account for EE; new-site figures are estimates from EE code, not yet checked against a modded save.")]},
+     reads: [tt("nav.mods.ee.reads", "Owned-building rental income, estimated leases, deposits and new-site costs follow EE; Results itemises EE bills, Payback includes setup investment, and office findings read active plans.")],
+     limits: [tt("nav.mods.ee.limits", "EE figures follow its code and have not been checked against a modded save. Bills and setup fees use the transactions the save still holds; Payback remembers observed setup fees.")]},
   ].map(m => {
     /* The Workshop's title and author, and the summary shortened from its description. */
     const w = MOD_WORKSHOP.find(x => x.id === m.ws) || {};

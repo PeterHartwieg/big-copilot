@@ -281,6 +281,14 @@ def _not_trading_notes(businesses: list, supply: dict, day: int) -> tuple:
     for b in businesses:
         # Only a shop or an office can fail to trade. A warehouse, factory or
         # head office never books a sale, so silence there is its normal state.
+        if ((b["status"] == "office" or b.get("typeSlug") == "ba:businesstype_headquarters") and b.get("closed")
+                and b.get("economyExpansion", {}).get("connectivityForcedClosed")):
+            silent.add(b["key"])
+            b["notTrading"] = ["closed"]
+            note("critical", b["name"], "notrading",
+                 msg("f.ee.internet", "{site} is closed by Economy Expansion: no internet plan; choose an internet plan to reopen it.",
+                     site=b["name"]), worth=b["rent"], always=True, key=b["key"])
+            continue
         if b["status"] not in ("retail", "office") or b["revenue"] or day - b["opened"] > NEW_SITE_DAYS:
             continue
         office = b["status"] == "office"

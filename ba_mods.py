@@ -88,6 +88,129 @@ EE_SOFTWARE = {"workspace": [97, 18], "lawfirm": [1197, 113],
                "webdevelopmentagency": [719, 63], "graphicdesigner": [379, 23],
                "eventplanningagency": [379, 23], "marketingagency": [379, 23]}
 
+# Same EE Workshop 2026-10-14, DLL sha256 4b29fe1d3e293d06.
+# CreatePreparedTransactionInfo/ChargeOccupancyComponent: occupancyComponent.
+# ChargeOneTimeServiceFee, ChargeSoftwareCashOnlyFee, ChargeDataCenterSetupFee:
+# setup transactions carry no occupancyComponent. Only serviceOneTimeFee is
+# subtracted from TotalProfit by ApplyRecordedOccupancyToFinancialSummaries.
+EE_COMPONENTS = ("electricity", "water", "waste", "utilities", "internet",
+                 "datacenter", "software", "maintenance")
+EE_SETUP = {"oc:tx_internet_installation": "serviceOneTimeFee",
+            "oc:tx_software_setup": "softwareSetupPurchase",
+            "oc:tx_datacenter_setup": "datacenterSetupPurchase"}
+# GetSoftwarePlanTier, GetWorkspacePlanTier, GetRequiredOperationalSoftwareProvider.
+EE_PLAN_TIERS = {"multisoft": {"essentials": 1, "business": 2, "enterprise": 3},
+                 "voogle": {"starter": 1, "teams": 2, "complete": 3},
+                 "natodesk": {"essential": 1, "custom": 3, "ultimate": 3},
+                 "sanvas": {"creator": 1, "studio": 2, "pro": 3},
+                 "byteforge": {"core": 1, "studio": 2, "forge": 3},
+                 "lexi": {"case": 1, "practice": 2, "counsel": 3},
+                 "neuraworks": {"assist": 1, "accelerate": 2, "apex": 3}}
+
+
+def ee_records(save):
+    """Saved EE plans and observed bills; private, cached for this immutable Save."""
+    if hasattr(save, "_ee_records"):
+        return save._ee_records
+    if "economyExpansion" not in detect(save):
+        save._ee_records = None
+        return None
+    state = json.loads(mod_data(save)[ECONOMY_KEY])
+
+    def address(key):
+        # GetKey uses Address.ToString(), retaining the native street slug.
+        if not isinstance(key, str):
+            return None
+        match = re.fullmatch(r"(ba:street_[a-z0-9]+)[\s_#,:;-]+([0-9]+)", key, re.I)
+        return (match[1], int(match[2])) if match else None
+
+    locations = {address(r.get("AddressKey")): r for r in (state.get("Locations") or [])
+                 if isinstance(r, dict) and address(r.get("AddressKey"))}
+    contracts = defaultdict(dict)
+    for row in (state.get("SoftwareContracts") or []):
+        if not isinstance(row, dict):
+            continue
+        addr, provider = address(row.get("AddressKey")), row.get("ProviderId")
+        if addr and isinstance(provider, str) and isinstance(row.get("ActivePlanId"), str):
+            contracts[addr][provider.lower()] = row["ActivePlanId"].lower()
+    charges, setup = defaultdict(Counter), defaultdict(list)
+    for tx in save.items(save.root.get("Transactions")):
+        if not isinstance(tx, dict):
+            continue
+        addr = save.address(tx.get("address"))
+        day = (save.deref(tx.get("timestamp")) or {}).get("Day")
+        amount = tx.get("amount")
+        if (not addr or type(day) is not int or not isinstance(amount, (int, float))
+                or not math.isfinite(amount) or amount >= 0):
+            continue
+        data = {r.get("$k"): save.deref(r.get("$v")) for r in save.items(tx.get("transactionData"))
+                if isinstance(r, dict)}
+        kind = tx.get("transactionType")
+        if kind in EE_SETUP:
+            setup[addr].append((day, -amount, kind == "oc:tx_internet_installation"))
+        elif data.get("occupancyComponent") in EE_COMPONENTS:
+            charges[addr, day][data["occupancyComponent"]] += -amount
+    # ApplyRecordedOccupancyToFinancialSummaries deducts serviceOneTimeFee
+    # only inside its branch for a day carrying recurring occupancy/software.
+    setup = {addr: [(day, amount, deducted and bool(charges.get((addr, day))))
+                    for day, amount, deducted in rows] for addr, rows in setup.items()}
+    save._ee_records = {"locations": locations, "contracts": dict(contracts),
+                        "charges": dict(charges), "setup": setup}
+    return save._ee_records
+
+
+def ee_technology(slug):
+    """BuildTechnologyDemandName/EnsureTechnologyDemandRegistry: tier sets priority."""
+    if not isinstance(slug, str):
+        return None
+    match = re.fullmatch(r"oc:jobdemand_technology_(internet|workspace|software)_t([1-3])", slug, re.I)
+    return (match[1].lower(), int(match[2])) if match else None
+
+
+def ee_office(save, addr, business_type):
+    """Active plans only, as IsTechnologyDemandFulfilled reads them (pending is not active)."""
+    records = ee_records(save)
+    if records is None:
+        return None
+    location = records["locations"].get(addr, {})
+    plans = records["contracts"].get(addr, {})
+    tier = lambda provider: EE_PLAN_TIERS.get(provider, {}).get(plans.get(provider), 0)
+    identity = business_type.lower()
+    providers = next((p for tokens, p in (
+        (("lawfirm",), ("lexi",)), (("webdevelopment",), ("byteforge",)),
+        (("eventplanning", "marketing"), ("sanvas",)),
+        (("architecture", "architect", "interiordesign"), ("natodesk",)),
+        (("graphicdesigner", "graphicdesign"), ("natodesk", "sanvas")))
+        if any(t in identity for t in tokens)), ())
+    return {"internet": {"business": 1, "fast": 2, "fiber": 3}.get(location.get("InternetPlan"), 0),
+            "workspace": max(tier("multisoft"), tier("voogle")),
+            "software": max((tier(p) for p in providers), default=0),
+            "required": bool(providers), "cloud": plans.get("cloudharbor", ""),
+            "forcedClosed": location.get("ConnectivityForcedClosed") is True}
+
+
+def ee_office_capacity(save, addr, business_type, capacity):
+    """RefreshOfficeCapabilityCache, using layout capacity, never its patched registration.
+
+    Missing CloudHarbor/workspace/specialist: -.50/-.15/-.10, floor .25.
+    GetCloudHarborOfficeBonusCoefficient/GetSpecializedSoftwareOfficePoints and
+    GetOfficeStructureFactorForVanillaCapacity supply the fully equipped bonus.
+    """
+    office = ee_office(save, addr, business_type)
+    if office is None:
+        return capacity
+    if office["forcedClosed"] or not office["internet"]:
+        return 0
+    software = not office["required"] or office["software"] > 0
+    factor = max(.25, 1 - (.5 if not office["cloud"] else 0)
+                 - (.15 if not office["workspace"] else 0) - (.1 if not software else 0))
+    result = max(1, math.floor(capacity * factor + .5)) if capacity else 0
+    if office["cloud"] and office["workspace"] and software:
+        points = 5 if office["software"] == 2 else 10 if office["software"] >= 3 else 0
+        scale = 1 if capacity >= 50 else .2857 if capacity >= 8 else .2142 if capacity >= 4 else 0
+        result += math.floor({"dedicated": .8, "resilient": 1.4}.get(office["cloud"], 0) * points * scale + .5)
+    return result
+
 
 def ee_multiplier(row):
     return EE_TYPES.get(row.get("t"), 25.3) * EE_DISTRICTS.get(row.get("h"), {}).get(row.get("t"), 1)
