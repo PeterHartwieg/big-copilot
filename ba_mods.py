@@ -172,7 +172,10 @@ def ee_office(save, addr, business_type):
     records = ee_records(save)
     if records is None:
         return None
-    location = records["locations"].get(addr, {})
+    location = records["locations"].get(addr)
+    if location is None:
+        # An absent/unreadable AddressKey is unknown, not proof of no plan.
+        return None
     plans = records["contracts"].get(addr, {})
     tier = lambda provider: EE_PLAN_TIERS.get(provider, {}).get(plans.get(provider), 0)
     identity = business_type.lower()
@@ -182,7 +185,10 @@ def ee_office(save, addr, business_type):
         (("architecture", "architect", "interiordesign"), ("natodesk",)),
         (("graphicdesigner", "graphicdesign"), ("natodesk", "sanvas")))
         if any(t in identity for t in tokens)), ())
-    return {"internet": {"business": 1, "fast": 2, "fiber": 3}.get(location.get("InternetPlan"), 0),
+    # NormalizeInternetPlan accepts "basic" as Business, ignoring case.
+    internet = location.get("InternetPlan")
+    internet = internet.lower() if isinstance(internet, str) else "none"
+    return {"internet": {"business": 1, "basic": 1, "fast": 2, "fiber": 3}.get(internet, 0),
             "workspace": max(tier("multisoft"), tier("voogle")),
             "software": max((tier(p) for p in providers), default=0),
             "required": bool(providers), "cloud": plans.get("cloudharbor", ""),

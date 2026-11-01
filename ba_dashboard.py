@@ -4667,6 +4667,8 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
             if by_key[key]["status"] != "office" and by_key[key].get("typeSlug") != "ba:businesstype_headquarters":
                 return True
             office = ba_mods.ee_office(save, _address_of(regs[key]), regs[key].get("businessTypeName", ""))
+            if office is None:
+                return True  # Unmatched EE location: no evidence this demand is unmet.
             category, tier = setting
             return (category == "software" and not office["required"]) or office[category] >= tier
         raise ValueError(kind)
@@ -5470,16 +5472,12 @@ def _sites_gone(save: Save, names: Names, latest: dict, rented: set, residential
 
 def _daily_series(save: Save, summaries: list) -> list:
     occupancy = ba_mods.ee_records(save)
-    ee_daily = collections.Counter()
-    if occupancy is not None:
-        rented = {_address_of(r) for r in save.items(save.root.get("BuildingRegistrations")) if r.get("RentedByPlayer")}
-        for (addr, stamp), components in occupancy["charges"].items():
-            if addr in rented:
-                ee_daily[stamp] += sum(components.values())
     out = []
     for s in summaries:
         revenue = cogs = wages = rent = marketing = theft = 0.0
+        business_addresses = set()
         for st in save.items(s["businessIncomeStatements"]):
+            business_addresses.add(save.address(st.get("Address")))
             revenue += st.get("TotalSales", 0)
             cogs += st.get("TotalResources", 0)
             wages += st.get("SalaryExpenses", 0)
@@ -5512,7 +5510,9 @@ def _daily_series(save: Save, summaries: list) -> list:
         )
         food = ba_street_food.statement(save, s)
         if occupancy is not None:
-            out[-1]["economyExpansionBill"] = money(ee_daily[s["dayNumber"]])
+            out[-1]["economyExpansionBill"] = money(sum(
+                sum(occupancy["charges"].get((addr, s["dayNumber"]), {}).values())
+                for addr in _in_order(business_addresses)))
         if food is not None:
             row = out[-1]
             row["streetFood"] = food
@@ -17943,7 +17943,7 @@ def _office_site_plan(save, names, business, building, grid, skill, pool, people
         for s in grid["stations"]
     ]
     office_capacity = None
-    if ba_mods.ee_records(save) is not None:
+    if ba_mods.ee_office(save, _address_of(building), business["typeSlug"]) is not None:
         baseline = _size_cap(load_buildings(save).get(_address_of(building), {}), _door_caps(names or Names({})))
         office_capacity = ModRules(save).office_capacity(
             _address_of(building), business["typeSlug"], baseline if baseline is not None else grid["door"])
@@ -20509,7 +20509,9 @@ def _payback(save: Save, names: Names, buildings: list, businesses: list, chains
         # are cash-only in this EE DLL and must not be added back to profit.
         if occupancy is not None:
             fees = {str(stamp): [amount, deducted] for stamp, amount, deducted in memory.get("eeSetup", [])
-                    if lease <= stamp <= today}
+                    if stamp <= today}
+            # This memory belongs to the same business opening. Already accepted
+            # pre-opening fees survive even after its lease statements roll off.
             observed = collections.defaultdict(lambda: [0, 0])
             for stamp, amount, deducted in occupancy["setup"].get(addr, ()):
                 if stamp >= lease and stamp <= today:

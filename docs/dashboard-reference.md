@@ -348,6 +348,9 @@ closed-site wording. Internet, workspace and specialist software staff demands c
 against the site's **active** saved plans; pending plans do not satisfy them. Tier 1, 2
 and 3 are respectively nice to have, important and critical. A software demand does not
 apply to an office type without required specialist software.
+If the site's EE location record cannot be matched, its plans are unknown: default
+staffing stays unchanged and technology demands are not reported as unmet. EE's native
+`AddressKey` format remains unverified against a modded save.
 
 The office default staffing plan uses EE's effective layout capacity: without
 CloudHarbor it loses 50%, without workspace another 15%, and without required specialist

@@ -13,7 +13,7 @@ import ba_dashboard as d
 import ba_mods as m
 from ba_save import Names, Save, load_save
 from tests.es3_fixture import encode
-from tests.save_fixtures import data_company, data_names
+from tests.save_fixtures import data_company, data_names, HOME
 from tests.test_job_demands import building, employee, STREET
 from tests.test_office_staffing import alerts
 from tests.test_payback import PRICES, SHOP, KEY_SHOP, registration, business, statements
@@ -115,6 +115,21 @@ class ResultsTests(unittest.TestCase):
                         [(38, {})], {}, 40)
         self.assertEqual(b["economyExpansion"]["cost"], 100)
 
+    def test_fixed_cost_history_excludes_home_bills(self):
+        save = activate(synthetic_save(data_company()))
+        save.root["Transactions"] = {"$items": [charge(HOME, 39, 1000, "electricity"),
+                                                charge(SHOP, 38, 125, "electricity")]}
+        result = d.build_core(save, Names(data_names())).core
+        self.assertEqual(result["kpi"]["economyExpansionBill"], 0)
+        self.assertEqual(result["daily"][-1]["economyExpansionBill"], 0)
+        self.assertEqual(result["daily"][-2]["economyExpansionBill"], 125)
+        # Historical business bills still count after the lease is given up.
+        for reg in save.items(save.root["BuildingRegistrations"]):
+            if (reg.get("StreetName"), reg.get("StreetNumber")) == SHOP:
+                reg["RentedByPlayer"] = False
+        daily = d._daily_series(save, save.items(save.root["financialSummaries"]))
+        self.assertEqual(daily[-2]["economyExpansionBill"], 125)
+
 
 class PaybackTests(unittest.TestCase):
     def run_case(self, setup, history=None, transactions=True, enabled=True, recurring=True, fee_day=2, today=12):
@@ -170,6 +185,28 @@ class PaybackTests(unittest.TestCase):
         row = self.run_case([], history, transactions=False, today=6)
         self.assertNotIn("economyExpansion", row["cost"])
         self.assertEqual(json.dumps(history.payback("EE"), sort_keys=True), before)
+
+    def test_preopening_setup_survives_its_transaction_and_statement_window(self):
+        history = d.History(None)
+        rows = []
+        for today, first in ((10, 2), (70, 9), (70, 9)):
+            save = activate(Save({"Day": today}, {}, __file__))
+            save.root["Transactions"] = {"$items": [
+                charge(SHOP, 2, 2000, setup="oc:tx_internet_installation"),
+                charge(SHOP, 2, 1, "water")] if today == 10 else []}
+            summaries = statements([(day, {SHOP: (-2000 if day == 2 else 1000 if day > 5 else 0,
+                                                  2000 if day > 5 else 0)})
+                                    for day in range(first, today)])
+            with patch.object(d, "_item_prices", PRICES):
+                result = d._payback(save, Names({}), [registration(SHOP, [], [], 100)],
+                                    [business(SHOP, 5)], [], summaries, history, "EE")
+            rows.append(result["sites"][KEY_SHOP])
+        for row in rows:
+            self.assertEqual(row["cost"]["economyExpansion"], 2000)
+            self.assertEqual(row["cost"]["self"], 2100)
+            self.assertEqual(row["self"]["day"], rows[0]["self"]["day"])
+        self.assertEqual(rows[1], rows[2])
+        self.assertEqual(history.payback("EE")["sites"][KEY_SHOP]["eeSetup"], [[2, 2000, 2000]])
 
 
 class OfficeTests(unittest.TestCase):
@@ -242,6 +279,41 @@ class OfficeTests(unittest.TestCase):
                                           "HasPendingPlan": True, "PendingPlanId": "complete"})
         save.root["modData"]["$items"][0]["$v"] = json.dumps(state)
         self.assertEqual(m.ee_office(save, (STREET, 10), LAW)["workspace"], 0)
+
+    def test_unmatched_location_keeps_staffing_and_does_not_invent_unmet_demands(self):
+        for locations in ([], [{"AddressKey": "unverified address format", "InternetPlan": "fiber"}]):
+            save, _, b = self.office()
+            state = json.loads(save.root["modData"]["$items"][0]["$v"])
+            state["Locations"] = locations
+            save.root["modData"]["$items"][0]["$v"] = json.dumps(state)
+            save = Save(save.root, save.refs, __file__)  # fresh immutable read
+            self.assertIsNone(m.ee_office(save, (STREET, 10), LAW))
+            self.assertEqual(m.ee_office_capacity(save, (STREET, 10), LAW, 8), 8)
+            save.root["EmployeeInstances"] = {"$items": [employee([
+                f"oc:jobdemand_technology_{kind}_t3" for kind in ("internet", "workspace", "software")])]}
+            d._job_demands(save, Names({}), [b])
+            self.assertEqual(b["staffDemands"], [])
+            reg = office_registration(8, [[[8, 20]] for _ in range(7)])
+            save.root["BuildingRegistrations"] = {"$items": [reg]}
+            grids = d._hourly(save, [reg], [b], {}, {COMPUTER}, {}, Names({}))
+            with patch.object(d, "load_buildings", return_value={(STREET, 10): {"t": "office", "z": "C", "v": 1}}):
+                [row] = d._office_staffing(save, Names({}), [b], grids, [])
+            self.assertFalse(row.get("failed"), row.get("error"))
+            self.assertEqual(len({s["s"] for s in row["shifts"]}), 8)
+            vanilla = Save({**save.root, "modData": {"$items": []}}, save.refs, __file__)
+            [expected] = d._office_staffing(vanilla, Names({}), [b], grids, [])
+            self.assertEqual(row, expected)
+
+    def test_internet_alias_and_case_follow_ee_normalization(self):
+        for plan, tier in (("basic", 1), ("BASIC", 1), ("Business", 1), ("FAST", 2), ("Fiber", 3)):
+            with self.subTest(plan=plan):
+                save, _, b = self.office(internet=plan)
+                self.assertEqual(m.ee_office(save, (STREET, 10), LAW)["internet"], tier)
+                self.assertEqual(m.ee_office_capacity(save, (STREET, 10), LAW, 8), 8)
+                save.root["EmployeeInstances"] = {"$items": [employee([
+                    f"oc:jobdemand_technology_internet_t{tier}"])]}
+                d._job_demands(save, Names({}), [b])
+                self.assertEqual(b["staffDemands"], [])
 
 
 if __name__ == "__main__":
