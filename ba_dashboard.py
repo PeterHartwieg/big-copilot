@@ -18315,6 +18315,8 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
     in the `businesses` order; `people` describes everybody a site's `spare` or
     `bench`, or the top-level `bench`, names, so the page can place them, and
     whether each is in training (`training`), whom the page never moves.
+    `displayPeople` separately supplies skills and verified wages for people
+    in the schedule tables, without making them eligible for reassignment.
     """
     regs = {
         site_key(_address_of(b)): b
@@ -18481,18 +18483,32 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
         for plan in site["plans"].values():
             named.update(plan["spare"])
             named.update(plan["bench"])
-    people = {}
+    # A schedule review also shows ordinary employees who are neither spare
+    # nor on the bench. Keep their display facts out of the eligibility table.
+    display_ids = set()
+    for row in [*staffing, *(r for rows in factory_staffing.values() for r in rows), *office_staffing]:
+        for plan in (row, row.get("fullCover") or {}, row.get("openCover") or {}):
+            display_ids.update(p["id"] for p in plan.get("people") or () if p.get("id") is not None)
+    people, display_people = {}, {}
     for e in employees:
-        if e.get("id") not in named:
+        pid = e.get("id")
+        if pid not in named and pid not in display_ids:
             continue
         char = _character(save, e)
-        addr = save.address(e.get("assignedAddress"))
-        hourly, wage_complete = ba_economy.hourly(save, e.get("id"), e.get("hourlyWage") or 0)
-        people[e.get("id")] = {
-            "name": char["name"],
+        hourly, wage_complete = ba_economy.hourly(save, pid, e.get("hourlyWage") or 0)
+        display = {
             "skills": _skill_rows(char),
             "wage": money(hourly),
             **_wage_basis(save, wage_complete),
+        }
+        if pid in display_ids:
+            display_people[pid] = display
+        if pid not in named:
+            continue
+        addr = save.address(e.get("assignedAddress"))
+        people[pid] = {
+            "name": char["name"],
+            **display,
             "site": site_key(addr) if addr else None,
             "hours": e.get("assignedWeeklyHours") or 0,
             "demands": _in_order(
@@ -18506,6 +18522,7 @@ def _hiring(save: Save, businesses: list, staffing: list, factory_staffing: dict
         "sites": sites,
         "bench": bench,
         "people": {pid: people[pid] for pid in _in_order(people)},
+        "displayPeople": {pid: display_people[pid] for pid in _in_order(display_people)},
         "demandKinds": {
             slug: DEMAND_SCOPE[JOB_DEMANDS[slug][0]]
             for slug in sorted(JOB_DEMANDS)

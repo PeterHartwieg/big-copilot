@@ -1293,6 +1293,30 @@
    "ba:jobdemand_standardfridge": "site",
    "ba:jobdemand_watercooler": "site"
   },
+  "displayPeople": {
+   "AAAAemployeeAAAAAAAAAAAA": {
+    "skills": [
+     {
+      "level": 60,
+      "skill": "ba:skill_customerservice"
+     },
+     {
+      "level": 40,
+      "skill": "ba:skill_cleaning"
+     }
+    ],
+    "wage": 0.0
+   },
+   "CCCCemployeeCCCCCCCCCCCC": {
+    "skills": [
+     {
+      "level": 60,
+      "skill": "ba:skill_customerservice"
+     }
+    ],
+    "wage": 0.0
+   }
+  },
   "people": {},
   "recruiting": {},
   "sites": [

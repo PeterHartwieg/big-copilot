@@ -2157,8 +2157,15 @@ function hrReviewSites(req, phase, gone, status){
         tt("co.hire.p.skill", "Skill")}</span><span class="m">${tt("co.hire.p.wage", "$/h")}</span><span class="hr-wkd">${
         HR_DAYS.map(d => `<span>${ttDay(d)[0]}</span>`).join("")}</span><span class="m">${tt("co.hire.p.week", "Week")}</span></div>${
       existing.map(p => {
-        const who = hrPerson(p.id, S.row), stations = (S.row || {}).stations || [];
+        const who = ((D.hiring || {}).displayPeople || {})[p.id] || hrPerson(p.id, S.row);
+        const stations = (S.row || {}).stations || [];
         const skills = [...new Set(p.slots.map(s => stations.find(st => st.id === s.station)?.skill).filter(Boolean))];
+        // Retained office duties can name a station without its role. The
+        // employee's saved skills are ordered with their primary one first.
+        if(!skills.length){
+          const primary = who.skills?.[0]?.skill || who.skill;
+          if(primary) skills.push(primary);
+        }
         const levels = skills.map(skill => (who.skills || []).find(s => s.skill === skill)?.level
           ?? (who.skill === skill ? who.level : undefined));
         return person(spEsc(gwWho(p.id, S.row).name || tt("co.hire.someone", "someone")), {t: tt("co.hire.p.current", "already at this site")},

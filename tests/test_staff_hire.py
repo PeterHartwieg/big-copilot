@@ -1042,6 +1042,34 @@ class HiringTest(unittest.TestCase):
         hiring = _hiring(save, self.businesses, [], {}, [])
         self.assertTrue(hiring["people"]["e3"]["training"])
 
+    def test_scheduled_display_metadata_does_not_change_hiring_eligibility(self):
+        row = {"key": self.businesses[0]["key"], "people": [{"id": "e1"}]}
+        # Every source of a selected week has its own indexed people table.
+        sources = [([row], {}, []),
+                   ([dict(row, people=[], fullCover=row)], {}, []),
+                   ([dict(row, people=[], openCover=row)], {}, []),
+                   ([], {"cap": [row]}, []), ([], {"dem": [row]}, []),
+                   ([], {}, [row]), ([], {}, [dict(row, people=[], openCover=row)])]
+        for shops, factories, offices in sources:
+            with self.subTest(shops=bool(shops), factories=list(factories), offices=bool(offices)):
+                hiring = _hiring(self.save, self.businesses, shops, factories, offices)
+                self.assertEqual(hiring["people"], self.hiring["people"])
+                self.assertEqual(hiring["bench"], self.hiring["bench"])
+                self.assertEqual(hiring["displayPeople"], {
+                    "e1": {"skills": [{"skill": SERVICE, "level": 50}], "wage": 20.0}})
+
+    def test_scheduled_display_uses_verified_mod_wages_and_flags_missing_observations(self):
+        from tests.test_economy import capture
+        save = capture({"employment": [{"employeeId": "e1", "ordinaryHourlyCents": 2351}]}, self.save.root)
+        row = {"key": self.businesses[0]["key"], "people": [{"id": "e1"}, {"id": "e2"}]}
+        display = _hiring(save, self.businesses, [row], {}, [])["displayPeople"]
+        self.assertEqual(display["e1"], {"skills": [{"skill": SERVICE, "level": 50}],
+                                         "wage": 23.51, "wageBasis": "ordinary-hourly"})
+        self.assertEqual(display["e2"]["skills"], [{"skill": CLEANING, "level": 70},
+                                                   {"skill": SERVICE, "level": 20}])
+        self.assertTrue(display["e2"]["wageUnavailable"])
+        self.assertEqual(display["e2"]["wageBasis"], "native-base-only")
+
     def test_every_assign_table_type_is_one_the_board_knows(self):
         known = ts.ba_dashboard.RETAIL_TYPES | ts.ba_dashboard.OFFICE_TYPES | \
             ts.ba_dashboard.COST_CENTRE_TYPES

@@ -330,7 +330,7 @@ Names are save data: they stay in the browser like employee names. `_character()
 a character from `characterData` or, in an older save, from the instance itself;
 `_staff()` reads through it too.
 
-`hiring` is `{sites, bench, people, demandKinds, company}`. `sites` has one entry per
+`hiring` is `{sites, bench, people, displayPeople, demandKinds, company}`. `sites` has one entry per
 business the player runs, in `businesses` order (vacant and `businesstype_empty` sites
 left out): `{key, name, kind (shop | office | factory | hq | warehouse), address {street,
 number}, planned, new, accepts, plans, facts}`. `plans` is keyed by variant (a shop
@@ -347,7 +347,10 @@ the business and building type bundles). `facts` answers each site-level demand 
 site (a desk demand: whether the site holds such an item anywhere). Top level: `bench`
 every unassigned employee id; `people` the name, `skills`, `wage`, `site`, `hours`,
 `demands` and `training` (in training: never moved) of everybody a `bench` or `spare` list
-names; `demandKinds` each demand as
+names. `displayPeople` separately maps the ids in shop, factory and office schedule tables
+to `skills`, `wage` and any `wageUnavailable`/`wageBasis` markers for the all-sites review;
+it supplies display facts only and never changes hiring or reassignment eligibility.
+`demandKinds` each demand as
 `schedule`, `site` or `company`; `company` whether the company meets each company-level
 demand for a new hire.
 
