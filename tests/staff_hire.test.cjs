@@ -955,9 +955,10 @@ test('Review: the dry run, who goes where, one confirm with no undo, and a parti
   // A site opens for its people and their days.
   await dlg.locator(`[data-hr-site="${G}"]`).click();
   const people = dlg.locator('.hr-dsite.open .hr-dp:not(.hd)');
-  assert.deepEqual(await people.locator('.who b').allTextContents(), ['Bram Castell', 'Sam Spare']);
-  assert.deepEqual(await people.locator('.who small').allTextContents(), [en("co.hire.p.new"), en("co.hire.p.from", {"site":"HART. Corner"})]);
-  assert.equal(await people.first().locator('.hr-wk i.on').count(), 3);
+  assert.deepEqual(await people.locator('.who b').allTextContents(), ['Ana Silva', 'Bram Castell', 'Sam Spare']);
+  assert.deepEqual(await people.locator('.who small').allTextContents(), [en("co.hire.p.current"), en("co.hire.p.new"), en("co.hire.p.from", {"site":"HART. Corner"})]);
+  assert.equal(await people.first().locator('.hr-wk i.on').count(), 2);
+  assert.equal(await people.nth(1).locator('.hr-wk i.on').count(), 3);
   const apply = dlg.locator('.gw-foot [data-gw-b="apply"]');
   assert.equal(await apply.textContent(), en("co.hire.go.all", {"n":4}));
   await apply.click();

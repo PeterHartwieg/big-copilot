@@ -3641,6 +3641,57 @@
    "ba:jobdemand_standardfridge": "site",
    "ba:jobdemand_watercooler": "site"
   },
+  "displayPeople": {
+   "EMPana": {
+    "skills": [
+     {
+      "level": 70,
+      "skill": "ba:skill_customerservice"
+     },
+     {
+      "level": 30,
+      "skill": "ba:skill_cleaning"
+     }
+    ],
+    "wage": 18.0
+   },
+   "EMPben": {
+    "skills": [
+     {
+      "level": 55,
+      "skill": "ba:skill_customerservice"
+     }
+    ],
+    "wage": 18.0
+   },
+   "EMPcy": {
+    "skills": [
+     {
+      "level": 60,
+      "skill": "ba:skill_cleaning"
+     }
+    ],
+    "wage": 14.0
+   },
+   "EMPdee": {
+    "skills": [
+     {
+      "level": 65,
+      "skill": "ba:skill_customerservice"
+     }
+    ],
+    "wage": 18.0
+   },
+   "EMPeli": {
+    "skills": [
+     {
+      "level": 50,
+      "skill": "ba:skill_factoryworker"
+     }
+    ],
+    "wage": 16.0
+   }
+  },
   "people": {},
   "recruiting": {},
   "sites": [

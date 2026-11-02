@@ -465,6 +465,7 @@
  "co.hire.order.why.old": "Big Copilot Link 0.3.0 erforderlich",
  "co.hire.p.askfor": "die verfügbaren {role}-Kräfte verlangen {demand}",
  "co.hire.p.bench": "nicht zugewiesen, im Plan",
+ "co.hire.p.current": "bereits an diesem Standort",
  "co.hire.p.expired": "Bewerbung abgelaufen",
  "co.hire.p.from": "von {site} versetzt",
  "co.hire.p.fromnone": "versetzt, zuvor nicht zugewiesen",

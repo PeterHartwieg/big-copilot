@@ -1,5 +1,11 @@
 [
   {
+    "pr": 562,
+    "date": "2026-11-02",
+    "title": "See existing staff in Staff all sites",
+    "summary": "Expanding a site in Staff all sites now lists the people already working there, including when only their hours change. Their planned days and weekly hours match the summary before you confirm."
+  },
+  {
     "pr": 560,
     "date": "2026-11-01",
     "title": "Explain existing businesses with Economy Expansion",
