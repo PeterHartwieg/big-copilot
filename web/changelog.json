@@ -1,5 +1,11 @@
 [
   {
+    "pr": 564,
+    "date": "2026-11-07",
+    "title": "See who asks for something their site lacks",
+    "summary": "In Staff this site and Staff all sites, the note about unmet demands now names the people it counts. Opening their site marks them in orange and lists what they ask for and why, as Change picks does. They are still hired."
+  },
+  {
     "pr": 562,
     "date": "2026-11-02",
     "title": "See existing staff in Staff all sites",

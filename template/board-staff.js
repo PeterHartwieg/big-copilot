@@ -1389,6 +1389,12 @@ function hrWhy(m, slug, S, wk){
   const tone = hrDemandAt(m, slug, S, wk);
   return tone === "warn" ? notHere() : nowhere();
 }
+/* A hire's demands their place in the action does not meet, each with why,
+   as Change picks says them: the review's site list and its note share it. */
+function hrHireUnmet(m, h, S){
+  const wk = h.w ? {w: h.w, S} : null;
+  return hrWarns(m, h.c, S, wk).map(([d]) => tt("co.hire.cand.unmet", "{demand} ({why})", {demand: hrName(d), why: hrWhy(m, d, S, wk)}));
+}
 /* One candidate as a row of Change picks. */
 function hrCandRow(m, r, c){
   const at = r.at.get(c.id);
@@ -2145,10 +2151,16 @@ function hrReviewSites(req, phase, gone, status){
       : said === "wait" ? `<span class="hr-st wait">${tt("co.hire.st.wait", "writing the week…")}</span>`
       : `<span class="hr-st no">${gwSvg("alert")}${said.say || tt("co.hire.st.failed", "week not written")}</span>`;
     const open = hrUi.reviewOpen === S.key;
-    const person = (name, sub, role, lv, wage, slots, hours, cls) => `<div class="hr-dp${cls ? ` ${cls}` : ""}"><span class="who"><b>${name}</b><small${sub.mv ? ` class="mv"` : ""}>${sub.t}</small></span><span class="r">${role}</span>
+    const person = (name, sub, role, lv, wage, slots, hours, cls) => `<div class="hr-dp${cls ? ` ${cls}` : ""}"><span class="who"><b>${name}</b><small${sub.mv ? ` class="mv"` : ""}>${sub.t}</small>${
+        sub.warn ? `<small class="warn">${sub.warn}</small>` : ""}</span><span class="r">${role}</span>
       <span class="m">${lv}</span><span class="m">${wage}</span>${hrWeekStrip(slots, cls === "gap")}<span class="m">${hours}</span></div>`;
     const struck = (c, g) => g ? `<span class="hr-struck">${spEsc(c.name)}</span>` : spEsc(c.name);
     const expired = tt("co.hire.p.expired", "application expired");
+    /* A hire whose demands their site does not meet, marked orange as in
+       Change picks, with what they ask for: the review's note counts them. */
+    const unmet = h => { const u = hrLast ? hrHireUnmet(hrLast.m, h, at.S || S) : [];
+      return u.length ? tt("co.hire.p.unmet", "asks for {demands}", {demands: u.join(", ")}) : ""; };
+    const hireCls = (h, g) => g ? "gap" : unmet(h) ? "warn" : "";
     /* Hires and moves have their own rows below. Existing staff also belong
        in an all-sites review, even when a site only changes its week. */
     const incoming = new Set([...at.hires.map(h => h.c.id), ...moves.map(x => x.id)]);
@@ -2173,12 +2185,12 @@ function hrReviewSites(req, phase, gone, status){
           hrWage(who.wageUnavailable ? null : who.wage), p.slots, `${p.hours} h`);
       }).join("")}${
       hires.map(h => { const g = gone.has(h.c.id);
-        return person(struck(h.c, g), {t: g ? expired : (h.misfit || []).length ? tt("co.hire.p.newbreak", "new hire · hours break a demand") : tt("co.hire.p.new", "new hire")},
-          hrRole(h.skill), `${Math.round(hrLevel(h.c, h.skill))}%`, hrWage(h.c.wageUnavailable ? null : h.c.wage), weekly ? h.w.slots : [], weekly ? `${h.w.hours || 0} h` : "–", g ? "gap" : ""); }).join("")}${
+        return person(struck(h.c, g), {t: g ? expired : (h.misfit || []).length ? tt("co.hire.p.newbreak", "new hire · hours break a demand") : tt("co.hire.p.new", "new hire"), warn: g ? "" : unmet(h)},
+          hrRole(h.skill), `${Math.round(hrLevel(h.c, h.skill))}%`, hrWage(h.c.wageUnavailable ? null : h.c.wage), weekly ? h.w.slots : [], weekly ? `${h.w.hours || 0} h` : "–", hireCls(h, g)); }).join("")}${
       extra.map(h => { const g = gone.has(h.c.id);
         return person(struck(h.c, g), {t: g ? expired : h.nofit ? tt("co.hire.p.nohours.nofit", "new hire · no hours: no open week fits {demands}", {demands: h.nofit.map(hrName).join(", ")})
-          : tt("co.hire.p.nohours", "new hire · no hours")}, hrRole(h.skill),
-          `${Math.round(hrLevel(h.c, h.skill))}%`, hrWage(h.c.wageUnavailable ? null : h.c.wage), [], "–", g ? "gap" : ""); }).join("")}${
+          : tt("co.hire.p.nohours", "new hire · no hours"), warn: g ? "" : unmet(h)}, hrRole(h.skill),
+          `${Math.round(hrLevel(h.c, h.skill))}%`, hrWage(h.c.wageUnavailable ? null : h.c.wage), [], "–", hireCls(h, g)); }).join("")}${
       moves.map(x => person(spEsc(x.p.name || "?"), {t: x.fixed ? tt("co.hire.p.bench", "unassigned, in the plan")
           : x.from ? tt("co.hire.p.from", "reassigned from {site}", {site: spEsc(x.from.b ? shortName(x.from.b) : tt("co.hire.asite", "a site"))})
           : tt("co.hire.p.fromnone", "reassigned, unassigned before"), mv: true},
@@ -2488,7 +2500,7 @@ function hrReview(o = {}, hooks = {}){
         const row = S && S.site.kind === "office" && !(req.touched.get(S.key) || {}).inbound ? gwOfficeRow(S.key) : S && S.row;
         return gwWeekCheck(row, x.days, away).map(p => Object.assign(p, writes.length > 1 && S ? {site: spEsc(hrSiteName(S))} : {}));
       });
-      const warned = [...req.touched.values()].flatMap(at => at.hires.filter(h => hrWarns(m, h.c, at.S, h.w ? {w: h.w, S: at.S} : null).length));
+      const warned = [...req.touched.values()].flatMap(at => at.hires.filter(h => hrHireUnmet(m, h, at.S).length));
       const officeLeft = [...req.touched.values()].flatMap(at => (at.leftOut || []).map(x => gwCall("warn", "alert", tt("sp.gw.sch.office.left",
         "<b>{name}</b>: {h} h of the office default left out, more than their week can take",
         {name: spEsc(x.name || tt("sp.gw.someone.cap", "Someone")), h: x.hours})))).join("");
@@ -2500,8 +2512,9 @@ function hrReview(o = {}, hooks = {}){
         ${gapText ? gwCall("warn", "alert", `${gapText}.${gapWhy ? ` ${gapWhy}` : ""}`) : ""}${shortCall}${chain}
         ${(req.unreadableSites || []).map(S => gwCall("warn", "alert", tt("sp.evidence.unreadable", "{site}: the current schedule contains unreadable entries. Hires and assignments can proceed, but this office's schedule will stay unchanged; repair its entries in BizMan before applying staffing.", {site: spEsc(hrSiteName(S))}))).join("")}
         ${gwCheckLines(checked)}${officeLeft}
-        ${warned.length ? gwCall("info", "info", tt("co.hire.warned", {one: "{n} person asks for something their site does not meet (marked orange in Change picks). They are hired anyway.",
-          other: "{n} people ask for something their site does not meet (marked orange in Change picks). They are hired anyway."}, {n: warned.length})) : ""}`;
+        ${warned.length ? gwCall("info", "info", tt("co.hire.warned", {one: "{n} person asks for something their site does not meet: {who}. They are hired anyway. Open their site above to see what they ask for, marked orange.",
+          other: "{n} people ask for something their site does not meet: {who}. They are hired anyway. Open their sites above to see what they ask for, marked orange."},
+          {n: warned.length, who: warned.map(h => `<b>${spEsc(h.c.name || "?")}</b>`).join(", ")})) : ""}`;
     },
     bind: (dlg, replan) => {
       dlg.querySelectorAll("[data-hr-mode]").forEach(b => { b.onclick = () => {
