@@ -3834,3 +3834,45 @@ test('hire count stays visible when the add prerequisite assigns only or states 
     await page.close();
   }
 });
+
+test('Staff this site marks the hires whose demands their site does not meet, and the note names them (#563)', async (t) => {
+  const d = JSON.parse(payload);
+  // Gifts hires Dario (coffee machine: none at Gifts), Edda (gold insurance:
+  // not offered) and Femi, who asks for nothing.
+  d.candidates = d.candidates.filter(c => !['c1', 'c2', 'c3'].includes(c.id));
+  d.hiring.bench = []; d.hiring.sites[1].plans.demand.spare = [];
+  d.hiring.sites[0].plans.demand.hireWeeks.push({skill: CS, hours: 24, days: 2, slots: [slot(7, 1, 8, 20, 'REG-G'), slot(8, 2, 8, 20, 'REG-G')]});
+  const page = await board(t, {link: ONE, data: JSON.stringify(d)});
+  await answering(page, []);
+  await page.evaluate(k => hrReview({scope: 'site', site: k}), G);
+  await phase(page, 'ready');
+  const dlg = page.locator('dialog.gw-dlg');
+  const note = (await dlg.locator('.gw-call').allTextContents()).find(x => x.includes('Dario Engstrom'));
+  assert.ok(note, 'the note names the people it counts');
+  assert.match(note, /Edda Farrow/);
+  assert.doesNotMatch(note, /Femi Gallo/);
+  assert.doesNotMatch(note, new RegExp(en('co.hire.role.change')));
+  assert.equal(note.trim(), textEn('co.hire.warned', {n: 2, who: 'Dario Engstrom, Edda Farrow'}));
+  await dlg.locator(`[data-hr-site="${G}"]`).click();
+  const rows = dlg.locator('.hr-dsite.open .hr-dp:not(.hd)');
+  assert.deepEqual(await rows.locator('.who b').allTextContents(), ['Dario Engstrom', 'Edda Farrow', 'Femi Gallo']);
+  assert.deepEqual(await rows.evaluateAll(els => els.map(e => e.classList.contains('warn'))), [true, true, false]);
+  const asks = demands => en('co.hire.p.unmet', {demands});
+  assert.deepEqual(await rows.locator('.who small.warn').allTextContents(), [
+    asks(en('co.hire.cand.unmet', {demand: 'Coffee Machine', why: en('co.hire.why.nothere', {site: 'HART. Gifts'})})),
+    asks(en('co.hire.cand.unmet', {demand: 'Gold Health Insurance', why: en('co.hire.why.notoffered')}))]);
+  // The same orange as Change picks.
+  const color = await rows.first().locator('.who small.warn').evaluate(e => getComputedStyle(e).color);
+  assert.equal(color, await page.evaluate(() => { const s = document.createElement('span'); s.className = 'warn'; document.body.append(s);
+    const c = getComputedStyle(s).color; s.remove(); return c; }));
+  assert.equal(await rows.nth(2).locator('.who small').allTextContents().then(x => x.join('|')), en('co.hire.p.new'));
+  // Staff all sites opens the same list.
+  await page.evaluate(() => document.querySelector('dialog.gw-dlg').close());
+  await page.evaluate(() => hrReview({scope: 'all'}));
+  await phase(page, 'ready');
+  assert.equal(await dlg.locator('h2').textContent(), en('co.hire.title.all'));
+  const head = dlg.locator(`[data-hr-site="${G}"]`);
+  if(await head.getAttribute('aria-expanded') !== 'true') await head.click();
+  assert.deepEqual(await rows.evaluateAll(els => els.filter(e => e.classList.contains('warn')).map(e => e.querySelector('.who b').textContent)),
+    ['Dario Engstrom', 'Edda Farrow']);
+});
