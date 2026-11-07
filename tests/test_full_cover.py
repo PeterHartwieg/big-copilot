@@ -396,6 +396,28 @@ class LayerFirstTest(unittest.TestCase):
         empty = [(wd, h) for wd in range(7) for h in range(24) if not cells[(wd, h)]]
         self.assertEqual(empty, [], "one register staffed 0 to 24 every day")
 
+    def test_the_old_plan_in_the_game_is_held_on_no_layer(self):
+        # The week the hour-by-hour fill placed, as the shop runs it now. A
+        # held week is judged role by role and layer by layer: with eight
+        # servers it kept one register alone for 72 hours and four on for 60,
+        # and with ten its 12 hours with no server were paid for by 12 more
+        # hours of cleaning.
+        for count, layers in ((8, 2), (10, 2)):
+            with self.subTest(count):
+                people = [employee(f"s{i}", [SERVICE]) for i in range(count)] + \
+                    [employee("c0", [CLEANING])]
+                with unittest.mock.patch.object(ba_dashboard, "_station_layers",
+                                                lambda grid, cover_posts: {}):
+                    old = plan(self.ITEMS, people, BUSY, weeks=0)
+                current = [{"wd": s["d"], "employeeId": old["people"][s["p"]]["id"],
+                            "itemInstanceId": old["stations"][s["s"]]["id"],
+                            "startingHour": s["f"], "endingHour": s["t"], "type": 1}
+                           for s in staffed(old["fullCover"])]
+                row = plan(self.ITEMS, people, BUSY, weeks=0, shifts=current)
+                cells = self.serving_cells(row["fullCover"])
+                self.assertEqual(min(cells[(wd, h)] for wd in range(7) for h in range(24)),
+                                 layers)
+
     def test_the_rules_still_hold(self):
         for label, servers in self.CREWS.items():
             with self.subTest(label):

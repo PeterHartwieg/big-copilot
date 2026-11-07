@@ -16789,15 +16789,44 @@ def _station_layers(grid: dict, cover_posts: list) -> dict:
     return layers
 
 
-def _empty_role_hours(shifts: list) -> int:
-    """The hours a week has a line for in a role and nobody working any of them."""
-    wanted, worked = collections.defaultdict(set), collections.defaultdict(set)
+def _layer_gaps(shifts: list) -> dict:
+    """Each role's hours short of each layer: {role: (hours short of 1, of 2, ...)}.
+
+    An hour of a role with n lines (staffed or open) is short of layer k <= n
+    when fewer than k people work it. Read earliest layer first, the tuples
+    compare the way full cover fills (_station_layers()).
+    """
+    lines = collections.defaultdict(collections.Counter)
+    worked = collections.defaultdict(collections.Counter)
     for s in shifts:
-        cells = {(s["wd"], hour) for hour in range(s["from"], s["to"])}
-        wanted[(s["skill"], s["kind"])].update(cells)
+        role = (s["skill"], s["kind"])
+        cells = [(s["wd"], hour) for hour in range(s["from"], s["to"])]
+        lines[role].update(cells)
         if s["employee"] is not None:
-            worked[(s["skill"], s["kind"])].update(cells)
-    return sum(len(cells - worked[role]) for role, cells in wanted.items())
+            worked[role].update(cells)
+    out = {}
+    for role, wanted in lines.items():
+        short = [0] * max(wanted.values())
+        for cell, count in wanted.items():
+            for k in range(worked[role][cell], count):
+                short[k] += 1
+        out[role] = tuple(short)
+    return out
+
+
+def _no_layer_lost(week: dict, plain: dict) -> bool:
+    """Whether `week` (_layer_gaps()) is short of no role's layers more than `plain`.
+
+    Role by role, so a cleaning hour gained never pays for a register hour
+    lost, and earliest layer first, so a second register held never pays for
+    an hour with no register at all.
+    """
+    for role in set(week) | set(plain):
+        mine, theirs = week.get(role, ()), plain.get(role, ())
+        width = max(len(mine), len(theirs))
+        if mine + (0,) * (width - len(mine)) > theirs + (0,) * (width - len(theirs)):
+            return False
+    return True
 
 
 def _lift_layers(shifts: list, pool: list, state: dict, layers: dict) -> int:
@@ -17067,10 +17096,10 @@ def _week_d_place(ctx: dict) -> None:
     # 0 h, draws the same bench members, hires no more people, and leaves
     # fewer hours short; the first that does is kept. Otherwise the plain
     # week stands (docs/dashboard-reference.md, "The week the board would copy into BizMan").
-    # Full cover's held week also leaves no more of a role's hours with
-    # nobody on them than the plain week does: holding a week stacked on the
-    # nights and evenings would undo the station-by-station fill
-    # (_station_layers()) on the very shops that followed the old plan.
+    # Full cover's held week is also short of no role's layers more than the
+    # plain week (_no_layer_lost()): holding a week stacked on the nights and
+    # evenings would undo the station-by-station fill (_station_layers()) on
+    # the very shops that followed the old plan.
     dropped, missing = _waiting_drops(shifts, standing, role_keys) if standing else ([], 0)
     if dropped:
         start, keys = ctx["start"], ctx["keys"]
@@ -17083,7 +17112,7 @@ def _week_d_place(ctx: dict) -> None:
             [row for row in dropped if row["employee"] in here_ids],
         ]
         kept = None
-        empty = _empty_role_hours(shifts) if ctx["layers"] else 0
+        gaps = _layer_gaps(shifts) if ctx["layers"] else None
         for index, held in enumerate(tries):
             # The second try is the first again where every entry of a short
             # role is on a short hour: asked once.
@@ -17098,7 +17127,7 @@ def _week_d_place(ctx: dict) -> None:
             short = _waiting_drops(shifts, standing, role_keys)[1]
             if (now_here <= here_ids and now_bench == bench_ids and now_hired <= hired
                     and short < missing
-                    and (not ctx["layers"] or _empty_role_hours(shifts) <= empty)):
+                    and (gaps is None or _no_layer_lost(_layer_gaps(shifts), gaps))):
                 kept = _week_d_snapshot(ctx, shifts, hire_weeks, here)
                 break
         shifts, hire_weeks, here = _week_d_restore(ctx, kept or plain)

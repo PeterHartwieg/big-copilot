@@ -909,8 +909,9 @@ unassigned bench and hires. One thing differs in the order: full cover fills a r
 stations one after another, every hour of its first register before any of its second
 (`_station_layers()`, issue #564), where the demand plan fills hour by hour, then moves
 hours from a later station onto an open line of an earlier one wherever the person's rules
-allow (`_lift_layers()`); a week held as it stands in the game is kept only if it leaves no
-more of a role's hours with nobody on them. A shop short
+allow (`_lift_layers()`); a week held as it stands in the game is kept only if no role is
+short of any of its stations for more hours than without it, earliest station first
+(`_no_layer_lost()`). A shop short
 of people then has one register staffed around the clock, and its hires are the second
 register onwards, rather than people on the night and evening of every register and
 nobody at midday. A shop already open 0 to 24 with complete data copies full cover as its
