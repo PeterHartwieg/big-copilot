@@ -76,6 +76,53 @@ test('a wholesale contract and an import contract pre-fill their current lines',
   assert.doesNotMatch(read, /data-po-amount/);
 });
 
+test('each import line names the warehouse it goes to, in the form and the review', () => {
+  setBoard();
+  const twice = {...agent, products: [
+    {slug: 'soda', item: 'Soda', s: 1, key: 'hub#1', where: 'Hub', amount: 10},
+    {slug: 'soda', item: 'Soda', s: 2, key: 'factory#2', where: 'Factory', amount: 20}]};
+  const imp = context.poFromAgent(twice);
+  const form = context.poFormBody(imp, context.poLines(imp), {write: true, reason: ''});
+  assert.match(form, /aria-label="Soda for Hub"/);
+  assert.match(form, /aria-label="Soda for Factory"/);
+  const diff = context.poAnswerDiff(imp, imp.lines, imp.lines.map(l => ({...l, amount: l.amount + 1})), {rows: [{products: [
+    {itemName: 'soda', warehouse: {street: 'hub', number: 1}, amount: 11, unitPrice: 1},
+    {itemName: 'soda', warehouse: {street: 'factory', number: 2}, amount: 21, unitPrice: 1}]}]});
+  assert.match(diff, /Soda <span class="sub">Hub<\/span>/);
+  assert.match(diff, /Soda <span class="sub">Factory<\/span>/);
+});
+
+test('an open form is checked against the contract as it is now before each write', () => {
+  setBoard();
+  run(`SOURCE.link = () => (${JSON.stringify(link)})`);
+  try {
+    const order = context.poFromWholesale(weekly);
+    assert.equal(context.poStale(order), '');
+    weekly.enabled = false;
+    assert.match(context.poStale(order), /will not start it again/);
+    weekly.enabled = true;
+    weekly.items[0].amount = 41;
+    assert.match(context.poStale(order), /open Edit again/);
+    weekly.items[0].amount = 40;
+    context.__wholesale.contracts = [];
+    assert.match(context.poStale(order), /no longer in the save/);
+    const again = context.poFromSnap(context.poSnapshot(order));
+    assert.equal(context.poStale(again), '');
+    context.__wholesale.contracts = [weekly];
+    assert.match(context.poStale(again), /in the save again/);
+
+    const imp = context.poFromAgent(agent);
+    assert.equal(context.poStale(imp), '');
+    context.__roles.agents = [{...agent, urgent: true}];
+    assert.match(context.poStale(imp), /urgent import/);
+    context.__roles.agents = [{...agent, active: false}];
+    assert.match(context.poStale(imp), /will not start it again/);
+  } finally {
+    run("delete SOURCE.link");
+    context.__roles.agents = [agent];
+  }
+});
+
 test('a missing or older Link, a stopped contract and a one-off stay read-only', () => {
   const order = context.poFromWholesale(weekly);
   const imp = context.poFromAgent(agent);
@@ -95,7 +142,11 @@ test('a missing or older Link, a stopped contract and a one-off stay read-only',
   assert.equal(context.poGate(context.poFromWholesale({...weekly, mode: 'once'}), link).reason, 'phase2');
   assert.equal(context.poGate(context.poFromWholesale({...weekly, mode: 'urgent'}), link).reason, 'phase2');
   assert.equal(context.poGate(context.poFromAgent({...agent, smart: false, repeating: false}), link).reason, 'phase2');
+  assert.equal(context.poGate(context.poFromAgent({...agent, smart: true, repeating: false}), link).reason, 'phase2');
+  assert.equal(context.poGate(context.poFromAgent({...agent, urgent: true}), link).reason, 'urgent');
+  assert.equal(context.poGate(context.poFromAgent({...agent, smart: true, urgent: true}), link).reason, 'urgent');
   assert.match(context.poGateSay({write: false, reason: 'phase2'}, order), /later Link update/);
+  assert.match(context.poGateSay({write: false, reason: 'urgent'}, order), /urgent import/);
 
   assert.deepEqual(plain(context.poGate(order, link)), {write: true, reason: ''});
   assert.deepEqual(plain(context.poGate(context.poFromAgent({...agent, smart: true}), link)), {write: true, reason: ''});
@@ -147,6 +198,10 @@ test('the diff names each line old to new, the cost, and a moved delivery day', 
   assert.match(quoted, /—/);
   assert.match(quoted, /The game quotes \$500/);
   assert.doesNotMatch(quoted, /moves from day/);
+  const live = context.poAnswerDiff(order, order.lines, order.lines, {rows: [{cost: 260}]});
+  assert.match(live, /The game quotes \$260/);
+  assert.doesNotMatch(live, /Cost goes from/);
+  assert.equal(context.poModeLabel('<b>x</b>'), '&lt;b&gt;x&lt;/b&gt;');
 });
 
 test('an edit reuses the weekly wholesale body and leaves a stopped import unstarted', () => {
@@ -218,6 +273,7 @@ test('Deliveries lists both kinds of contract, and a copied order survives witho
   assert.match(roles, /with or without Link/);
   assert.match(roles, /data-po-copied="wholesale\|gone"/);
   assert.match(roles, /Old Market/);
+  assert.match(roles, />Supplier</);
   assert.doesNotMatch(roles, /data-po-edit="import"/);
 });
 
