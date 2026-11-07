@@ -367,6 +367,35 @@ class LayerFirstTest(unittest.TestCase):
                 # The second register onwards is where the hires go.
                 self.assertTrue(open_lines(row["fullCover"]))
 
+    def test_each_layer_is_complete_before_the_next_starts(self):
+        # Four twelve-hour entries each: seven servers are 336 hours, two
+        # registers around the clock; eleven are three and 24 hours over.
+        # Filled a station at a time alone, seven left the second register
+        # empty at the weekend afternoons and staffed the third on Monday.
+        for count, layers in ((7, 2), (11, 3)):
+            with self.subTest(count):
+                row, _people = self.row([employee(f"s{i}", [SERVICE]) for i in range(count)])
+                cells = self.serving_cells(row["fullCover"])
+                self.assertEqual(min(cells[(wd, h)] for wd in range(7) for h in range(24)),
+                                 layers)
+
+    def test_a_stacked_week_already_in_the_game_is_not_held(self):
+        # A shop open around the clock that followed the old plan: two
+        # registers on at night and in the evening, nobody 8 to 16. Full cover
+        # holds people on the hours they work now while it waits on a hire,
+        # but not where that leaves hours with nobody on them.
+        current = [{"wd": wd, "employeeId": pid, "itemInstanceId": post,
+                    "startingHour": start, "endingHour": end, "type": 1}
+                   for wd in range(7)
+                   for pid, post, start, end in (("s0", 1, 0, 8), ("s1", 2, 0, 8),
+                                                 ("s2", 1, 16, 24), ("s3", 2, 16, 24))]
+        people = [employee(f"s{i}", [SERVICE]) for i in range(4)] + [employee("c0", [CLEANING])]
+        row = plan(self.ITEMS, people, BUSY, weeks=0, shifts=current)
+        self.assertIs(row["fullCover"]["openNow"], True)
+        cells = self.serving_cells(row["fullCover"])
+        empty = [(wd, h) for wd in range(7) for h in range(24) if not cells[(wd, h)]]
+        self.assertEqual(empty, [], "one register staffed 0 to 24 every day")
+
     def test_the_rules_still_hold(self):
         for label, servers in self.CREWS.items():
             with self.subTest(label):

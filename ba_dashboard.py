@@ -16789,6 +16789,77 @@ def _station_layers(grid: dict, cover_posts: list) -> dict:
     return layers
 
 
+def _empty_role_hours(shifts: list) -> int:
+    """The hours a week has a line for in a role and nobody working any of them."""
+    wanted, worked = collections.defaultdict(set), collections.defaultdict(set)
+    for s in shifts:
+        cells = {(s["wd"], hour) for hour in range(s["from"], s["to"])}
+        wanted[(s["skill"], s["kind"])].update(cells)
+        if s["employee"] is not None:
+            worked[(s["skill"], s["kind"])].update(cells)
+    return sum(len(cells - worked[role]) for role, cells in wanted.items())
+
+
+def _lift_layers(shifts: list, pool: list, state: dict, layers: dict) -> int:
+    """Move hours down the layers onto the open lines of the stations before them.
+
+    The full-cover fill (_station_layers()) only offers a role's first station
+    first: the third register can be staffed on Monday morning while the
+    second stands empty on Saturday afternoon, because whoever was free on
+    Saturday had used their week up by the time it came round. So each open
+    line, the earliest layer first, is offered to anybody working a line of
+    the same role, day and hours as one on a later layer than the open line,
+    in exchange for theirs: the same `_may_take()` and `_has_room()` against
+    their week without it, and `_keeps_floors()`, so no rule bends and no met
+    demand breaks. Whoever held the latest of those lines then takes the
+    station the mover left, the same hours, so it is the latest that opens.
+
+    Returns how many lines it moved.
+    """
+    by_id = {person["id"]: person for person in pool}
+    layer = lambda s: layers.get(s["station"], 0)  # noqa: E731
+    clock = lambda s: (s["wd"], s["from"], s["to"], str(s["station"]))  # noqa: E731
+    moved = 0
+    for hole in sorted((s for s in shifts if s["employee"] is None),
+                       key=lambda s: (layer(s), clock(s))):
+        if hole["employee"] is not None:
+            continue
+        level = layer(hole)
+        shapes = collections.defaultdict(list)
+        for s in shifts:
+            if s["employee"] in by_id and s["skill"] == hole["skill"] and s["kind"] == hole["kind"]:
+                shapes[_slot_shape(s)].append(s)
+        # The shapes with a line on a later layer than the hole's, the
+        # latest first: their hours have more people on them than the hole's.
+        tops = sorted(
+            (max(rows, key=lambda s: (layer(s), clock(s))) for rows in shapes.values()),
+            key=lambda s: (-layer(s), clock(s)),
+        )
+        for top in tops:
+            if layer(top) <= level:
+                break
+            done = False
+            for given in sorted(shapes[_slot_shape(top)], key=lambda s: (-layer(s), clock(s))):
+                person = by_id[given["employee"]]
+                week = state[person["id"]]
+                trial = _week_without(week, given)
+                if not (_may_take(person, hole) and _has_room(person, trial, hole)
+                        and _keeps_floors(person, week, trial, hole)):
+                    continue
+                _week_off(given, person, state, shifts)
+                _take_over(hole, person, state)
+                if given is not top:
+                    other = by_id[top["employee"]]
+                    _week_off(top, other, state, shifts)
+                    _take_over(given, other, state)
+                moved += 1
+                done = True
+                break
+            if done:
+                break
+    return moved
+
+
 def _week_a_cover(ctx: dict) -> None:
     """a. Per-station cover, with the troughs bridged before b. cuts it.
 
@@ -16996,6 +17067,10 @@ def _week_d_place(ctx: dict) -> None:
     # 0 h, draws the same bench members, hires no more people, and leaves
     # fewer hours short; the first that does is kept. Otherwise the plain
     # week stands (docs/dashboard-reference.md, "The week the board would copy into BizMan").
+    # Full cover's held week also leaves no more of a role's hours with
+    # nobody on them than the plain week does: holding a week stacked on the
+    # nights and evenings would undo the station-by-station fill
+    # (_station_layers()) on the very shops that followed the old plan.
     dropped, missing = _waiting_drops(shifts, standing, role_keys) if standing else ([], 0)
     if dropped:
         start, keys = ctx["start"], ctx["keys"]
@@ -17008,6 +17083,7 @@ def _week_d_place(ctx: dict) -> None:
             [row for row in dropped if row["employee"] in here_ids],
         ]
         kept = None
+        empty = _empty_role_hours(shifts) if ctx["layers"] else 0
         for index, held in enumerate(tries):
             # The second try is the first again where every entry of a short
             # role is on a short hour: asked once.
@@ -17021,7 +17097,8 @@ def _week_d_place(ctx: dict) -> None:
             now_here, now_bench, now_hired = _week_d_who(ctx, shifts, hire_weeks)
             short = _waiting_drops(shifts, standing, role_keys)[1]
             if (now_here <= here_ids and now_bench == bench_ids and now_hired <= hired
-                    and short < missing):
+                    and short < missing
+                    and (not ctx["layers"] or _empty_role_hours(shifts) <= empty)):
                 kept = _week_d_snapshot(ctx, shifts, hire_weeks, here)
                 break
         shifts, hire_weeks, here = _week_d_restore(ctx, kept or plain)
@@ -17047,6 +17124,8 @@ def _week_d_fill(ctx: dict, held: list) -> tuple:
         here = {"groups": ctx["groups"] or {}, "rostered": set(), "flex": ctx["flex"]}
         shifts = _fill_week(slots, cover_slots, pool, state, here, pins, allowed, ctx["layers"])
         _repair_week(shifts, pool, state, here["rostered"], before)
+        if ctx["layers"]:
+            _lift_layers(shifts, pool, state, ctx["layers"])
         worse = [
             person["id"] for person in ctx["protected"]
             if person["id"] not in kept
