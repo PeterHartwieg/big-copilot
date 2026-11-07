@@ -4020,7 +4020,11 @@ def build_core(save: Save, names: Names, history_path: str | None = None,
         businesses.append(row)
     businesses.sort(key=lambda x: -x["profit"])
     sites_gone = _sites_gone(save, names, latest, {_address_of(b, strict=True) for b in buildings}, residential)
-    _job_demands(save, names, businesses)
+    unmet_by_id = _job_demands(save, names, businesses)
+    by_key = {b["key"]: b for b in businesses}
+    for addr, crew in staff_by_addr.items():
+        if site_key(addr) in by_key:
+            by_key[site_key(addr)]["people"] = _people(crew, unmet_by_id)
 
     daily = _daily_series(save, summaries)
     loans = _loans(save, names)
@@ -4563,10 +4567,12 @@ def _ee_demand_label(slug):
     return msg("co.ee.demand.software", "Specialist software, tier {tier}", tier=tier)
 
 
-def _job_demands(save: Save, names: Names, businesses: list) -> None:
+def _job_demands(save: Save, names: Names, businesses: list) -> dict:
     """Which staff demands go unmet at each site, written onto its business row.
 
-    staffDemands is one row per unmet demand with how many staff there hold it,
+    Returns those same failures by employee id for the Crew people, with the
+    scope and any worked-over cause used to explain them. staffDemands is one
+    row per unmet demand with how many staff there hold it,
     highest priority first; company rows (health insurance, a happy boss) are
     marked, since no site can settle them. staffLacking, staffLackingCompany and
     staffLackingAny count the people behind the site rows, the company rows and
@@ -4682,6 +4688,7 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
     # with anything unmet have warned they will quit.
     people = collections.defaultdict(collections.Counter)
     idle = collections.defaultdict(list)
+    unmet_by_id = collections.defaultdict(list)
     for e in employees:
         key = site_key(save.address(e.get("assignedAddress")))
         if key not in by_key or key not in regs:
@@ -4694,8 +4701,18 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
             rule = rules.get(slug)
             if rule and not met(e, key, rule[0], rule[1]):
                 unmet[key][slug] += 1
+                demand = {
+                    "slug": slug,
+                    "demand": _ee_demand_label(slug) if rule[0] == "technology" else names.label(slug),
+                    "scope": DEMAND_SCOPE.get(rule[0], "site"),
+                }
+                unmet_by_id[e.get("id")].append(demand)
                 if rule[0] in ("hours", "days") and rostered(e, rule[0], rule[1]):
                     worked[key][slug] += 1
+                    demand["workedOver"] = {
+                        "count": 1, "max": rule[1][1] if rule[0] == "hours" else rule[1],
+                        "unit": rule[0],
+                    }
                 lacks.add("company" if rule[0] in COMPANY_DEMAND_KINDS else "site")
         for scope in lacks:
             people[key][scope] += 1
@@ -4729,6 +4746,7 @@ def _job_demands(save: Save, names: Names, businesses: list) -> None:
         b["staffLackingAny"] = people[b["key"]]["any"]
         b["quitWarnings"] = people[b["key"]]["quitting"]
         b["staffIdle"] = sorted(idle[b["key"]], key=str)
+    return dict(unmet_by_id)
 
 
 def _station_shifts(save: Save, b: dict, crew: list):
@@ -5364,7 +5382,7 @@ def _crew(crew: list) -> list:
     return sorted(roles.values(), key=lambda r: -r["count"])
 
 
-def _people(crew: list) -> list:
+def _people(crew: list, unmet_by_id: dict | None = None) -> list:
     """The same crew one person at a time, so a site can name who works it.
 
     A character without a name — the save permits it, and _staff then reads
@@ -5385,6 +5403,8 @@ def _people(crew: list) -> list:
                 "daily": money(person["daily"]),
                 **({"wageBasis": person["wageBasis"]} if person.get("wageBasis") else {}),
                 **({"wageUnavailable": True} if person.get("wageUnavailable") else {}),
+                **({"unmetDemands": unmet_by_id[person.get("id")]}
+                   if unmet_by_id and unmet_by_id.get(person.get("id")) else {}),
             }
         )
     return out

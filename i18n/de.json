@@ -3962,6 +3962,8 @@
  "sp.crew.tip.offtoday_other": "{n} Personen heute frei.",
  "sp.crew.tip.one": "{role} · {w}/Tag",
  "sp.crew.title": "Team",
+ "sp.crew.unmet.schedule": "die gespeicherten Stunden oder Tage widersprechen dem",
+ "sp.crew.unmet.site": "an diesem Standort nicht erfüllt",
  "sp.crumb.portfolio": "Portfolio",
  "sp.crumb.where": "Wo diese Seite liegt",
  "sp.dem.companywide": "firmenweit",

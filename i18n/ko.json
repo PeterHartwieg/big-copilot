@@ -3547,6 +3547,8 @@
  "sp.crew.tip.offtoday_other": "오늘 {n}명 휴무.",
  "sp.crew.tip.one": "{role} · {w}/일",
  "sp.crew.title": "직원",
+ "sp.crew.unmet.schedule": "저장된 근무 시간 또는 근무일이 조건에 맞지 않음",
+ "sp.crew.unmet.site": "이 사업장에서 충족되지 않음",
  "sp.crumb.portfolio": "포트폴리오",
  "sp.crumb.where": "이 페이지의 위치",
  "sp.dem.companywide": "회사 전체",

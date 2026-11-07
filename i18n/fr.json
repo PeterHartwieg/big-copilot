@@ -4273,6 +4273,8 @@
  "sp.crew.tip.offtoday_other": "{n} personnes absentes ce jour.",
  "sp.crew.tip.one": "{role} · {w}/jour",
  "sp.crew.title": "Équipe",
+ "sp.crew.unmet.schedule": "les heures ou les jours enregistrés ne respectent pas cette demande",
+ "sp.crew.unmet.site": "non satisfaite sur ce site",
  "sp.crumb.portfolio": "Portefeuille",
  "sp.crumb.where": "Place de cette page",
  "sp.dem.companywide": "dans l'entreprise",

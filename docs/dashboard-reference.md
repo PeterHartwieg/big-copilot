@@ -1047,7 +1047,14 @@ not worth typing, so a demand that could only be met with less is reported unmet
 Each employee holds up to three demands, and an ignored one wears their satisfaction down
 until they resign. The save lists the demands (`EmployeeInstances[].demands`) but not
 whether they are met, so the board repeats the game's own check for each kind, read from
-its code at build 3680:
+its code at build 3680.
+
+The site's Crew marks each person with unmet demands in orange. Hover or focus their
+chip to see what they ask for and whether the saved schedule, workstation, site or
+company leaves it unmet. These are the current employees' saved conditions; the site
+summary still counts the same people, and the marks do not change hiring or scheduling.
+
+The checks are:
 
 - **Hours and days.** Full-time is 30 to 50 assigned hours a week, part-time 10 to 30, and
   the hours worked so far this week must not pass the top. Four or five days a week counts

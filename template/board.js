@@ -6017,8 +6017,21 @@ function spRosterPairs(b, people){
   (row.people || []).forEach((p, k) => { if(here[p.name] === 1 && there[p.name] === 1) out[p.name] = k; });
   return out;
 }
-/* A person, with the shirt mark when nobody in their role has a uniform set. */
-const spPersonPill = (p, gaps, pairs) => `<span class="person${p.absent ? " off" : ""}"${
+/* Saved failures, attributed by employee id in Python, independent of the
+   planned week and of the name matching used to light schedule hours. */
+function spPersonDemands(p){
+  return (p.unmetDemands || []).map(d => {
+    const why = d.workedOver ? tt("sp.dem.worked.all", "worked over {max} {unit} this week", {max: d.workedOver.max, unit: d.workedOver.unit})
+      : d.scope === "company" ? tt("sp.dem.settled", "settled company-wide, not here")
+      : d.scope === "station" ? tt("co.hire.why.desk", "not at this desk")
+      : d.scope === "schedule" ? tt("sp.crew.unmet.schedule", "saved hours or days break it")
+      : tt("sp.crew.unmet.site", "not met at this site");
+    return tt("co.hire.cand.unmet", "{demand} ({why})", {demand: d.demand, why});
+  }).join(" · ");
+}
+/* A person, with their unmet demands and any missing role uniform. */
+const spPersonPill = (p, gaps, pairs) => `<span class="person${p.absent ? " off" : ""}${p.unmetDemands?.length ? " sp-demand-warn" : ""}"${
+  p.unmetDemands?.length ? ` tabindex="0" data-tip="${attr(spPersonDemands(p))}"` : ""}${
   pairs && pairs[p.name] !== undefined ? ` data-p="${pairs[p.name]}"` : ""}><i>${spEsc(roleCode(p.role))}</i>${spEsc(p.name)}<small>${
   spEsc(p.role)}${p.absent ? ` · ${tt("sp.crew.offtoday", "off today")}` : ""}</small>${
   (gaps || []).includes(p.role) ? `<span class="sp-i" data-el="uniform" data-tip="${attr(tt("sp.crew.nouniform", "No uniform set for this role"))}">${spIcon("shirt")}</span>` : ""}</span>`;

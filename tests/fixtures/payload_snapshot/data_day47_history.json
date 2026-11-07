@@ -1066,7 +1066,14 @@
      "absent": false,
      "daily": 144.0,
      "name": "Ana Silva",
-     "role": "Customer Service"
+     "role": "Customer Service",
+     "unmetDemands": [
+      {
+       "demand": "Free weekends",
+       "scope": "schedule",
+       "slug": "ba:jobdemand_freeweekends"
+      }
+     ]
     },
     {
      "absent": false,

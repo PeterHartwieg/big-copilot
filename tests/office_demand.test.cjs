@@ -4,6 +4,46 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const {loadBoard} = require('./_board.cjs');
 const plain = x => JSON.parse(JSON.stringify(x));
+const H = require('./_page.cjs');
+const browser = H.suiteBrowser();
+
+test('Crew marks only current people with unmet demands and names each demand on hover', async t => {
+  const {page} = await H.openPage(t, await browser(), {html: H.boardHtml()});
+  const d = structuredClone(require('./fixtures/payload_snapshot/link.json'));
+  const insurance = {slug: 'ba:jobdemand_silverhealthinsurance', demand: 'Silver Health Insurance', scope: 'company'};
+  const cooler = {slug: 'ba:jobdemand_watercooler', demand: 'Water Cooler', scope: 'site'};
+  const b = d.businesses[0];
+  b.people = Array.from({length: 13}, (_, i) => ({name: `Current person ${i}`, role: 'Customer Service',
+    daily: 100, absent: false, ...(i === 0 ? {unmetDemands: [insurance, cooler]}
+      : i === 1 ? {unmetDemands: [insurance]} : {})}));
+  b.staffDemands = [{slug: insurance.slug, demand: insurance.demand, count: 2, priority: 1, company: true},
+    {slug: cooler.slug, demand: cooler.demand, count: 1, priority: 0, company: false}];
+  await H.loadPayload(page, d);
+  await page.evaluate(key => routeOpenSite(key, '#sp-crew', 'staffing/needs'), b.key);
+  const crew = page.locator('#sp-crew');
+  await crew.locator('.sp-rbtn').click();
+  const people = crew.locator('.person');
+  assert.equal(await people.count(), 13);
+  for (const i of [0, 1]) {
+    assert.match(await people.nth(i).getAttribute('class'), /sp-demand-warn/);
+    assert.match(await people.nth(i).getAttribute('data-tip'), /Silver Health Insurance.*settled company-wide, not here/);
+    assert.notEqual(await people.nth(i).evaluate(el => getComputedStyle(el).borderColor),
+      await people.nth(2).evaluate(el => getComputedStyle(el).borderColor));
+  }
+  assert.match(await people.nth(0).getAttribute('data-tip'), /Water Cooler.*not met at this site/);
+  assert.doesNotMatch(await people.nth(2).getAttribute('class'), /sp-demand-warn/);
+  assert.equal(await people.nth(2).getAttribute('data-tip'), null);
+  await people.nth(0).hover();
+  assert.match(await page.locator('#tip').textContent(), /Silver Health Insurance/);
+  assert.match(await page.locator('#tip').textContent(), /Water Cooler/);
+  await people.nth(1).focus();
+  assert.match(await page.locator('#tip').textContent(), /Silver Health Insurance/);
+  assert.doesNotMatch(await page.locator('#tip').textContent(), /Water Cooler/);
+  assert.equal(await crew.locator('.sp-dem').count(), 2, 'the site summary remains');
+  // Small Crew lists use the same per-person marks without the folded role.
+  await page.evaluate(() => { D.businesses[0].people = D.businesses[0].people.slice(0, 3); drawSite(); });
+  assert.equal(await crew.locator('.person.sp-demand-warn').count(), 2);
+});
 function row(){
   return {key: 'ba:street_secondavenue#10', office: true, demandBased: true, computers: 2,
     staffedComputers: 1, roles: [{skill: 'lawyer', stations: [0, 1]}],

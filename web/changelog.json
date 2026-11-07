@@ -1,5 +1,11 @@
 [
   {
+    "pr": 568,
+    "date": "2026-11-07",
+    "title": "See which current employees have unmet demands",
+    "summary": "In a site's Crew, current employees with unmet demands now have an orange outline. Hover or focus their chip to see what they ask for and why it is unmet, including company-wide health insurance. Hiring and scheduling stay the same."
+  },
+  {
     "pr": 566,
     "date": "2026-11-07",
     "title": "Full cover 24/7 keeps one station open around the clock first",

@@ -4273,6 +4273,8 @@
  "sp.crew.tip.offtoday_other": "{n} pessoas de folga hoje.",
  "sp.crew.tip.one": "{role} · {w}/dia",
  "sp.crew.title": "Equipe",
+ "sp.crew.unmet.schedule": "as horas ou os dias guardados não cumprem o pedido",
+ "sp.crew.unmet.site": "não cumprido neste local",
  "sp.crumb.portfolio": "Portfólio",
  "sp.crumb.where": "Onde esta página fica",
  "sp.dem.companywide": "na empresa toda",
