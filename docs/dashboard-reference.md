@@ -905,7 +905,13 @@ empty station and the hours that come back are the demand. It is a different nee
 put through the same placer with every rule above unchanged (twelve-hour entries, the
 12-hour day, the 50-hour ceiling, day counts, blackout windows, one business per person, no
 server on cleaning, the fewest people first) and the same people: the site's staff, the
-unassigned bench and hires. Every site's demand plan is placed first; then every
+unassigned bench and hires. One thing differs in the order: full cover fills a role's
+stations one after another, every hour of its first register before any of its second
+(`_station_layers()`, issue #564), where the demand plan fills hour by hour. A shop short
+of people then has one register staffed around the clock, and its hires are the second
+register onwards, rather than people on the night and evening of every register and
+nobody at midday. A shop already open 0 to 24 with complete data copies full cover as its
+open-hours plan only where no role has a second station (`_open_is_full()`). Every site's demand plan is placed first; then every
 full-cover plan, against the unassigned staff the demand plans left, each taking whom it
 uses off a shared copy, plus whoever its own site's demand plan took. The sites where the
 test is the live choice go first (fewer than two measured weeks on a weekday it opens and
