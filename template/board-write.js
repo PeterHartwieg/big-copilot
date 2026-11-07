@@ -2908,9 +2908,12 @@ function poImportBody(contract, lines){
   return {contracts: [{id: contract.id, activate: false, products: lines.map(l => ({
     itemName: l.slug, warehouse: gwAddress(l.warehouse), amount: l.amount, expect: l.expect}))}]};
 }
+/* Whose save a copied order came from: another save in this browser never
+   lists it or restores it. */
+const poWho = () => D && D.meta ? `${D.meta.character || ""}|${D.meta.save || ""}` : "";
 function poSnapshot(contract, lines){
   const use = lines || poLines(contract);
-  return {v: 1, kind: contract.kind, id: contract.id, shop: contract.shop || null,
+  return {v: 1, who: poWho(), kind: contract.kind, id: contract.id, shop: contract.shop || null,
     supplier: contract.supplier || null, supplierName: contract.supplierName || "", mode: contract.mode,
     next: Number.isFinite(contract.next) ? contract.next : null, enabled: !!contract.enabled,
     fee: Number.isFinite(Number(contract.fee)) ? Number(contract.fee) : null,
@@ -2947,8 +2950,12 @@ function poRemember(snap){
   poWriteAll(all);
   return poCopyText(snap);
 }
+function poMine(snap){
+  return !!snap && snap.v === 1 && snap.who === poWho();
+}
 function poRecall(kind, id){
-  return poReadAll()[`${kind}|${id}`] || null;
+  const snap = poReadAll()[`${kind}|${id}`];
+  return poMine(snap) ? snap : null;
 }
 function poRestoreLines(current, snap){
   const saved = (snap && snap.lines) || [];
@@ -3025,7 +3032,7 @@ function poImportHtml(view){
 }
 function poCopiedHtml(){
   const live = new Set([...poWholesaleRows(), ...poImportRows()].map(c => poKey(c)));
-  const rows = Object.entries(poReadAll()).filter(([k, snap]) => snap && snap.v === 1 && !live.has(k));
+  const rows = Object.entries(poReadAll()).filter(([k, snap]) => poMine(snap) && !live.has(k));
   if (!rows.length) return "";
   const body = rows.map(([k, snap]) => `<tr><td class="l">${spEsc(snap.supplierName || "—")}</td><td class="l">${poModeLabel(snap.mode)}</td>
     <td class="l">${poSummary(snap.lines || [])}</td><td class="tg"><button type="button" class="nx-btn sm" data-po-copied="${attr(k)}">${
@@ -3187,7 +3194,7 @@ function poFromSnap(snap){
 }
 function poOpenCopied(storeKey){
   const snap = poReadAll()[storeKey];
-  if (!snap) return;
+  if (!poMine(snap)) return;
   const live = poFind(snap.kind, snap.id);
   if (live){ poForm(live, poRestoreLines(poLines(live), snap)); return; }
   const contract = poFromSnap(snap);

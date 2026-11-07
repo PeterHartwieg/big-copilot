@@ -275,6 +275,13 @@ test('Deliveries lists both kinds of contract, and a copied order survives witho
   assert.match(roles, /Old Market/);
   assert.match(roles, />Supplier</);
   assert.doesNotMatch(roles, /data-po-edit="import"/);
+
+  /* Another save in the same browser neither lists nor restores it. */
+  run(`D.meta = {character: 'Bea', save: 'Other'}`);
+  assert.doesNotMatch(context.poContractsHtml('roles'), /Copied orders/);
+  assert.equal(context.poRecall('wholesale', 'gone'), null);
+  run(`D.meta = {character: 'Ann'}`);
+  assert.match(context.poContractsHtml('roles'), /data-po-copied="wholesale\|gone"/);
 });
 
 test('putting a cancelled weekly order back is a new weekly write, not a restart', () => {
