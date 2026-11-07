@@ -4636,6 +4636,8 @@
  "sp.crew.tip.offtoday_other": "{n} человека сегодня нет.",
  "sp.crew.tip.one": "{role} · {w}/день",
  "sp.crew.title": "Штат",
+ "sp.crew.unmet.schedule": "сохранённые часы или дни не соответствуют требованию",
+ "sp.crew.unmet.site": "не выполнено в этом заведении",
  "sp.crumb.portfolio": "Портфель",
  "sp.crumb.where": "Раздел этой страницы",
  "sp.dem.companywide": "по всей компании",

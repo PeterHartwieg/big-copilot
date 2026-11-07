@@ -12,6 +12,12 @@
     "summary": "In Staff this site and Staff all sites, the note about unmet demands now names the people it counts. Opening their site marks them in orange and lists what they ask for and why, as Change picks does. They are still hired."
   },
   {
+    "pr": 0,
+    "date": "2026-11-07",
+    "title": "See which current employees have unmet demands",
+    "summary": "In a site's Crew, current employees with unmet demands now have an orange outline. Hover or focus their chip to see what they ask for and why it is unmet, including company-wide health insurance. Hiring and scheduling stay the same."
+  },
+  {
     "pr": 562,
     "date": "2026-11-02",
     "title": "See existing staff in Staff all sites",

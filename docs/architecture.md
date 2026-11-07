@@ -330,6 +330,14 @@ Names are save data: they stay in the browser like employee names. `_character()
 a character from `characterData` or, in an older save, from the instance itself;
 `_staff()` reads through it too.
 
+Crew's `businesses[].people[].unmetDemands` is optional and omitted when empty.
+`_job_demands()` returns its existing met/unmet checks by employee id; `build_core()`
+passes those to `_people()`, so duplicate or missing names cannot misattribute a demand.
+Each entry carries `slug`, `demand` (the label), `scope` from `DEMAND_SCOPE`, and optional
+`workedOver` with the same `count`/`max`/`unit` shape as the site summary (count 1).
+`spPersonPill()` uses these saved failures for an orange outline and the shared tooltip.
+The existing `staffDemands` counts and all hire/schedule inputs are unchanged.
+
 `hiring` is `{sites, bench, people, displayPeople, demandKinds, company}`. `sites` has one entry per
 business the player runs, in `businesses` order (vacant and `businesstype_empty` sites
 left out): `{key, name, kind (shop | office | factory | hq | warehouse), address {street,

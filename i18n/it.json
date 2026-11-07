@@ -4366,6 +4366,8 @@
  "sp.crew.tip.offtoday_other": "{n} persone assenti oggi.",
  "sp.crew.tip.one": "{role} · {w}/giorno",
  "sp.crew.title": "Gruppo di personale",
+ "sp.crew.unmet.schedule": "le ore o i giorni salvati non la rispettano",
+ "sp.crew.unmet.site": "non soddisfatta in questa sede",
  "sp.crumb.portfolio": "Portafoglio",
  "sp.crumb.where": "Posizione di questa pagina",
  "sp.dem.companywide": "in tutta l'azienda",

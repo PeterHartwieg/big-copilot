@@ -1,8 +1,9 @@
 """Staff demands: the game's own met/unmet rules, and the findings they raise."""
 import unittest
 
-from ba_dashboard import plain, JOB_DEMANDS, _alerts, _business, _cleanliness, _job_demands
+from ba_dashboard import plain, JOB_DEMANDS, _alerts, _business, _cleanliness, _job_demands, build_core
 from ba_save import Names, Save
+from tests.es3_fixture import link_company
 from tests.i18n_check import MsgAsserts, list_items, msg_param
 
 from build_web import ships  # noqa: E402
@@ -184,6 +185,63 @@ class EnvironmentRuleTests(unittest.TestCase):
         # visible 60/4 = 15, all 60/4 = 15: 100 - 15 - 15.
         self.assertEqual(score([30, 30, 0, 0]), 70.0)
         self.assertEqual(score([100, 100]), 0.0)
+
+
+class CrewDemandTests(unittest.TestCase):
+    def test_current_crew_failures_follow_employee_ids_and_their_own_hr_plans(self):
+        silver = "ba:jobdemand_silverhealthinsurance"
+        cooler = "ba:jobdemand_watercooler"
+        root = link_company()
+        root["BuildingRegistrations"] = {"$items": [building()]}
+        staff = [
+            # Duplicate names deliberately: only the first person's plan falls short.
+            employee([silver, cooler, silver], eid="a", name="Same name", assignedHrManagerPlanId="bronze"),
+            employee([silver], eid="b", name="Same name", assignedHrManagerPlanId="silver"),
+            employee([cooler], eid="c", name="Building asker"),
+            employee([silver, cooler], eid="idle", name="Idle", assignedWeeklyHours=0),
+            employee(["ba:jobdemand_fulltime", "ba:jobdemand_unknown"], eid="ok", name="Content"),
+            employee([], eid="hr", name="HR", assignedAddress=None),
+        ]
+        root["EmployeeInstances"] = {"$items": staff}
+        root["hrManagerPlans"] = {"$items": [
+            {"id": plan, "assignedEmployeeId": "hr", "healthInsurancePlan": {"planType": tier}}
+            for plan, tier in [("bronze", 0), ("silver", 1)]
+        ]}
+        save = Save(root, {}, __file__)
+        names = Names({**LABELS, silver: "Silver Health Insurance", cooler: "Water Cooler"})
+        b = build_core(save, names).core["businesses"][0]
+        same = [p for p in b["people"] if p["name"] == "Same name"]
+        self.assertEqual(same[0]["unmetDemands"], [
+            {"slug": silver, "demand": "Silver Health Insurance", "scope": "company"},
+            {"slug": cooler, "demand": "Water Cooler", "scope": "site"},
+        ])
+        self.assertNotIn("unmetDemands", same[1])
+        by_name = {p["name"]: p for p in b["people"]}
+        self.assertEqual(by_name["Building asker"]["unmetDemands"], [same[0]["unmetDemands"][1]])
+        for name in ["Content", "Idle"]:
+            self.assertNotIn("unmetDemands", by_name[name])
+        self.assertEqual({d["slug"]: d["count"] for d in b["staffDemands"]}, {silver: 1, cooler: 2})
+        self.assertEqual((b["staffLackingAny"], b["staffLackingCompany"], b["staffIdle"]), (2, 1, ["idle"]))
+
+    def test_per_person_reasons_keep_worked_over_and_station_failures_separate(self):
+        full, pad = "ba:jobdemand_fulltime", "ba:jobdemand_hasmousepad"
+        root = link_company()
+        root["BuildingRegistrations"] = {"$items": [building()]}
+        root["EmployeeInstances"] = {"$items": [
+            employee([full, pad], eid="over", workedHoursThisWeek=51),
+            employee([full], eid="short", assignedWeeklyHours=20),
+            employee([full, pad], eid="met", assignedWorkStationItems={"$items": ["ba:itemname_mousepad"]}),
+        ]}
+        save = Save(root, {}, "")
+        b = {"key": KEY}
+        unmet_by_id = _job_demands(save, Names(LABELS), [b])
+        self.assertEqual(unmet_by_id["over"], [
+            {"slug": full, "demand": "Full-time", "scope": "schedule",
+             "workedOver": {"count": 1, "max": 50, "unit": "hours"}},
+            {"slug": pad, "demand": "Mouse Pad", "scope": "station"},
+        ])
+        self.assertEqual(unmet_by_id["short"], [{"slug": full, "demand": "Full-time", "scope": "schedule"}])
+        self.assertNotIn("met", unmet_by_id)
 
 
 def items(text):

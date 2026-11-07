@@ -3910,6 +3910,8 @@
  "sp.crew.tip.offtoday_other": "{n} kişi bugün izinli.",
  "sp.crew.tip.one": "{role} · {w}/gün",
  "sp.crew.title": "Ekip",
+ "sp.crew.unmet.schedule": "kayıtlı saatler veya günler bu talebi karşılamıyor",
+ "sp.crew.unmet.site": "bu işletmede karşılanmıyor",
  "sp.crumb.portfolio": "Portföy",
  "sp.crumb.where": "Bu sayfanın konumu",
  "sp.dem.companywide": "şirket genelinde",
