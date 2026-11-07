@@ -2,7 +2,8 @@
 
 The full-cover plan is the demand test for a new shop: every serving station
 staffed every hour of every day, placed by the same placer as the demand plan
-with every rule unchanged. Synthetic saves only, built with the helpers
+with every rule unchanged. Only the order differs: a role's stations are
+filled one after another (LayerFirstTest). Synthetic saves only, built with the helpers
 tests/test_staffing.py uses.
 """
 import collections
@@ -47,9 +48,11 @@ from tests.test_staffing import (
     employee,
     hours,
     kind,
+    open_lines,
     plan,
     plan_sites,
     registration,
+    staffed,
     who,
 )
 
@@ -321,6 +324,133 @@ class FullCoverRulesTest(unittest.TestCase):
         self.assertEqual(established["addPeople"]["assign"], [])
         self.assertEqual(established["fullCover"]["addPeople"]["assign"], [])
         self.assertEqual([r["id"] for r in new["fullCover"]["addPeople"]["assign"]], ["free"])
+
+
+class LayerFirstTest(unittest.TestCase):
+    """Short of people, full cover keeps one station open every hour before a second (#564).
+
+    Four registers around the clock are 672 station-hours; four or six
+    servers cannot staff them, but can staff one register 0 to 24. Filled
+    hour by hour, the plan put people on the night and evening of every
+    register and left the middle of the day empty on all four; filled one
+    station after another, no hour has a second server until every hour has
+    one, and the open lines (the hires) are the second register onwards.
+    """
+
+    ITEMS = [(1, REGISTER), (2, REGISTER), (3, REGISTER), (4, REGISTER), (8, CLEAN_STATION)]
+    NIGHTS = "ba:jobdemand_nonights"
+    CREWS = {
+        "four servers": [employee(f"s{i}", [SERVICE]) for i in range(4)],
+        "six, half of them no nights": [
+            employee(f"s{i}", [SERVICE], demands=("ba:jobdemand_nonights",) if i % 2 else ())
+            for i in range(6)],
+    }
+
+    def row(self, servers):
+        people = servers + [employee("c0", [CLEANING])]
+        return plan(self.ITEMS, people, BUSY, weeks=0), {p["id"]: p for p in people}
+
+    def serving_cells(self, week):
+        cells = collections.Counter()
+        for s in serving(week):
+            if s["p"] is not None:
+                cells.update((s["d"], hour) for hour in range(s["f"], s["t"]))
+        return cells
+
+    def test_every_hour_has_a_server_before_any_has_two(self):
+        for label, servers in self.CREWS.items():
+            with self.subTest(label):
+                row, _people = self.row(servers)
+                cells = self.serving_cells(row["fullCover"])
+                empty = [(wd, h) for wd in range(7) for h in range(24) if not cells[(wd, h)]]
+                self.assertEqual(empty, [], "one register staffed 0 to 24 every day")
+                # The second register onwards is where the hires go.
+                self.assertTrue(open_lines(row["fullCover"]))
+
+    def test_each_layer_is_complete_before_the_next_starts(self):
+        # Four twelve-hour entries each: seven servers are 336 hours, two
+        # registers around the clock; eleven are three and 24 hours over.
+        # Filled a station at a time alone, seven left the second register
+        # empty at the weekend afternoons and staffed the third on Monday.
+        for count, layers in ((7, 2), (11, 3)):
+            with self.subTest(count):
+                row, _people = self.row([employee(f"s{i}", [SERVICE]) for i in range(count)])
+                cells = self.serving_cells(row["fullCover"])
+                self.assertEqual(min(cells[(wd, h)] for wd in range(7) for h in range(24)),
+                                 layers)
+
+    def test_a_stacked_week_already_in_the_game_is_not_held(self):
+        # A shop open around the clock that followed the old plan: two
+        # registers on at night and in the evening, nobody 8 to 16. Full cover
+        # holds people on the hours they work now while it waits on a hire,
+        # but not where that leaves hours with nobody on them.
+        current = [{"wd": wd, "employeeId": pid, "itemInstanceId": post,
+                    "startingHour": start, "endingHour": end, "type": 1}
+                   for wd in range(7)
+                   for pid, post, start, end in (("s0", 1, 0, 8), ("s1", 2, 0, 8),
+                                                 ("s2", 1, 16, 24), ("s3", 2, 16, 24))]
+        people = [employee(f"s{i}", [SERVICE]) for i in range(4)] + [employee("c0", [CLEANING])]
+        row = plan(self.ITEMS, people, BUSY, weeks=0, shifts=current)
+        self.assertIs(row["fullCover"]["openNow"], True)
+        cells = self.serving_cells(row["fullCover"])
+        empty = [(wd, h) for wd in range(7) for h in range(24) if not cells[(wd, h)]]
+        self.assertEqual(empty, [], "one register staffed 0 to 24 every day")
+
+    def test_the_old_plan_in_the_game_is_held_on_no_layer(self):
+        # The week the hour-by-hour fill placed, as the shop runs it now. A
+        # held week is judged role by role and layer by layer: with eight
+        # servers it kept one register alone for 72 hours and four on for 60,
+        # and with ten its 12 hours with no server were paid for by 12 more
+        # hours of cleaning.
+        for count, layers in ((8, 2), (10, 2)):
+            with self.subTest(count):
+                people = [employee(f"s{i}", [SERVICE]) for i in range(count)] + \
+                    [employee("c0", [CLEANING])]
+                with unittest.mock.patch.object(ba_dashboard, "_station_layers",
+                                                lambda grid, cover_posts: {}):
+                    old = plan(self.ITEMS, people, BUSY, weeks=0)
+                current = [{"wd": s["d"], "employeeId": old["people"][s["p"]]["id"],
+                            "itemInstanceId": old["stations"][s["s"]]["id"],
+                            "startingHour": s["f"], "endingHour": s["t"], "type": 1}
+                           for s in staffed(old["fullCover"])]
+                row = plan(self.ITEMS, people, BUSY, weeks=0, shifts=current)
+                cells = self.serving_cells(row["fullCover"])
+                self.assertEqual(min(cells[(wd, h)] for wd in range(7) for h in range(24)),
+                                 layers)
+
+    def test_the_rules_still_hold(self):
+        for label, servers in self.CREWS.items():
+            with self.subTest(label):
+                row, people = self.row(servers)
+                full = row["fullCover"] | {"people": row["people"]}
+                by_person = collections.defaultdict(list)
+                for s in staffed(full):
+                    by_person[who(full, s)].append(s)
+                for eid, shifts in by_person.items():
+                    self.assertLessEqual(sum(hours(s) for s in shifts), FULL_TIME[1], eid)
+                    per_day = collections.Counter()
+                    for s in shifts:
+                        per_day[s["d"]] += hours(s)
+                    self.assertLessEqual(max(per_day.values()), SHIFT_CAP, eid)
+                    if eid.startswith("s"):
+                        self.assertFalse([s for s in shifts if kind(s) != "serve"], eid)
+                    if self.NIGHTS in people[eid]["demands"]["$items"]:
+                        windows = JOB_DEMANDS[self.NIGHTS][1]
+                        for s in shifts:
+                            for low, high in windows:
+                                self.assertFalse(low < s["t"] and s["f"] < high, (eid, s))
+
+    def test_the_demand_and_open_hours_plans_are_unchanged(self):
+        for label, servers in self.CREWS.items():
+            with self.subTest(label):
+                row, _people = self.row(servers)
+                # Every station its own first layer: the fill order as it was.
+                with unittest.mock.patch.object(ba_dashboard, "_station_layers",
+                                                lambda grid, cover_posts: {}):
+                    before, _people = self.row(servers)
+                self.assertNotEqual(row["fullCover"]["shifts"], before["fullCover"]["shifts"])
+                self.assertEqual({k: v for k, v in row.items() if k != "fullCover"},
+                                 {k: v for k, v in before.items() if k != "fullCover"})
 
 
 
@@ -841,13 +971,19 @@ class HireCountTest(unittest.TestCase):
 
 
 class OpenIsFullTest(unittest.TestCase):
-    """A measured shop already open around the clock: its open-hours plan is full cover's."""
+    """A measured shop already open around the clock: its open-hours plan is full cover's.
 
-    def row(self, **kw):
+    Copied only where no role has a second station: with two registers, full
+    cover fills them one after the other (LayerFirstTest) and the open-hours
+    plan is placed on its own, hour by hour as before.
+    """
+
+    ITEMS = [(1, REGISTER), (8, CLEAN_STATION)]
+
+    def row(self, items=None, **kw):
         crew_ = [employee(f"s{i}", [SERVICE], demands=(FULLTIME,)) for i in range(3)] + \
             [employee("c0", [CLEANING])]
-        return plan([(1, REGISTER), (2, REGISTER), (8, CLEAN_STATION)], crew_, BUSY,
-                    opens=((0, 12), (12, 24)), **kw)
+        return plan(items or self.ITEMS, crew_, BUSY, opens=((0, 12), (12, 24)), **kw)
 
     def test_it_is_copied_and_the_copy_is_the_plan_placed_again(self):
         row = self.row()
@@ -876,6 +1012,20 @@ class OpenIsFullTest(unittest.TestCase):
         with unittest.mock.patch.object(ba_dashboard, "_place_week", counting):
             plan([(1, REGISTER)], [employee("s0", [SERVICE])], BUSY, opens=((8, 20),))
         self.assertEqual(len(calls), 3)
+
+    def test_a_second_register_places_the_open_hours_plan_on_its_own(self):
+        calls = []
+        real = ba_dashboard._place_week
+
+        def counting(*a, **k):
+            calls.append(k.get("layered", False))
+            return real(*a, **k)
+
+        with unittest.mock.patch.object(ba_dashboard, "_place_week", counting):
+            self.row([(1, REGISTER), (2, REGISTER), (8, CLEAN_STATION)])
+        # The demand plan, full cover station by station, and the open-hours
+        # plan hour by hour, as it was placed before full cover was layered.
+        self.assertEqual(calls, [False, True, False])
 
 
 class ExchangeKeepsDemandsTest(unittest.TestCase):
